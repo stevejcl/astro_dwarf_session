@@ -1,0 +1,41 @@
+{
+    "command": {
+        "id_command": {
+            "uuid": "00001",
+            "description": "First Test",
+            "date": "2024-09-25",
+            "time": "02:18:00",
+            "process": "wait",
+            "max_retries": 3,
+            "result": true,
+            "message": {},
+            "nb_try": 1
+        },
+        "calibration": {
+            "do_action": true,
+            "wait_before": 10,
+            "wait_after": 10
+        },
+        "goto_solar": {
+            "do_action": false,
+            "target": "planet_name",
+            "wait_after": 10
+        },
+        "goto_manual": {
+            "do_action": true,
+            "target": "C20",
+            "ra_coord": 20.98808,
+            "dec_coord": 44.52889,
+            "wait_after": 20
+        },
+        "setup_camera": {
+            "do_action": true,
+            "exposure": "10",
+            "gain": "80",
+            "binning": "0",
+            "IRCut": "2",
+            "count": "10",
+            "wait_after": 30
+        }
+    }
+}

@@ -61,6 +61,7 @@ Installation
 2. Then Install the dwarf_python_api library with :
   
      python -m pip install -r requirements.txt
+   
      python -m pip install -r requirements-local.txt --target .
 
    This project uses the dwarf_python_api library that must be installed locally in the root path of this project

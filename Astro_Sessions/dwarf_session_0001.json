@@ -8,8 +8,8 @@
             "process": "wait",
             "max_retries": 2,
             "result": false,
-            "message": "",
-            "nb_try": 1,
+            "message": {},
+            "nb_try": 1
         },
         "calibration": {
             "do_action": true,

@@ -48,7 +48,14 @@ the json use this format samples are provided in ./Astro_Session directory :
                     "IRCut" : IRCut_val;     # "0": IRCut - "1": IRPass for D2, "0": VIS Filter - "1": Astro Filter - "2" for DUAL BAND Filter for D3
                     "count" : nb_image;
                     "wait_after" : time_sec;
-                }
+               },
+               "setup_wide_camera": {
+                    "do_action": true,
+                    "exposure": "10",
+                    "gain": "90",
+                    "count": "10",
+                    "wait_after": 30
+               }
             }
         }
 
@@ -69,6 +76,7 @@ Installation
 
    Don't miss the dot at the end of the line
 
+Setup the config.ini file with your wifi ssid and password for using your dwarf on you local wifi network
 Then you can start it with => python .\astro_dwarf_scheduler.py
 
 At the beginning, it will ask if you want to connect to the dwarf with bluetooth to start STA Mode.

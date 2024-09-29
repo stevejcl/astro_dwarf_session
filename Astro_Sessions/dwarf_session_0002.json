@@ -36,6 +36,13 @@
             "IRCut": "0",
             "count": "10",
             "wait_after": 30
+        },
+        "setup_wide_camera": {
+            "do_action": false,
+            "exposure": "10",
+            "gain": "90",
+            "count": "10",
+            "wait_after": 30
         }
     }
 }

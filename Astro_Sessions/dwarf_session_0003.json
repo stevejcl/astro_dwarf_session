@@ -3,8 +3,8 @@
         "id_command": {
             "uuid": "00001",
             "description": "First Test",
-            "date": "2024-09-25",
-            "time": "02:18:00",
+            "date": "2024-09-27",
+            "time": "23:05:00",
             "process": "wait",
             "result": true,
             "message": {}
@@ -28,10 +28,17 @@
         },
         "setup_camera": {
             "do_action": true,
-            "exposure": "10",
-            "gain": "80",
+            "exposure": "30",
+            "gain": "60",
             "binning": "0",
             "IRCut": "2",
+            "count": "10",
+            "wait_after": 30
+        },
+        "setup_wide_camera": {
+            "do_action": false,
+            "exposure": "10",
+            "gain": "90",
             "count": "10",
             "wait_after": 30
         }

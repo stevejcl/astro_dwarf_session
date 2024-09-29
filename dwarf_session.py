@@ -15,13 +15,18 @@ from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_update_camera_setting
+from dwarf_python_api.lib.dwarf_utils import perform_takeAstroWidePhoto
+from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto
+
 from dwarf_python_api.lib.dwarf_utils import perform_time
 
 from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_setting
 from dwarf_python_api.lib.dwarf_utils import perform_get_all_feature_camera_setting
+from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_wide_setting
 from dwarf_python_api.lib.data_utils import get_exposure_name_by_index
 from dwarf_python_api.lib.data_utils import get_gain_name_by_index
-
+from dwarf_python_api.lib.data_wide_utils import get_wide_exposure_name_by_index
+from dwarf_python_api.lib.data_wide_utils import get_wide_gain_name_by_index
 from dwarf_python_api.get_config_data import get_config_data
 
 import logging
@@ -42,6 +47,9 @@ STEP_DESCRIPTIONS = {
     "step_10": "Setup Astro Photo Parameters",
     "step_11": "Starting Astrophoto Session",
     "step_12": "Wait End of Astrophoto Session",
+    "step_13": "Setup Astro Wide Photo Parameters",
+    "step_14": "Starting Astro wide photo Session",
+    "step_15": "Wait End of Astro wide photo Session",
 }
 
 
@@ -71,6 +79,7 @@ def start_dwarf_session(program, type_dwarf = 2):
         goto_solar = program['goto_solar']['do_action']
         goto_manual = program['goto_manual']['do_action']
         take_photo = program['setup_camera']['do_action']
+        take_widephoto = program['setup_wide_camera']['do_action']
 
         if goto_solar:
             target_name = program['goto_solar']['target']
@@ -95,6 +104,15 @@ def start_dwarf_session(program, type_dwarf = 2):
                 log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
             else:
                 log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
+            log.notice(f"     number of images  => {count_val}")
+
+        if take_widephoto:
+            wide_exp_val = program['setup_wide_camera'].get('exposure', None)
+            wide_gain_val = program['setup_wide_camera'].get('gain', None)
+            count_val = program['setup_wide_camera'].get('count', None)
+            log.notice(f" To do => Astro Wide Photo with these parameters")
+            log.notice(f"     exposition  => {wide_exp_val}s")
+            log.notice(f"     gain  => {wide_gain_val}")
             log.notice(f"     number of images  => {count_val}")
 
         # Session initialization
@@ -209,6 +227,28 @@ def start_dwarf_session(program, type_dwarf = 2):
 
             continue_action = perform_waitEndAstroPhoto()
             verify_action(continue_action, "step_12")
+
+        if take_widephoto:
+            log.notice(f"Processing Astro Wide Photo Session : {count_val} images")
+            if wide_exp_val:
+                continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, dwarf_id)
+            if wide_gain_val:
+                continue_action = perform_update_camera_setting("wide_gain", wide_gain_val, dwarf_id)
+            if count_val:
+                continue_action = perform_update_camera_setting("count", count_val)
+
+            # check value
+            time.sleep(5)
+            print_wide_camera_data()
+
+            time.sleep(program['setup_wide_camera']['wait_after'])
+            verify_action(continue_action, "step_13")
+
+            continue_action = perform_takeAstroWidePhoto()
+            verify_action(continue_action, "step_14")
+
+            continue_action = perform_waitEndAstroWidePhoto()
+            verify_action(continue_action, "step_15")
 
     except Exception as e:
         log.error(f"Error during session : {e}")
@@ -360,6 +400,77 @@ def print_camera_data():
     else:
        log.notice("the Binning value has not been found")
        log.notice("the image format value has not been found")
+       log.notice("the number of images for the session has not been found")
+
+    log.notice("----------------------")
+
+def print_wide_camera_data():
+    camera_wide_exposure = False
+    camera_wide_gain = False
+    camera_count = False
+
+    result = perform_get_all_camera_wide_setting()
+    result_feature = perform_get_all_feature_camera_setting()
+
+    # get dwarf type id
+    data_config = get_config_data()
+    dwarf_id = data_config['dwarf_id'] 
+    log.notice("----------------------")
+    log.notice(f"Connected to Dwarf {dwarf_id}")
+
+    # ALL PARAMS
+    if (result):
+        # get Camera
+        target_id = 0
+
+        # Find the entry with the matching id
+        matching_entry = next((entry for entry in result["all_params"] if entry["id"] == target_id), None)
+
+        if matching_entry:
+            # Extract specific fields for the matching entry
+           index_value = matching_entry["index"]
+
+           camera_wide_exposure = str(get_wide_exposure_name_by_index(index_value,dwarf_id))
+           log.notice(f"the exposition is: {camera_wide_exposure}")
+        else:
+           log.notice("the exposition has not been found")
+
+        # get Gain
+        target_id = 1
+
+        # Find the entry with the matching id
+        matching_entry = next((entry for entry in result["all_params"] if entry["id"] == target_id), None)
+
+        if matching_entry:
+            # Extract specific fields for the matching entry
+           index_value = matching_entry["index"]
+
+
+           camera_wide_gain = str(get_wide_gain_name_by_index(index_value,dwarf_id))
+           log.notice(f"the gain is: {camera_wide_gain}")
+        else:
+           log.notice("the gain has not been found")
+
+    else:
+       log.notice("the exposition has not been found")
+       log.notice("the gain has not been found")
+
+    # ALL FEATURE PARAMS
+    if result_feature : 
+        # get camera_count
+        target_id = 1
+
+        # Find the entry with the matching id
+        matching_entry = next((entry for entry in result_feature["all_feature_params"] if entry["id"] == target_id), None)
+
+        if matching_entry:
+            # Extract specific fields for the matching entry
+            camera_count = str(round(matching_entry["continue_value"]))
+
+            log.notice(f"the number of images for the session is: {camera_count}")
+        else:
+           log.notice("the number of images for the session has not been found")
+    else:
        log.notice("the number of images for the session has not been found")
 
     log.notice("----------------------")

@@ -3,16 +3,16 @@
         "id_command": {
             "uuid": "00001",
             "description": "First Test",
-            "date": "2024-09-24",
-            "time": "08:00:00",
+            "date": "2024-09-25",
+            "time": "02:18:00",
             "process": "wait",
-            "max_retries": 2,
-            "result": false,
+            "max_retries": 3,
+            "result": true,
             "message": {},
             "nb_try": 1
         },
         "calibration": {
-            "do_action": true,
+            "do_action": false,
             "wait_before": 10,
             "wait_after": 10
         },
@@ -22,28 +22,25 @@
             "wait_after": 10
         },
         "goto_manual": {
-            "do_action": true,
-            "target": "VEGA",
-            "ra_coord": 18.6152268611111,
-            "dec_coord": 38.78441583333333,
+            "do_action": false,
+            "target": "C20",
+            "ra_coord": 20.98808,
+            "dec_coord": 44.52889,
             "wait_after": 20
         },
         "setup_camera": {
-            "do_action": true,
+            "do_action": false,
             "exposure": "10",
             "gain": "80",
-            "binning": "0",
-            "IRCut": "0",
             "count": "10",
-            "wait_after": 3
+            "wait_after": 30
         },
         "setup_wide_camera": {
-            "do_action": false,
+            "do_action": true,
             "exposure": "10",
             "gain": "90",
             "count": "10",
             "wait_after": 30
         }
-
     }
 }

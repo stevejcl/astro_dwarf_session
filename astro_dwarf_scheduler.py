@@ -6,15 +6,12 @@ from datetime import datetime
 
 from dwarf_session import start_dwarf_session
 from dwarf_ble_connect.connect_bluetooth import connect_bluetooth
-from dwarf_ble_connect.connect_bluetooth import update_htmlfile
 
 from dwarf_python_api.lib.dwarf_utils import perform_time
 from dwarf_python_api.lib.dwarf_utils import perform_timezone
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
-from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_psd
-from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_ssid
-from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_pwd
+from dwarf_python_api.lib.dwarf_utils import save_bluetooth_config_from_ini_file
 
 from dwarf_python_api.get_live_data_dwarf import fn_wait_for_user_input
 import dwarf_python_api.lib.my_logger as log
@@ -129,19 +126,13 @@ def check_and_execute_commands():
 
 def start_connection():
 
-    result = False
+    if not save_bluetooth_config_from_ini_file():
+        log.error("No Wifi Data have been found, can't connect to wifi")
+        log.error("Need to update the config file with Wifi Informations.") 
+        result = False
 
-    ble_psd = read_bluetooth_ble_psd()
-
-    ble_STA_ssid = read_bluetooth_ble_STA_ssid()
-
-    ble_STA_pwd = read_bluetooth_ble_STA_pwd()
-
-    if ble_psd is not False and  ble_psd is not False and  ble_psd is not False:
-        result = update_htmlfile(ble_psd, ble_STA_ssid, ble_STA_pwd)
-    
-        if result:
-            result = connect_bluetooth()
+    else:
+        result = connect_bluetooth()
 
         if result is not False and result!= "":
         

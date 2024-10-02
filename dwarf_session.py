@@ -52,6 +52,28 @@ STEP_DESCRIPTIONS = {
     "step_15": "Wait End of Astro wide photo Session",
 }
 
+def try_attemps (function, function_succeed_message, max_attempts = 3):
+    # Try to perform the action up to 3 times by default
+    max_attempts
+    attempts = 0
+    continue_action = True
+
+    # Try to perform the action up to 3 times
+    while attempts < max_attempts:
+        continue_action = function()  # action to test
+
+        if continue_action:
+            log.notice(function_succeed_message)
+            break  # Exit the loop if the action succeeds
+ 
+        attempts += 1
+        log.notice(f"Attempt {attempts} failed. Retrying...")
+
+    # If the maximum number of attempts is reached and continue_action is False
+    if continue_action is False:
+        log.notice("Action failed after 3 attempts.")
+
+    return continue_action
 
 def start_dwarf_session(program, type_dwarf = 2):
     try:
@@ -119,24 +141,7 @@ def start_dwarf_session(program, type_dwarf = 2):
         log.notice("######################")
         #init Frame : TIME
         # Try to perform the action up to 3 times
-        max_attempts = 3
-        attempts = 0
-        continue_action = True
-
-        # Try to perform the action up to 3 times
-        while attempts < max_attempts:
-            continue_action = perform_time()  # Your action
-
-            if continue_action:
-                log.notice("Init succeeded.")
-                break  # Exit the loop if the action succeeds
- 
-            attempts += 1
-            log.notice(f"Attempt {attempts} failed. Retrying...")
-
-        # If the maximum number of attempts is reached and continue_action is False
-        if continue_action is False:
-            log.notice("Action failed after 3 attempts.")
+        continue_action = try_attemps (perform_time, "Init succeeded.")
             
         verify_action(continue_action, "step_0")
 
@@ -247,8 +252,10 @@ def start_dwarf_session(program, type_dwarf = 2):
             continue_action = perform_takeAstroWidePhoto()
             verify_action(continue_action, "step_14")
 
-            continue_action = perform_waitEndAstroWidePhoto()
-            verify_action(continue_action, "step_15")
+            # try mulltiple time due to timeout errors during waiting end of session
+            continue_action = try_attemps (perform_waitEndAstroWidePhoto, "", 5)
+
+            verify_action(continue_action, "step_15", True)
 
     except Exception as e:
         log.error(f"Error during session : {e}")
@@ -259,8 +266,10 @@ def start_dwarf_session(program, type_dwarf = 2):
         log.success(f"  End of Session")
         log.success("######################")
 
-def verify_action (result, action_step):
+def verify_action (result, action_step, wait = False):
     log.notice(f"verify_action : {result}")
+    if result is False and wait is True:
+        return False
     if result is False:
         raise RuntimeError(f"Action failed at step: {STEP_DESCRIPTIONS.get(action_step, action_step)}")
     if result or result == 0:

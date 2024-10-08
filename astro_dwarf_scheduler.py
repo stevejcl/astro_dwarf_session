@@ -24,17 +24,29 @@ ERROR_DIR = './Astro_Sessions/Error'
 
 # Load the JSON file
 def load_json(filepath):
-    with open(filepath, 'r') as file:
-        return json.load(file)
+    try:
+        with open(filepath, 'r') as file:
+            return json.load(file)
+    except Exception as e:
+        log.error(f"error loading file: {filepath} - {e}")
+        return False
 
 # Save the JSON file
 def save_json(filepath, data):
-    with open(filepath, 'w') as file:
-        json.dump(data, file, indent=4)
+    try:
+        with open(filepath, 'w') as file:
+            json.dump(data, file, indent=4)
+    except Exception as e:
+        log.error(f"error saving file: {filepath} - {e}")
+        return False
 
 # Move the JSON file
 def move_file(source, destination):
-    shutil.move(source, destination)
+    try:
+        shutil.move(source, destination)
+    except Exception as e:
+        log.error(f"error moving file: {source} to {destination} - {e}")
+        return False
 
 # Check if the execution time of the command has been reached
 def is_time_to_execute(command):
@@ -81,6 +93,8 @@ def check_and_execute_commands():
             log.notice("######################")
             log.notice(f"Find File  {filepath}")
             program = load_json(filepath)
+            if program is False:
+                return
 
             # Extract command info
             command = program['command']['id_command']

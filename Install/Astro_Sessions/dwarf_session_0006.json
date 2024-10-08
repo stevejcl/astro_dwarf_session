@@ -2,17 +2,19 @@
     "command": {
         "id_command": {
             "uuid": "00001",
-            "description": "First Test",
-            "date": "2024-09-27",
+            "description": "Sadr Region",
+            "date": "2024-10-01",
             "time": "23:05:00",
             "process": "wait",
+            "max_retries": 3,
             "result": true,
-            "message": {}
+            "message": {},
+            "nb_try": 1
         },
         "calibration": {
-            "do_action": false,
+            "do_action": true,
             "wait_before": 10,
-            "wait_after": 10
+            "wait_after": 20
         },
         "goto_solar": {
             "do_action": false,
@@ -20,19 +22,17 @@
             "wait_after": 10
         },
         "goto_manual": {
-            "do_action": false,
-            "target": "C20",
-            "ra_coord": 20.98808,
-            "dec_coord": 44.52889,
-            "wait_after": 20
+            "do_action": true,
+            "target": "Sadr",
+            "ra_coord": "20:22:14.40",
+            "dec_coord": "+40:15:41.2",
+            "wait_after": 40
         },
         "setup_camera": {
             "do_action": true,
-            "exposure": "30",
-            "gain": "60",
-            "binning": "0",
-            "IRCut": "2",
-            "count": "10",
+            "exposure": "13",
+            "gain": "80",
+            "count": "250",
             "wait_after": 30
         },
         "setup_wide_camera": {

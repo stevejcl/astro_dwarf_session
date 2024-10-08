@@ -1,18 +1,20 @@
-{
+			{
     "command": {
         "id_command": {
             "uuid": "00001",
-            "description": "First Test",
-            "date": "2024-09-27",
-            "time": "23:05:00",
+            "description": "NGC 7000",
+            "date": "2024-10-02",
+            "time": "00:05:00",
             "process": "wait",
+            "max_retries": 3,
             "result": true,
-            "message": {}
+            "message": {},
+            "nb_try": 1
         },
         "calibration": {
             "do_action": false,
             "wait_before": 10,
-            "wait_after": 10
+            "wait_after": 20
         },
         "goto_solar": {
             "do_action": false,
@@ -20,19 +22,17 @@
             "wait_after": 10
         },
         "goto_manual": {
-            "do_action": false,
-            "target": "C20",
-            "ra_coord": 20.98808,
-            "dec_coord": 44.52889,
-            "wait_after": 20
+            "do_action": true,
+            "target": "NGC 7000",
+            "ra_coord": "20:53:40.13",
+            "dec_coord": "+42:42:22.3",
+            "wait_after": 40
         },
         "setup_camera": {
             "do_action": true,
-            "exposure": "30",
-            "gain": "60",
-            "binning": "0",
-            "IRCut": "2",
-            "count": "10",
+            "exposure": "13",
+            "gain": "80",
+            "count": "300",
             "wait_after": 30
         },
         "setup_wide_camera": {

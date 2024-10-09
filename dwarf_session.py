@@ -29,7 +29,6 @@ from dwarf_python_api.lib.data_wide_utils import get_wide_exposure_name_by_index
 from dwarf_python_api.lib.data_wide_utils import get_wide_gain_name_by_index
 from dwarf_python_api.get_config_data import get_config_data
 
-import logging
 import dwarf_python_api.lib.my_logger as log
 
 # Define step descriptions

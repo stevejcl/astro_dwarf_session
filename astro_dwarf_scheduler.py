@@ -138,7 +138,7 @@ def check_and_execute_commands():
                     else:
                         start_connection()
 
-def start_connection():
+def start_connection(startSTA = False):
 
     if not save_bluetooth_config_from_ini_file():
         log.error("No Wifi Data have been found, can't connect to wifi")
@@ -148,7 +148,7 @@ def start_connection():
     else:
         result = connect_bluetooth()
 
-        if result is not False and result!= "":
+        if startSTA and result is not False and result!= "":
         
             #init Frame : TIME and TIMEZONE
             result = perform_time()
@@ -158,13 +158,23 @@ def start_connection():
     
     return result
 
+def start_STA_connection():
+
+    #init Frame : TIME and TIMEZONE
+    result = perform_time()
+       
+    if result:
+       perform_timezone()
+    
+    return result
+
 # Main loop to check files in ToDo folder
 def main():
     try:
         result = True
         choice = input("Do you want to Start bluetooth connection Y / N (default)? ")
         if (choice == "Y"):
-            result = start_connection()
+            result = start_connection(True)
         if (result):
             log.notice ("##--------------------------------------##")
             log.notice ("## Astro_Dwarf_Scheduler is starting... ##")

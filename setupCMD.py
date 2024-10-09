@@ -14,5 +14,5 @@ setup(
     version = "1.1",
     description = "automatic Astro Session for the Dwarf",
     options = dict(build_exe = buildOptions),
-    executables = [Executable("astro_dwarf_scheduler.py")]
+    executables = [Executable("astro_dwarf_scheduler.py",target_name="astro_dwarf_scheduler.exe")]
 )

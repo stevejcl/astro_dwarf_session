@@ -7,3 +7,7 @@ bleak
 filelock
 
 paramiko
+
+tk
+
+requests

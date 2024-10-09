@@ -35,6 +35,7 @@ jobs:
 
   build_console:
     runs-on: windows-latest
+    needs: build_UI  # Ensures build_console runs after build_UI
 
     steps:
       - name: Checkout code
@@ -52,7 +53,7 @@ jobs:
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze
 
-      - name: Build the executable with setup.py
+      - name: Build the executable with setupCMD.py
         run: |
           python setupCMD.py build
 
@@ -61,3 +62,50 @@ jobs:
         with:
           name: AstroDwarfScheduler-Console
           path: build\exe.win-amd64-3.12\
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build_UI, build_console]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from CHANGELOG.md
+        id: get_version
+        run: |
+          VERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.VERSION }}
+          release_name: "AstroDwarfSchedulerGUI v${{ env.VERSION }}"
+          body: |
+            See the changelog for details.
+            [Changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
+          draft: false
+          prerelease: false
+
+      - name: Upload UI executable to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build\exe.win-amd64-3.12\AstroDwarfSchedulerGUI-UI.exe
+          asset_name: AstroDwarfSchedulerGUI-UI.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload Console executable to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build\exe.win-amd64-3.12\AstroDwarfScheduler-Console.exe
+          asset_name: AstroDwarfScheduler-Console.exe
+          asset_content_type: application/octet-stream

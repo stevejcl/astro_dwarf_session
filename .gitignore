@@ -1,0 +1,10 @@
+venv/
+dwarf_ble_connect/
+dwarf_python_api*/
+*.log
+*.log.old
+*.pyc
+*.tmp
+config.ini.bak
+build/
+*.bak

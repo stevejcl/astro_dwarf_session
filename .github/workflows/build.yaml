@@ -23,7 +23,7 @@ jobs:
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze
 
-      - name: Build the executable with setup_UI.py
+      - name: Build the executable with setupUI.py
         run: |
           python setup_UI.py build
 
@@ -54,7 +54,7 @@ jobs:
 
       - name: Build the executable with setup.py
         run: |
-          python setup.py build
+          python setupCMD.py build
 
       - name: Upload executable
         uses: actions/upload-artifact@v4

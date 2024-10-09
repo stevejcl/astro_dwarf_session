@@ -25,7 +25,7 @@ jobs:
 
       - name: Build the executable with setupUI.py
         run: |
-          python setup_UI.py build
+          python setupUI.py build
 
       - name: Upload executable
         uses: actions/upload-artifact@v4

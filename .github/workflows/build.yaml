@@ -30,13 +30,12 @@ jobs:
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: AstroDwarfSchedulerGUI-UI
+          name: AstroDwarfScheduler-GUI
           path: build\exe.win-amd64-3.12\
 
   build_console:
     runs-on: windows-latest
-    needs: build_UI  # Ensures build_console runs after build_UI
-
+    needs: build_UI 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,6 +69,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download UI executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-GUI
+
+      - name: Download Console executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console
 
       - name: Get version from CHANGELOG.md
         id: get_version

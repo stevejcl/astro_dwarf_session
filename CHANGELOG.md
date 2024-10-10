@@ -9,11 +9,8 @@
 -- GUI Features
   - Add Logs in main window
 
-## [1.2] - 2024-10-09
+## [1.2] - 2024-10-10
 
-### Added
+### Bugfixes
 
-- Initial release of AstroDwarfScheduler with console & GUI version
-- GUI Features
-  - Create sessions and use Stellarim for target selection
-
+- Bugfixes

@@ -79,7 +79,7 @@ jobs:
         id: release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: AstroDwarfSchedulerGUI, AstroDwarfScheduler-Console
+          artifacts: AstroDwarfScheduler*
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
           skipIfReleaseExists: true

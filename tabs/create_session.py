@@ -39,6 +39,36 @@ def save_to_json(settings_vars):
     }
     ircut_value = ircut_options.get(ircut_selected, "")  # Get the numerical value from the description
 
+    # Get the selected camera type
+    selected_camera = settings_vars["camera_type"].get()
+
+    # Initialize the camera setup with default values for "Tele Camera"
+    setup_camera = {
+        "do_action": True,
+        "exposure": exposure,
+        "gain": gain,
+        "binning": "0",
+        "IRCut": ircut_value,
+        "count": count,
+        "wait_after": 30
+    }
+
+    setup_wide_camera = {
+        "do_action": False,
+        "exposure": "10",
+        "gain": "90",
+        "count": "10",
+        "wait_after": 30
+    }
+
+    # Modify the behavior for "Wide-Angle Camera"
+    if selected_camera == "Wide-Angle Camera":
+        setup_camera["do_action"] = False
+        setup_wide_camera["do_action"] = True
+        setup_wide_camera["exposure"] = exposure  # Use input fields for wide-angle as well
+        setup_wide_camera["gain"] = gain
+        setup_wide_camera["count"] = count
+
     # Validate required fields
     if not description or not date or not time or not max_retries:
         messagebox.showerror("Error", "Please fill all required fields")
@@ -75,22 +105,8 @@ def save_to_json(settings_vars):
                 "dec_coord": float(dec_coord),
                 "wait_after": 20
             },
-            "setup_camera": {
-                "do_action": True,
-                "exposure": exposure,
-                "gain": gain,
-                "binning": "0",
-                "IRCut": ircut_value,  # Store the numerical value
-                "count": count,
-                "wait_after": 30
-            },
-            "setup_wide_camera": {
-            "do_action": False,
-            "exposure": "10",
-            "gain": "90",
-            "count": "10",
-            "wait_after": 30
-            }
+            "setup_camera": setup_camera,
+            "setup_wide_camera": setup_wide_camera
         }
     }
 
@@ -118,7 +134,6 @@ def save_to_json(settings_vars):
 
     messagebox.showinfo("Success", "Data saved successfully!")
 
-# Function to fetch and update Stellarium data
 def refresh_stellarium_data(settings_vars):
     """Refreshes Stellarium data and updates the form fields."""
     stellarium_connection = StellariumConnection()
@@ -138,7 +153,6 @@ def refresh_stellarium_data(settings_vars):
     except Exception as e:
         messagebox.showerror("Error", f"Error retrieving data from Stellarium: {e}")
 
-# Function to calculate and display the session end time
 def calculate_end_time(settings_vars):
     try:
         # Get the starting date, time, exposure, and count
@@ -167,8 +181,8 @@ def calculate_end_time(settings_vars):
     except ValueError as e:
         messagebox.showerror("Error", f"Invalid input: {e}")
         return None, None
-    
-# Create the create session tab
+
+# Function to create the session tab
 def create_session_tab(tab_create_session, settings_vars):
     # Create a Canvas and a Scrollbar for the session
     canvas = tk.Canvas(tab_create_session)
@@ -216,8 +230,16 @@ def create_session_tab(tab_create_session, settings_vars):
     check_calibration.pack(pady=10)
     settings_vars["calibration"] = var_calibration
 
+    # Camera Type Dropdown Menu
+    camera_label = tk.Label(scrollable_frame, text="Camera Type")
+    camera_label.pack(pady=5)
+    camera_var = tk.StringVar()
+    camera_dropdown = ttk.Combobox(scrollable_frame, textvariable=camera_var)
+    camera_dropdown['values'] = ["Tele Camera", "Wide-Angle Camera"]
+    camera_dropdown.pack(pady=5)
+    settings_vars["camera_type"] = camera_var  # Store selected camera type
+
     # IR Cut Dropdown Menu
-    # Updated IR Cut Dropdown Menu
     ircut_options = {
         "D2 - IRCut": "0",
         "D2 - IRPass": "1",
@@ -233,10 +255,6 @@ def create_session_tab(tab_create_session, settings_vars):
     ircut_dropdown['values'] = list(ircut_options.keys())
     ircut_dropdown.pack(pady=5)
     settings_vars["IRCut"] = ircut_var
-
-    # In save_to_json(), extract the numerical value based on the selection
-    ircut_selected = settings_vars["IRCut"].get()
-    ircut_value = ircut_options.get(ircut_selected, "")
 
     # Add button to fetch Stellarium data
     fetch_stellarium_button = tk.Button(scrollable_frame, text="Fetch Stellarium Data", command=lambda: refresh_stellarium_data(settings_vars))

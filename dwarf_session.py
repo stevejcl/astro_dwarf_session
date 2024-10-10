@@ -35,7 +35,7 @@ import dwarf_python_api.lib.my_logger as log
 STEP_DESCRIPTIONS = {
     "step_0": "initialization",
     "step_1": "Send GO LIVE Command to close previous imaging session",
-    "step_2": "Set Exposition to 1s for Calibration",
+    "step_2": "Set Exposure to 1s for Calibration",
     "step_3": "Set Gain to 80 for Calibration",
     "step_4": "Set IR PASS for Calibration",
     "step_5": "Set Binning to 4k for Calibration",

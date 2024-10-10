@@ -275,6 +275,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.json_text.insert(tk.END, f"  IRCut: {setup_camera.get('IRCut', 'N/A')}\n")
             self.json_text.insert(tk.END, f"  Count: {setup_camera.get('count', 'N/A')}\n")
             self.json_text.insert(tk.END, f"  Wait After: {setup_camera.get('wait_after', 'N/A')}\n")
+        
+        if command.get('setup_wide_camera', {}).get('do_action', False):
+            self.json_text.insert(tk.END, "\nSetup Wide-Angle Camera:\n")
+            setup_wide_camera = command['setup_wide_camera']
+            self.json_text.insert(tk.END, f"  Exposure: {setup_wide_camera.get('exposure', 'N/A')}\n")
+            self.json_text.insert(tk.END, f"  Gain: {setup_wide_camera.get('gain', 'N/A')}\n")
+            self.json_text.insert(tk.END, f"  Count: {setup_wide_camera.get('count', 'N/A')}\n")
+            self.json_text.insert(tk.END, f"  Wait After: {setup_wide_camera.get('wait_after', 'N/A')}\n")
 
         self.json_text.config(state=tk.DISABLED)
     

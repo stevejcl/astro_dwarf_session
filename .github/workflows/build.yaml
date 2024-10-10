@@ -27,14 +27,19 @@ jobs:
         run: |
           python setupUI.py build
 
-      - name: Upload executable
+      - name: Zip the GUI executable
+        run: |
+          powershell Compress-Archive -Path build\exe.win-amd64-3.12\* -DestinationPath AstroDwarfScheduler-GUI.zip
+
+      - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
         with:
-          name: AstroDwarfSchedulerGUI-UI
-          path: build\exe.win-amd64-3.12\
+          name: AstroDwarfScheduler-GUI
+          path: AstroDwarfScheduler-GUI.zip
 
   build_console:
     runs-on: windows-latest
+    needs: build_UI
 
     steps:
       - name: Checkout code
@@ -52,12 +57,52 @@ jobs:
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze
 
-      - name: Build the executable with setup.py
+      - name: Build the executable with setupCMD.py
         run: |
           python setupCMD.py build
 
-      - name: Upload executable
+      - name: Zip the Console executable
+        run: |
+          powershell Compress-Archive -Path build\exe.win-amd64-3.12\* -DestinationPath AstroDwarfScheduler-Console.zip
+
+      - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console
-          path: build\exe.win-amd64-3.12\
+          path: AstroDwarfScheduler-Console.zip
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build_UI, build_console]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download UI executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-GUI
+
+      - name: Download Console executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console
+
+      - name: Get version from CHANGELOG.md
+        id: get_version
+        run: echo "RVERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)" >> $GITHUB_ENV
+
+      - name: Check for files
+        id: checkfiles
+        run: ls /home/runner/work/astro_dwarf_session/astro_dwarf_session/
+
+      - name: Release with ncipollo/release-action
+        id: release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: AstroDwarfScheduler*
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generateReleaseNotes: true
+          skipIfReleaseExists: true
+          tag: v${{ env.RVERSION }}

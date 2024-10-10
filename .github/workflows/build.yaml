@@ -84,6 +84,10 @@ jobs:
         id: get_version
         run: echo "RVERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)" >> $GITHUB_ENV
 
+      - name: Check for files
+        id: checkfiles
+        run: ls /home/runner/work/astro_dwarf_session/astro_dwarf_session/
+
       - name: Release with ncipollo/release-action
         id: release
         uses: ncipollo/release-action@v1

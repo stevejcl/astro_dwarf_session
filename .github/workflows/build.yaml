@@ -88,7 +88,7 @@ jobs:
         id: release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: AstroDwarfScheduler*
+          artifacts: /home/runner/work/astro_dwarf_session/astro_dwarf_session/AstroDwarfScheduler*
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
           skipIfReleaseExists: true

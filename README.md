@@ -76,11 +76,23 @@ Installation
 
    Don't miss the dot at the end of the line
 
-Setup the config.ini file with your wifi ssid and password for using your dwarf on you local wifi network
-Then you can start it with => python .\astro_dwarf_scheduler.py
+   Setup the config.ini file with your wifi ssid and password for using your dwarf on you local wifi network
+   Then you can start :
+     console version with => python .\astro_dwarf_scheduler.py
+     GUI version with => python .\astro_dwarf_session_UI.py
 
-At the beginning, it will ask if you want to connect to the dwarf with bluetooth to start STA Mode.
-It will ask the same thing after an error at the end of an action processing, but il wait only 60s in this case.
+   For the console, you can set parameters: --ip ip_value --id (2 or 3)
+   These values are needed if you don't have connected it with bluetooth one time.
+
+   If parameters are not set, it will try to connect to the dwarf with bluetooth: a web page will start. it will stops on bluetooth error.
+
+   If it can't connect to dwarf at startup, it will ask if you want to connect to the dwarf with bluetooth during 30s and continue.
+
+   It will ask the same thing after an error at the end of an processing action, but il wait 60s in this case and continue.
+
+  - If parameters are OK, the console will continue and not ask fo bluetooth 
+  - So the console can be used in a headless environnement until it can connect.
+  - In this case, you can start the connection on Dwarfium (if you have it), so the processing can continue without human action on the console
 
 3. Prepare manually your sessions files, this will be done later with Dwarfium
 

@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import shutil
 import time
@@ -12,6 +13,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_timezone
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
 from dwarf_python_api.lib.dwarf_utils import save_bluetooth_config_from_ini_file
+from dwarf_python_api.get_config_data import get_config_data, update_config_data
 
 from dwarf_python_api.get_live_data_dwarf import fn_wait_for_user_input
 import dwarf_python_api.lib.my_logger as log
@@ -86,7 +88,7 @@ def retry_procedure(program, max_retries =3):
                 log.notice("----------------------")
 
 # Main function to check and execute the commands
-def check_and_execute_commands():
+def check_and_execute_commands(askBluetooth = False):
     for filename in os.listdir(TODO_DIR):
         filepath = os.path.join(TODO_DIR, filename)
         if filepath.endswith('.json'):
@@ -133,10 +135,13 @@ def check_and_execute_commands():
                     move_file(current_filepath, os.path.join(ERROR_DIR, filename))
                     log.notice("----------------------")
                     log.notice("----------------------")
-                    if (fn_wait_for_user_input(60, "An error occuring during last Action, do you want to reconnect to bluetooth or continue ?\nThe program will contine if you don't press CTRL-C within 60 seconds:" ))  == 1:
-                        print('continuing ....')
+                    if (askBluetooth and fn_wait_for_user_input(60, "An error occuring during last Action, do you want to reconnect to bluetooth or continue ?\nThe program will contine if you don't press CTRL-C within 60 seconds:" ))  == 1:
+                        log.notice('continuing ....')
+                    elif askBluetooth:
+                        start_connection(True)
                     else:
-                        start_connection()
+                        log.notice('continuing ....')
+                    pass
 
 def start_connection(startSTA = False):
 
@@ -171,23 +176,84 @@ def start_STA_connection():
 # Main loop to check files in ToDo folder
 def main():
     try:
-        result = True
-        choice = input("Do you want to Start bluetooth connection Y / N (default)? ")
-        if (choice == "Y"):
-            result = start_connection(True)
+        start_bluetooth = False
+        dwarf_ip = None
+        dwarf_id = None
+
+        if len(sys.argv) > 1:
+            # If command-line parameters are provided
+            i = 1
+            while i < len(sys.argv):
+                if sys.argv[i] == "--ble":
+                    start_bluetooth = True
+                    log.notice("Read: --ble parameter")
+                if sys.argv[i] == "--id":
+                    if i + 1 < len(sys.argv):
+                        dwarf_id = sys.argv[i + 1]
+                        log.notice(f"Read: --id parameter => {dwarf_id}")
+                        i += 1
+                    else:
+                        log.error("Error: --id parameter requires an argument.")
+                        sys.exit(1)
+                elif sys.argv[i] == "--ip":
+                    if i + 1 < len(sys.argv):
+                        dwarf_ip = sys.argv[i + 1]
+                        log.notice(f"Read: --ip parameter => {dwarf_ip}")
+                        i += 1
+                    else:
+                        log.error("Error: --ip parameter requires an argument.")
+                        sys.exit(1)
+                i += 1
+            if dwarf_id:
+                update_config_data( 'dwarf_id', dwarf_id)
+            if dwarf_ip:
+                update_config_data( 'ip', dwarf_ip)
+
+        # test if Ip and Id is set
+        data_config = get_config_data()
+        if data_config["dwarf_id"]:
+            dwarf_id = data_config['dwarf_id']
+        if data_config["ip"]:
+            dwarf_ip = data_config['ip']
+
+        # can't start
+        if not start_bluetooth and  not (dwarf_ip and dwarf_id):
+            log.notice("Some parameters are missing to connect automatically to the Dwarf, need to connect with bluetooth first.")
+            start_bluetooth = True
+
+        result = start_bluetooth
+        max_retries = 3
+        attempt = 0
+        while not result and attempt < max_retries:
+            log.notice ("##--------------------------------------##")
+            log.notice(f'Try to connect to the dwarf {dwarf_id} on {dwarf_ip}')
+            result = start_STA_connection()
+            attempt += 1
+
+        if start_bluetooth or not result:
+            if start_bluetooth:
+                log.notice('starting bluetooth....')
+                result = start_connection(True)
+            elif (fn_wait_for_user_input(30, "Can't connect to the dwarf, do you want to reconnect to bluetooth or continue ?\nThe program will continue if you don't press CTRL-C within 30 seconds:" ))  == 1:
+                log.notice('continue ....')
+                result = True
+            else:
+                log.notice('starting bluetooth....')
+                result = start_connection(True)
+
         if (result):
             log.notice ("##--------------------------------------##")
             log.notice ("## Astro_Dwarf_Scheduler is starting... ##")
             log.notice ("##--------------------------------------##")
             log.notice ("   Waiting for Action files...")
             while True:
-                check_and_execute_commands()
+                check_and_execute_commands(True)
                 time.sleep(10)
         else:
              log.error("Can't connect to the Dwarf, process stop!")
     except KeyboardInterrupt:
         log.notice("Operation interrupted by the user (CTRL+C).")
-
+        pass
     finally:
         perform_disconnect()
 

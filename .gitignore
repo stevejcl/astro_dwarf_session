@@ -8,3 +8,4 @@ dwarf_python_api*/
 config.ini.bak
 build/
 *.bak
+/myenv3

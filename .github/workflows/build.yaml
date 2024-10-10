@@ -27,15 +27,20 @@ jobs:
         run: |
           python setupUI.py build
 
-      - name: Upload executable
+      - name: Zip the GUI executable
+        run: |
+          powershell Compress-Archive -Path build\exe.win-amd64-3.12\* -DestinationPath AstroDwarfScheduler-GUI.zip
+
+      - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI
-          path: build\exe.win-amd64-3.12\
+          path: AstroDwarfScheduler-GUI.zip
 
   build_console:
     runs-on: windows-latest
-    needs: build_UI 
+    needs: build_UI
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,11 +61,15 @@ jobs:
         run: |
           python setupCMD.py build
 
-      - name: Upload executable
+      - name: Zip the Console executable
+        run: |
+          powershell Compress-Archive -Path build\exe.win-amd64-3.12\* -DestinationPath AstroDwarfScheduler-Console.zip
+
+      - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console
-          path: build\exe.win-amd64-3.12\
+          path: AstroDwarfScheduler-Console.zip
 
   release:
     runs-on: ubuntu-latest
@@ -92,7 +101,7 @@ jobs:
         id: release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: /home/runner/work/astro_dwarf_session/astro_dwarf_session/AstroDwarfScheduler*
+          artifacts: AstroDwarfScheduler*
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
           skipIfReleaseExists: true

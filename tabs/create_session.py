@@ -83,6 +83,13 @@ def save_to_json(settings_vars):
                 "IRCut": ircut_value,  # Store the numerical value
                 "count": count,
                 "wait_after": 30
+            },
+            "setup_wide_camera": {
+            "do_action": False,
+            "exposure": "10",
+            "gain": "90",
+            "count": "10",
+            "wait_after": 30
             }
         }
     }

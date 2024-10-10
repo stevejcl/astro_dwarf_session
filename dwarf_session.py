@@ -31,6 +31,45 @@ from dwarf_python_api.get_config_data import get_config_data
 
 import dwarf_python_api.lib.my_logger as log
 
+def select_solar_target (target):
+   
+    target_id = None
+    reult = False
+   
+    if (target.lower() == "mercury"):
+        target_id = 1
+
+    if (target.lower() == "venus"):
+        target_id = 2
+
+    if (target.lower() == "mars"):
+        target_id = 3
+
+    if (target.lower() == "jupiter"):
+        target_id = 4
+
+    if (target.lower() == "saturn"):
+        target_id = 5
+
+    if (target.lower() == "uranus"):
+        target_id = 6
+
+    if (target.lower()== "neptune"):
+        target_id = 7
+
+    if (target.lower() == "moon"):
+        target_id = 8
+
+    if (target.lower() == "sun"):
+        target_id = 9
+
+    if target_id:
+        target_name = target.capitalize()
+        result = perform_goto_stellar(target_id, target_name)
+    else:
+        log.error(f"The solar system object ({target}) is unknown")
+    return result
+
 # Define step descriptions
 STEP_DESCRIPTIONS = {
     "step_0": "initialization",
@@ -118,7 +157,7 @@ def start_dwarf_session(program, type_dwarf = 2):
             IR_val = program['setup_camera'].get('IRCut', None)
             count_val = program['setup_camera'].get('count', None)
             log.notice(f" To do => Astro Photo with these parameters")
-            log.notice(f"     exposition  => {exp_val}s")
+            log.notice(f"     exposure  => {exp_val}s")
             log.notice(f"     gain  => {gain_val}")
             log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
             if dwarf_id == "3":
@@ -132,7 +171,7 @@ def start_dwarf_session(program, type_dwarf = 2):
             wide_gain_val = program['setup_wide_camera'].get('gain', None)
             count_val = program['setup_wide_camera'].get('count', None)
             log.notice(f" To do => Astro Wide Photo with these parameters")
-            log.notice(f"     exposition  => {wide_exp_val}s")
+            log.notice(f"     exposure  => {wide_exp_val}s")
             log.notice(f"     gain  => {wide_gain_val}")
             log.notice(f"     number of images  => {count_val}")
 
@@ -311,9 +350,9 @@ def print_camera_data():
            index_value = matching_entry["index"]
 
            camera_exposure = str(get_exposure_name_by_index(index_value,dwarf_id))
-           log.notice(f"the exposition is: {camera_exposure}")
+           log.notice(f"the exposure is: {camera_exposure}")
         else:
-           log.notice("the exposition has not been found")
+           log.notice("the exposure has not been found")
 
         # get Gain
         target_id = 1
@@ -354,7 +393,7 @@ def print_camera_data():
         else:
            log.notice("the IRfilter has not been found")
     else:
-       log.notice("the exposition has not been found")
+       log.notice("the exposure has not been found")
        log.notice("the gain has not been found")
        log.notice("the IRfilter has not been found")
 
@@ -439,9 +478,9 @@ def print_wide_camera_data():
            index_value = matching_entry["index"]
 
            camera_wide_exposure = str(get_wide_exposure_name_by_index(index_value,dwarf_id))
-           log.notice(f"the exposition is: {camera_wide_exposure}")
+           log.notice(f"the exposure is: {camera_wide_exposure}")
         else:
-           log.notice("the exposition has not been found")
+           log.notice("the exposure has not been found")
 
         # get Gain
         target_id = 1
@@ -460,7 +499,7 @@ def print_wide_camera_data():
            log.notice("the gain has not been found")
 
     else:
-       log.notice("the exposition has not been found")
+       log.notice("the exposure has not been found")
        log.notice("the gain has not been found")
 
     # ALL FEATURE PARAMS

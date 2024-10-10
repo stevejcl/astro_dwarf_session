@@ -9,6 +9,10 @@ from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection
 from dwarf_ble_connect.connect_bluetooth import connect_bluetooth
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
+import logging
+import dwarf_python_api.lib.my_logger as log
+from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
+
 from tabs import settings
 from tabs import create_session
 
@@ -46,6 +50,23 @@ class Tooltip:
         if self.tooltip_window:
             self.tooltip_window.destroy()
             self.tooltip_window = None
+
+class TextHandler(logging.Handler):
+    """
+    This class allows logging to be directed to a Tkinter Text widget.
+    """
+    def __init__(self, text_widget):
+        super().__init__()
+        self.text_widget = text_widget
+        self.text_widget.config(state=tk.NORMAL)
+    
+    def emit(self, record):
+        # Format the log message
+        msg = self.format(record)
+        # Append the message to the text widget
+        self.text_widget.insert(tk.END, msg + '\n')
+        # Auto scroll to the end
+        self.text_widget.yview(tk.END)
 
 # GUI Application class
 class AstroDwarfSchedulerApp(tk.Tk):
@@ -98,10 +119,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.log("Waiting Closing Scheduler...")
             self.stop_scheduler()
         
-            self.countdown(15)
+            self.countdown(20)
 
         else:
-            self.after(500, self.destroy)
+            self.after(3000, self.destroy)
 
     def countdown(self, wait):
         '''
@@ -153,7 +174,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
         # Log text area
         self.log_text = tk.Text(self.tab_main, wrap=tk.WORD, height=15)
         self.log_text.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-        
 
     def overview_session_tab(self):  
         # JSON session management section
@@ -311,6 +331,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def start_scheduler(self):
         if not self.scheduler_running:
             self.scheduler_running = True
+            self.start_logHandler()
             self.start_button.config(state=tk.DISABLED)
             self.stop_button.config(state=tk.NORMAL)
             self.log("Astro_Dwarf_Scheduler is starting...")
@@ -318,16 +339,31 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_thread.start()
 
     def stop_scheduler(self):
+        self.stop_logHandler()
         if self.scheduler_running:
             self.scheduler_running = False
             self.start_button.config(state=tk.NORMAL)
             self.stop_button.config(state=tk.DISABLED)
-            perform_disconnect()
+            self.verifyCountdown(15)
             self.log("Scheduler is stopping...")
         else:
             self.start_button.config(state=tk.NORMAL)
             self.stop_button.config(state=tk.DISABLED)
             self.log("Scheduler is stopped")
+
+    def verifyCountdown(self, wait):
+        '''
+        verifyCountdown that checks scheduler status and waits for stop or timeout
+        '''
+        if self.scheduler_stopped:
+            self.log("Scheduler stopped.")
+        elif wait > 0:
+            # Schedule the verifyCountdown to run again after 1 second
+            self.after(1000, self.verifyCountdown, wait - 1)
+        else:
+            self.log("Time's up! Closing now...")
+            self.after(500, perform_disconnect())
+ 
 
     def run_scheduler(self):
         try:
@@ -349,6 +385,23 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.log("Disconnected from the Dwarf.")
             self.scheduler_running = False
             self.scheduler_stopped = True
+
+    def start_logHandler(self):
+
+        # Create an instance of the TextHandler and attach it to the logger
+        self.logger = logging.getLogger()
+        self.logger.setLevel(logging.INFO)  # Ensure all messages are captured
+
+        self.text_handler = TextHandler(self.log_text)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s',  datefmt='%y-%m-%d %H:%M:%S')
+        self.text_handler.setFormatter(formatter)
+        self.text_handler.setLevel(NOTICE_LEVEL_NUM)
+        self.logger.addHandler(self.text_handler)
+
+    def stop_logHandler(self):
+
+        self.logger.info("Removing L...")
+        self.logger.removeHandler(self.text_handler)  # Remove the TextHandler
 
     def log(self, message):
         self.log_text.insert(tk.END, message + "\n")

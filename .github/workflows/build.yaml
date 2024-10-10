@@ -73,39 +73,14 @@ jobs:
 
       - name: Get version from CHANGELOG.md
         id: get_version
-        run: |
-          VERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+        run: echo "RVERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)" >> $GITHUB_ENV
 
-      - name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release with ncipollo/release-action
+        id: release
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ env.VERSION }}
-          release_name: "AstroDwarfSchedulerGUI v${{ env.VERSION }}"
-          body: |
-            See the changelog for details.
-            [Changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
-          draft: false
-          prerelease: false
-
-      - name: Upload UI executable to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build\exe.win-amd64-3.12\AstroDwarfSchedulerGUI-UI.exe
-          asset_name: AstroDwarfSchedulerGUI-UI.exe
-          asset_content_type: application/octet-stream
-
-      - name: Upload Console executable to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build\exe.win-amd64-3.12\AstroDwarfScheduler-Console.exe
-          asset_name: AstroDwarfScheduler-Console.exe
-          asset_content_type: application/octet-stream
+          artifacts: AstroDwarfSchedulerGUI, AstroDwarfScheduler-Console
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generateReleaseNotes: true
+          skipIfReleaseExists: true
+          tag: v${{ env.RVERSION }}

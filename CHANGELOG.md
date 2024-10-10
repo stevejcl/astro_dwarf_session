@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4] - 2024-10-10
+
+### Wide-Angle for session creation
+
+-- GUI Feature
+
+- Add Wide-Angle selection for new sessions
+- Display Wide-Angle configuration from session
+
+-- Bugfix
+
+- fixed typo
+
 ## [1.3] - 2024-10-10
 
 ### Added

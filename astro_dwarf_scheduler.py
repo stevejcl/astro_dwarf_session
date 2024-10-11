@@ -206,9 +206,9 @@ def check_and_execute_commands(askBluetooth = False):
 
                     # Check for 30 minutes, 15 minutes, and 5 minutes before execution
                     time_intervals = {
-                        '30 minutes': timedelta(minutes=30),
+                        '5 minutes': timedelta(minutes=5),
                         '15 minutes': timedelta(minutes=15),
-                        '5 minutes': timedelta(minutes=5)
+                        '30 minutes': timedelta(minutes=30)
                     }
                     
                     for interval, delta in time_intervals.items():

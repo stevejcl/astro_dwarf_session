@@ -3,7 +3,7 @@ import sys
 import json
 import shutil
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from dwarf_session import start_dwarf_session
 from dwarf_ble_connect.connect_bluetooth import connect_bluetooth
@@ -52,8 +52,25 @@ def move_file(source, destination):
 
 # Check if the execution time of the command has been reached
 def is_time_to_execute(command):
-    command_datetime = datetime.strptime(f"{command['date']} {command['time']}", "%Y-%m-%d %H:%M:%S")
+    # Get current date and time
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_time = datetime.now().strftime("%H:%M:%S")
+
+    date_action = command.get('date',current_date)
+    time_action = command.get('time',current_time)
+    command_datetime = datetime.strptime(f"{date_action} {time_action}", "%Y-%m-%d %H:%M:%S")
     return datetime.now() >= command_datetime
+
+# Get the execution time for later processing
+def get_time_to_execute(current_datetime, command):
+    # Safely get 'date' and 'time' from the command, defaulting to now if missing
+    command_date = command.get('date', current_datetime.strftime("%Y-%m-%d"))
+    command_time = command.get('time', current_datetime.strftime("%H:%M:%S"))
+            
+    # Combine 'date' and 'time' into a single datetime object
+    command_datetime = datetime.strptime(f"{command_date} {command_time}", "%Y-%m-%d %H:%M:%S")
+
+    return command_datetime
 
 # Update the process status in the JSON file
 def update_process_status(program, status, result=None, message=None, nb_try=None):
@@ -87,29 +104,55 @@ def retry_procedure(program, max_retries =3):
                 log.notice("Retrying...")
                 log.notice("----------------------")
 
+last_logged = {}  # Dictionary to track when each file was last logged
+last_hourly_log = {}  # Dictionary to track the last hourly log time for each filename
+
 # Main function to check and execute the commands
 def check_and_execute_commands(askBluetooth = False):
     for filename in os.listdir(TODO_DIR):
         filepath = os.path.join(TODO_DIR, filename)
         if filepath.endswith('.json'):
-            log.notice("######################")
-            log.notice(f"Find File  {filepath}")
             program = load_json(filepath)
             if program is False:
                 return
 
             # Extract command info
-            command = program['command']['id_command']
+            command = program.get('command', {}).get('id_command')
 
+            # ignore file if command or id_command doesn't exist
+            if not command:
+                log.error(f"Mandatory commands not found in file, the file {filename} is ignored")
+                # Move file to "Error" folder
+                current_filepath = os.path.join(TODO_DIR, filename)
+                move_file(current_filepath, os.path.join(ERROR_DIR, filename))
+                log.notice("----------------------")
+                log.notice("----------------------")
+
+            # Ignore file if process exists and is different from 'wait' 
+            elif command.get('process') is not None and command.get('process') != 'wait':
+                log.warning(f"Process value is not 'wait', the file {filename} is ignored")
+                # Move file to "Error" folder
+                current_filepath = os.path.join(TODO_DIR, filename)
+                move_file(current_filepath, os.path.join(ERROR_DIR, filename))
+                log.notice("----------------------")
+                log.notice("----------------------")
             # Check if the execution time has been reached
-            if is_time_to_execute(command) and command['process'] == 'wait':
-                log.debug(f"Executing command {command['uuid']}")
+            elif is_time_to_execute(command) and command.get('process', 'wait') == 'wait':
+                log.notice("######################")
+                log.notice(f"Find File  {filename}, that is ready to execute")
+                log.debug(f"Executing command {command.get('uuid')}")
 
                 # Move to "Current" folder and update status
                 current_filepath = os.path.join(CURRENT_DIR, filename)
                 program = update_process_status(program, 'pending')
                 save_json(filepath, program)
                 move_file(filepath, current_filepath)
+
+                # Remove from the logging dictionary as it's been executed
+                if filename in last_logged:
+                    del last_logged[filename]
+                if filename in last_hourly_log:
+                    del last_hourly_log[filename]
 
                 try:
                     # Execute the session
@@ -142,6 +185,49 @@ def check_and_execute_commands(askBluetooth = False):
                     else:
                         log.notice('continuing ....')
                     pass
+
+            # Log Ignore time
+            elif command.get('process', 'wait') == 'wait':
+                # Get current date and time
+                current_datetime = datetime.now()
+                command_datetime = get_time_to_execute(current_datetime, command)
+
+                # If the file isn't ready, log it based on the time since the last log
+                if filename not in last_logged:
+                    # Log the first time
+                    log_command_status(filename, command_datetime, first_time=True)
+                    last_logged[filename] = current_datetime
+                    last_hourly_log[filename] = current_datetime  # Initialize hourly log
+                else:
+                    # Check for hourly log
+                    if current_datetime - last_hourly_log[filename] >= timedelta(hours=1):
+                        log_command_status(filename, command_datetime, interval="Hourly")
+                        last_hourly_log[filename] = current_datetime  # Update last hourly log
+
+                    # Check for 30 minutes, 15 minutes, and 5 minutes before execution
+                    time_intervals = {
+                        '5 minutes': timedelta(minutes=5),
+                        '15 minutes': timedelta(minutes=15),
+                        '30 minutes': timedelta(minutes=30)
+                    }
+                    
+                    for interval, delta in time_intervals.items():
+                        # Check if the time until the command execution exceeds the interval
+                        if command_datetime - current_datetime <= delta:
+                            # Only log if we haven't logged this interval yet
+                            if filename not in last_logged or last_logged[filename] != interval:
+                                log_command_status(filename, command_datetime, interval)
+                                last_logged[filename] = interval  # Update last logged interval
+                            break  # Break to avoid logging multiple times for the same interval
+
+
+def log_command_status(filename, command_datetime, interval=None, first_time=False):
+    if first_time:
+        log.notice("######################")
+        log.notice(f"Find File  {filename}, not yet ready, will execute not earlier than {command_datetime}")
+    else:
+        log.notice("######################")
+        log.notice(f"{interval} log:  {filename}, not yet ready, will execute not earlier than {command_datetime}")
 
 def start_connection(startSTA = False):
 

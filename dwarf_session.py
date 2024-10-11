@@ -34,7 +34,7 @@ import dwarf_python_api.lib.my_logger as log
 def select_solar_target (target):
    
     target_id = None
-    reult = False
+    result = False
    
     if (target.lower() == "mercury"):
         target_id = 1
@@ -131,24 +131,33 @@ def start_dwarf_session(program, type_dwarf = 2):
         log.debug(f"program: {dump_json}")
         log.debug("######################")
 
-        # Extracting program parameters
-        calibration = program['calibration']['do_action']
+        # Extracting program parameters, return None if it doesn't exist
+        calibration = program.get('calibration', {}).get('do_action')
         if calibration:
             log.notice(f" To do => Calibration")
 
-        goto_solar = program['goto_solar']['do_action']
-        goto_manual = program['goto_manual']['do_action']
-        take_photo = program['setup_camera']['do_action']
-        take_widephoto = program['setup_wide_camera']['do_action']
+        goto_solar = program.get('goto_solar', {}).get('do_action')
+        goto_manual = program.get('goto_manual', {}).get('do_action')
+        take_photo = program.get('setup_camera', {}).get('do_action')
+        take_widephoto = program.get('setup_wide_camera', {}).get('do_action')
 
         if goto_solar:
-            target_name = program['goto_solar']['target']
-            log.notice(f" To do => GOTO SOLAR SYSTEM : {target_name}")
+            target_name = program.get('goto_solar', {}).get('target')
+            if target_name:
+                log.notice(f" To do => GOTO SOLAR SYSTEM : {target_name}")
+            else:
+                log.error(f" Error in Settings => GOTO SOLAR SYSTEM : 'target' is not valid, task ignored!")
+                goto_solar = False
+
         if goto_manual:
-            manual_RA = program['goto_manual']['ra_coord']
-            manual_declination = program['goto_manual']['dec_coord']
-            target_name = program['goto_manual']['target']
-            log.notice(f" To do => GOTO : {target_name}")
+            manual_RA = program.get('goto_manual', {}).get('ra_coord')
+            manual_declination = program.get('goto_manual', {}).get('dec_coord')
+            target_name = program.get('goto_manual', {}).get('target')
+            if target_name and manual_RA and manual_declination:
+                log.notice(f" To do => GOTO : {target_name}")
+            else:
+                log.error(f" Error in Settings => GOTO : parameters are not valid, task ignored!")
+                goto_manual = False
 
         if take_photo:
             exp_val = program['setup_camera'].get('exposure', None)
@@ -156,24 +165,34 @@ def start_dwarf_session(program, type_dwarf = 2):
             binning_val = program['setup_camera'].get('binning', None)
             IR_val = program['setup_camera'].get('IRCut', None)
             count_val = program['setup_camera'].get('count', None)
-            log.notice(f" To do => Astro Photo with these parameters")
-            log.notice(f"     exposure  => {exp_val}s")
-            log.notice(f"     gain  => {gain_val}")
-            log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
-            if dwarf_id == "3":
-                log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
+
+            if exp_val or gain_val or binning_val or IR_val or count_val:
+                log.notice(f" To do => Astro Photo with these parameters")
+                log.notice(f"     exposure  => {exp_val}s")
+                log.notice(f"     gain  => {gain_val}")
+                log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
+                if dwarf_id == "3":
+                    log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
+                else:
+                    log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
+                log.notice(f"     number of images  => {count_val}")
             else:
-                log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
-            log.notice(f"     number of images  => {count_val}")
+                log.warning(f" Error in Settings => PHOTO : none settings found, task ignored!")
+                take_photo = False
 
         if take_widephoto:
             wide_exp_val = program['setup_wide_camera'].get('exposure', None)
             wide_gain_val = program['setup_wide_camera'].get('gain', None)
             count_val = program['setup_wide_camera'].get('count', None)
-            log.notice(f" To do => Astro Wide Photo with these parameters")
-            log.notice(f"     exposure  => {wide_exp_val}s")
-            log.notice(f"     gain  => {wide_gain_val}")
-            log.notice(f"     number of images  => {count_val}")
+
+            if wide_exp_val or wide_gain_val or count_val:
+                log.notice(f" To do => Astro Wide Photo with these parameters")
+                log.notice(f"     exposure  => {wide_exp_val}s")
+                log.notice(f"     gain  => {wide_gain_val}")
+                log.notice(f"     number of images  => {count_val}")
+            else:
+                log.warning(f" Error in Settings => WIDE PHOTO : none settings found, task ignored!")
+                take_widephoto = False
 
         # Session initialization
         log.notice("######################")
@@ -218,15 +237,18 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(5)
 
             log.notice("Starting Calibration")
-            time.sleep(program['calibration']['wait_before'])
+            wait_before = program.get('calibration', {}).get('wait_before', 0)
+            time.sleep(wait_before)
             continue_action = perform_calibration()
             verify_action(continue_action, "step_7")
-            time.sleep(program['calibration']['wait_after'])
+            wait_after = program.get('calibration', {}).get('wait_after', 0)
+            time.sleep(wait_after)
 
         if goto_solar:
             log.notice(f"Processing Goto Solar System : {target_name}")
             continue_action = select_solar_target(target_name)
-            time.sleep(program['goto_solar']['wait_after'])
+            wait_after = program.get('goto_solar', {}).get('wait_after', 0)
+            time.sleep(wait_after)
             verify_action(continue_action, "step_8")
 
         if goto_manual:
@@ -242,7 +264,8 @@ def start_dwarf_session(program, type_dwarf = 2):
                 decimal_Dec = parse_dec_to_float(manual_declination)
 
             continue_action = perform_goto(decimal_RA, decimal_Dec, target_name)
-            time.sleep(program['goto_manual']['wait_after'])
+            wait_after = program.get('goto_manual', {}).get('wait_after', 0)
+            time.sleep(wait_after)
             verify_action(continue_action, "step_9")
 
         if take_photo:
@@ -262,7 +285,8 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(5)
             print_camera_data()
 
-            time.sleep(program['setup_camera']['wait_after'])
+            wait_after = program.get('setup_camera', {}).get('wait_after', 0)
+            time.sleep(wait_after)
             verify_action(continue_action, "step_10")
 
             continue_action = perform_takeAstroPhoto()
@@ -284,7 +308,8 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(5)
             print_wide_camera_data()
 
-            time.sleep(program['setup_wide_camera']['wait_after'])
+            wait_after = program.get('setup_wide_camera', {}).get('wait_after', 0)
+            time.sleep(wait_after)
             verify_action(continue_action, "step_13")
 
             continue_action = perform_takeAstroWidePhoto()

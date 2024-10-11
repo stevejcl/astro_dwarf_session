@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5] - 2024-10-11
+
+### Add control in Tasks Settings
+
+-- Bugfix
+
+- Avoid error if settings doesn't exist
+- Control the settings in each section to ignore task if mandatory one doesn't exist
+
 ## [1.4] - 2024-10-10
 
 ### Wide-Angle for session creation

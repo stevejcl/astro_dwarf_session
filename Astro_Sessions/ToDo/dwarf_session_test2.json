@@ -2,11 +2,11 @@
     "command": {
         "id_command": {
             "uuid": "00001",
-            "description": "NGC 7000",
-            "date": "2024-10-02",
-            "time": "00:05:00",
-            "process": "wait",
-            "max_retries": 3,
+            "description": "First Test",
+            "date": "2024-10-11",
+            "time": "14:40:00",
+            "process2": "wait",
+            "max_retries": 2,
             "result": true,
             "message": {},
             "nb_try": 1
@@ -14,31 +14,26 @@
         "calibration": {
             "do_action": false,
             "wait_before": 10,
-            "wait_after": 20
+            "wait_after": 10
         },
         "goto_solar": {
-            "do_action": false,
+            "do_action": true,
             "target": "planet_name",
             "wait_after": 10
         },
         "goto_manual": {
-            "do_action": true,
-            "target": "Veil Nebula 2",
-            "ra_coord": "20:52:6.78",
-            "dec_coord": "+29:54:41.5",
-            "wait_after": 40
+            "do_action": false,
+            "target": "VEGA",
+            "ra_coord": 18.6152268611111,
+            "dec_coord": 38.78441583333333,
+            "wait_after": 20
         },
         "setup_camera": {
-            "do_action": false,
-            "exposure": "13",
-            "gain": "80",
-            "binning": "0",
-            "IRCut": "0",
-            "count": "200",
+            "do_action": true,
             "wait_after": 30
         },
         "setup_wide_camera": {
-            "do_action": true,
+            "do_action": false,
             "exposure": "10",
             "gain": "90",
             "count": "10",

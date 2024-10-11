@@ -237,15 +237,18 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(5)
 
             log.notice("Starting Calibration")
-            time.sleep(program['calibration']['wait_before'])
+            wait_before = program.get('calibration', {}).get('wait_before', 0)
+            time.sleep(wait_before)
             continue_action = perform_calibration()
             verify_action(continue_action, "step_7")
-            time.sleep(program['calibration']['wait_after'])
+            wait_after = program.get('calibration', {}).get('wait_after', 0)
+            time.sleep(wait_after)
 
         if goto_solar:
             log.notice(f"Processing Goto Solar System : {target_name}")
             continue_action = select_solar_target(target_name)
-            time.sleep(program['goto_solar']['wait_after'])
+            wait_after = program.get('goto_solar', {}).get('wait_after', 0)
+            time.sleep(wait_after)
             verify_action(continue_action, "step_8")
 
         if goto_manual:
@@ -261,7 +264,8 @@ def start_dwarf_session(program, type_dwarf = 2):
                 decimal_Dec = parse_dec_to_float(manual_declination)
 
             continue_action = perform_goto(decimal_RA, decimal_Dec, target_name)
-            time.sleep(program['goto_manual']['wait_after'])
+            wait_after = program.get('goto_manual', {}).get('wait_after', 0)
+            time.sleep(wait_after)
             verify_action(continue_action, "step_9")
 
         if take_photo:
@@ -281,7 +285,8 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(5)
             print_camera_data()
 
-            time.sleep(program['setup_camera']['wait_after'])
+            wait_after = program.get('setup_camera', {}).get('wait_after', 0)
+            time.sleep(wait_after)
             verify_action(continue_action, "step_10")
 
             continue_action = perform_takeAstroPhoto()
@@ -303,7 +308,8 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(5)
             print_wide_camera_data()
 
-            time.sleep(program['setup_wide_camera']['wait_after'])
+            wait_after = program.get('setup_wide_camera', {}).get('wait_after', 0)
+            time.sleep(wait_after)
             verify_action(continue_action, "step_13")
 
             continue_action = perform_takeAstroWidePhoto()

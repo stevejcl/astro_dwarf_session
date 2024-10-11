@@ -25,7 +25,7 @@ def overview_session_tab(parent_frame):
     json_text.pack(fill=tk.BOTH, padx=10, pady=5)
     
     # Button to select the session
-    select_button = tk.Button(parent_frame, text="Select Session", command=lambda: select_session(json_listbox), state=tk.DISABLED)
+    select_button = tk.Button(parent_frame, text="Select Session", command=lambda: select_session(json_listbox, json_text, select_button), state=tk.NORMAL)
     select_button.pack(pady=20)
     
     # Button to refresh the JSON list
@@ -108,27 +108,27 @@ def display_json_content(filepath, json_text):
         json_text.insert(tk.END, f"  Wait After: {setup_wide_camera.get('wait_after', 'N/A')}\n")
     json_text.config(state=tk.DISABLED)
 
-def select_session(self):
+def select_session(json_listbox, json_text, select_button):
     """Moves the selected JSON file to the ToDo folder."""
-    selection = self.json_listbox.curselection()
+    selection = json_listbox.curselection()
     if selection:
-        selected_file = self.json_listbox.get(selection[0])
+        selected_file = json_listbox.get(selection[0])
         source_path = os.path.join('./Astro_Sessions', selected_file)
         destination_path = os.path.join(TODO_DIR, selected_file)
         
         try:
             # Move the file to the ToDo directory
             shutil.move(source_path, destination_path)
-            self.log(f"Moved {selected_file} to ToDo folder.")
+            print(f"Moved {selected_file} to ToDo folder.")
 
             # Refresh the listbox
-            self.populate_json_list()
+            populate_json_list(json_listbox)
             
             # Clear the text area and disable the select button
-            self.json_text.config(state=tk.NORMAL)
-            self.json_text.delete(1.0, tk.END)
-            self.json_text.config(state=tk.DISABLED)
-            self.select_button.config(state=tk.DISABLED)
+            json_text.config(state=tk.NORMAL)
+            json_text.delete(1.0, tk.END)
+            json_text.config(state=tk.DISABLED)
+            select_button.config(state=tk.DISABLED)
 
         except Exception as e:
-            self.log(f"Error moving file: {e}")
+            print(f"Error moving file: {e}")

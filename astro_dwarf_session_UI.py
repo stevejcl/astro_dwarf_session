@@ -1,6 +1,5 @@
 import os
 import json
-import shutil
 import time
 import threading
 from datetime import datetime
@@ -15,6 +14,7 @@ from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
 
 from tabs import settings
 from tabs import create_session
+from tabs import overview_session
 
 # Directories
 TODO_DIR = './Astro_Sessions/ToDo'
@@ -81,18 +81,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
         
         self.tab_main = ttk.Frame(self.tab_control)
         self.tab_settings = ttk.Frame(self.tab_control)
-        self.tab_session = ttk.Frame(self.tab_control)
+        self.tab_overview_session = ttk.Frame(self.tab_control)
         self.tab_create_session = ttk.Frame(self.tab_control)
         
         self.tab_control.add(self.tab_main, text="Main")
         self.tab_control.add(self.tab_settings, text="Settings")
-        self.tab_control.add(self.tab_session, text="Session Overview")
+        self.tab_control.add(self.tab_overview_session, text="Session Overview")
         self.tab_control.add(self.tab_create_session, text="Create Session")
         
         self.create_main_tab()
         self.settings_vars = {}
         settings.create_settings_tab(self.tab_settings, self.settings_vars) 
-        self.overview_session_tab()
+        overview_session.overview_session_tab(self.tab_overview_session)
         create_session.create_session_tab(self.tab_create_session, self.settings_vars)
 
         self.result = False
@@ -174,144 +174,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
         # Log text area
         self.log_text = tk.Text(self.tab_main, wrap=tk.WORD, height=15)
         self.log_text.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-
-    def overview_session_tab(self):  
-        # JSON session management section
-        self.json_label = tk.Label(self.tab_session, text="Available Sessions:", font=("Arial", 12))
-        self.json_label.pack(pady=5)
-    
-        # Listbox to show available JSON files
-        self.json_listbox = tk.Listbox(self.tab_session, height=6)
-        self.json_listbox.pack(fill=tk.BOTH, padx=10, pady=5)
-        self.json_listbox.bind('<<ListboxSelect>>', self.on_json_select)
-    
-        # Text area to display JSON file content
-        self.json_text = tk.Text(self.tab_session, height=10, state=tk.DISABLED)
-        self.json_text.pack(fill=tk.BOTH, padx=10, pady=5)
-    
-        # Button to select the session
-        self.select_button = tk.Button(self.tab_session, text="Select Session", command=self.select_session, state=tk.DISABLED)
-        self.select_button.pack(pady=20)
-    
-        # Button to refresh the JSON list
-        self.refresh_button = tk.Button(self.tab_session, text="Refresh JSON List", command=self.populate_json_list)
-        self.refresh_button.pack(pady=5)
-
-        # Populate JSON list
-        self.populate_json_list()  
-    
-    def populate_json_list(self):
-        """Populates the listbox with JSON files from the Astro_Sessions folder."""
-        self.json_listbox.delete(0, tk.END)
-        try:
-            for filename in os.listdir('./Astro_Sessions'):
-                if filename.endswith('.json'):
-                   self.json_listbox.insert(tk.END, filename)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load JSON files: {e}")
-    
-    def on_json_select(self, event):
-        """Triggered when a JSON file is selected, and displays its content."""
-        selection = self.json_listbox.curselection()
-        if selection:
-            selected_file = self.json_listbox.get(selection[0])
-            filepath = os.path.join('./Astro_Sessions', selected_file)
-            
-            # Load and display the selected JSON file content
-            self.display_json_content(filepath)
-    
-            # Enable the Select Session button
-            self.select_button.config(state=tk.NORMAL)
-    
-    def display_json_content(self, filepath):
-        """Displays the content of the selected JSON file in the text area."""
-        with open(filepath, 'r') as file:
-            data = json.load(file)
-
-        self.json_text.config(state=tk.NORMAL)
-        self.json_text.delete(1.0, tk.END)
-
-        # Extract 'id_command' details
-        id_command = data['command']['id_command']
-        description = id_command.get('description', 'N/A')
-        date = id_command.get('date', 'N/A')
-        time_ = id_command.get('time', 'N/A')
-
-        # Insert description, date, and time
-        self.json_text.insert(tk.END, f"Description: {description}\n")
-        self.json_text.insert(tk.END, f"Date: {date}\n")
-        self.json_text.insert(tk.END, f"Time: {time_}\n")
-
-        # Now check each action and display details if 'do_action' is True
-        command = data['command']
-
-        # Calibration
-        if command.get('calibration', {}).get('do_action', False):
-            self.json_text.insert(tk.END, "\nCalibration:\n")
-            self.json_text.insert(tk.END, f"  Wait Before: {command['calibration'].get('wait_before', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Wait After: {command['calibration'].get('wait_after', 'N/A')}\n")
-
-        # Goto Solar
-        if command.get('goto_solar', {}).get('do_action', False):
-            self.json_text.insert(tk.END, "\nGoto Solar:\n")
-            self.json_text.insert(tk.END, f"  Target: {command['goto_solar'].get('target', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Wait After: {command['goto_solar'].get('wait_after', 'N/A')}\n")
-
-        # Goto Manual
-        if command.get('goto_manual', {}).get('do_action', False):
-            self.json_text.insert(tk.END, "\nGoto Manual:\n")
-            self.json_text.insert(tk.END, f"  Target: {command['goto_manual'].get('target', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  RA Coord: {command['goto_manual'].get('ra_coord', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Dec Coord: {command['goto_manual'].get('dec_coord', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Wait After: {command['goto_manual'].get('wait_after', 'N/A')}\n")
-
-        # Setup Camera
-        if command.get('setup_camera', {}).get('do_action', False):
-            self.json_text.insert(tk.END, "\nSetup Camera:\n")
-            setup_camera = command['setup_camera']
-            self.json_text.insert(tk.END, f"  Exposure: {setup_camera.get('exposure', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Gain: {setup_camera.get('gain', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Binning: {setup_camera.get('binning', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  IRCut: {setup_camera.get('IRCut', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Count: {setup_camera.get('count', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Wait After: {setup_camera.get('wait_after', 'N/A')}\n")
-        
-        if command.get('setup_wide_camera', {}).get('do_action', False):
-            self.json_text.insert(tk.END, "\nSetup Wide-Angle Camera:\n")
-            setup_wide_camera = command['setup_wide_camera']
-            self.json_text.insert(tk.END, f"  Exposure: {setup_wide_camera.get('exposure', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Gain: {setup_wide_camera.get('gain', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Count: {setup_wide_camera.get('count', 'N/A')}\n")
-            self.json_text.insert(tk.END, f"  Wait After: {setup_wide_camera.get('wait_after', 'N/A')}\n")
-
-        self.json_text.config(state=tk.DISABLED)
-    
-    def select_session(self):
-        """Moves the selected JSON file to the ToDo folder."""
-        selection = self.json_listbox.curselection()
-        if selection:
-            selected_file = self.json_listbox.get(selection[0])
-            source_path = os.path.join('./Astro_Sessions', selected_file)
-            destination_path = os.path.join(TODO_DIR, selected_file)
-            
-            try:
-                # Move the file to the ToDo directory
-                shutil.move(source_path, destination_path)
-                self.log(f"Moved {selected_file} to ToDo folder.")
-    
-                # Refresh the listbox
-                self.populate_json_list()
-                
-                # Clear the text area and disable the select button
-                self.json_text.config(state=tk.NORMAL)
-                self.json_text.delete(1.0, tk.END)
-                self.json_text.config(state=tk.DISABLED)
-                self.select_button.config(state=tk.DISABLED)
-    
-            except Exception as e:
-                self.log(f"Error moving file: {e}")
-
-
 
     def start_bluetooth(self):
         self.log("Starting Bluetooth connection in a separate thread...")

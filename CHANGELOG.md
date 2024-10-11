@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1] - 2024-10-11
+
+### minor Bugfix
+
+-- Bugfix
+
+- allow session to be selected
+
 ## [1.5] - 2024-10-11
 
 ### Add control in Tasks Settings

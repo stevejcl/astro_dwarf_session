@@ -21,7 +21,7 @@ def overview_session_tab(parent_frame):
     json_listbox.bind('<<ListboxSelect>>', lambda event: on_json_select(event, json_listbox, json_text))
     
     # Text area to display JSON file content
-    json_text = tk.Text(parent_frame, height=25, state=tk.DISABLED)
+    json_text = tk.Text(parent_frame, height=21, state=tk.DISABLED)
     json_text.pack(fill=tk.BOTH, padx=10, pady=5)
     
     # Button to select the session

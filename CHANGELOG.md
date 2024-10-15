@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.2] - 2024-10-16
+
+### Bugfix
+- Correction on Config : Avoid using same keys for config and session settings
+
+### Add functions and control in Session Creation
+
+- Add Goto Solar Systems Objects
+- Add option to do only Imaging
+- Add option to not do Goto
+
 ## [1.5.1] - 2024-10-11
 
 ### minor Bugfix

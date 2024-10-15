@@ -19,7 +19,6 @@ def save_config(config_data):
 # Create the settings tab
 def create_settings_tab(tab_settings, settings_vars):
     config = load_config()
-
     # Create a Canvas and a Scrollbar for the settings
     canvas = tk.Canvas(tab_settings)
     scrollbar = ttk.Scrollbar(tab_settings, orient="vertical", command=canvas.yview)

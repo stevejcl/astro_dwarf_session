@@ -10,4 +10,6 @@ paramiko
 
 tk
 
+tkcalendar
+
 requests

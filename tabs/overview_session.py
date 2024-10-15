@@ -16,12 +16,12 @@ def overview_session_tab(parent_frame):
     json_label.pack(pady=5)
     
     # Listbox to show available JSON files
-    json_listbox = tk.Listbox(parent_frame, height=6)
+    json_listbox = tk.Listbox(parent_frame, height=10)
     json_listbox.pack(fill=tk.BOTH, padx=10, pady=5)
     json_listbox.bind('<<ListboxSelect>>', lambda event: on_json_select(event, json_listbox, json_text))
     
     # Text area to display JSON file content
-    json_text = tk.Text(parent_frame, height=10, state=tk.DISABLED)
+    json_text = tk.Text(parent_frame, height=25, state=tk.DISABLED)
     json_text.pack(fill=tk.BOTH, padx=10, pady=5)
     
     # Button to select the session

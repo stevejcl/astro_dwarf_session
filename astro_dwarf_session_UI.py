@@ -72,7 +72,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Astro Dwarf Scheduler")
-        self.geometry("600x600")
+        self.geometry("600x700")
         
         # Create tabs
         self.tab_control = ttk.Notebook(self)
@@ -90,9 +90,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
         
         self.create_main_tab()
         self.settings_vars = {}
-        settings.create_settings_tab(self.tab_settings, self.settings_vars) 
+        self.config_vars = {}
+        settings.create_settings_tab(self.tab_settings, self.config_vars) 
         overview_session.overview_session_tab(self.tab_overview_session)
-        create_session.create_session_tab(self.tab_create_session, self.settings_vars)
+        create_session.create_session_tab(self.tab_create_session, self.settings_vars, self.config_vars)
 
         self.result = False
         self.stellarium_connection = None

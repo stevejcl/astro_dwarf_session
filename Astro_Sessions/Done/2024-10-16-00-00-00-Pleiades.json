@@ -1,0 +1,49 @@
+{
+    "command": {
+        "id_command": {
+            "uuid": "00001",
+            "description": "test session",
+            "date": "2024-10-16",
+            "time": "00:00:00",
+            "process": "ended",
+            "max_retries": 2,
+            "result": true,
+            "message": "Action completed successfully.",
+            "nb_try": 1,
+            "processed_date": "2024-10-16 00:27:10"
+        },
+        "calibration": {
+            "do_action": false,
+            "wait_before": 10,
+            "wait_after": 10
+        },
+        "goto_solar": {
+            "do_action": false,
+            "target": "",
+            "wait_after": 10
+        },
+        "goto_manual": {
+            "do_action": false,
+            "target": "Pleiades",
+            "ra_coord": 57.122993838042554,
+            "dec_coord": 24.195114967878474,
+            "wait_after": 20
+        },
+        "setup_camera": {
+            "do_action": true,
+            "exposure": "5",
+            "gain": "100",
+            "binning": "0",
+            "IRCut": "1",
+            "count": 5,
+            "wait_after": 30
+        },
+        "setup_wide_camera": {
+            "do_action": false,
+            "exposure": "10",
+            "gain": "90",
+            "count": "10",
+            "wait_after": 30
+        }
+    }
+}

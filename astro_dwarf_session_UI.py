@@ -72,7 +72,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Astro Dwarf Scheduler")
-        self.geometry("600x700")
+        self.geometry("600x800")
         
         # Create tabs
         self.tab_control = ttk.Notebook(self)

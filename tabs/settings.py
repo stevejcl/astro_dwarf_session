@@ -4,14 +4,19 @@ from tkinter import messagebox, ttk
 import webbrowser
 
 from geopy.geocoders import Nominatim
+from geopy.geocoders import Photon
 from timezonefinder import TimezoneFinder
+from geopy.exc import GeocoderInsufficientPrivileges
 
 CONFIG_FILE = 'config.ini'
 
-def get_lat_long_and_timezone(address):
+def get_lat_long_and_timezone(address, agent = 1):
     try:
         # Initialize the geolocator with Nominatim
-        geolocator = Nominatim(user_agent="geoapiExercises")
+        if agent == 1:
+            geolocator = Nominatim(user_agent="geoapiAstroSession")
+        else: 
+            geolocator = Photon(user_agent="geoapiAstroSession")
 
         #Get location based on the address
         location = geolocator.geocode(address)
@@ -30,11 +35,25 @@ def get_lat_long_and_timezone(address):
 
     except GeocoderInsufficientPrivileges as e:
         print(f"Error: {e} - You do not have permission to access this resource.")
-        return None, None, None
+
+        # Attempt to switch agent and retry
+        if agent == 1:
+            print("Switching to Photon geocoder for the next attempt.")
+            return get_location_data(address, agent=2)  # Retry with the second agent
+        else:
+            messagebox.showinfo("Error", "Can't found your location data!")
+            return None, None, None
 
     except Exception as e:
-        messagebox.showinfo("Error", "Can't found your location data!")
-        return None, None, None
+        print(f"Error: {e}")
+
+        # Attempt to switch agent and retry
+        if agent == 1:
+            print("Switching to Photon geocoder for the next attempt.")
+            return get_location_data(address, agent=2)  # Retry with the second agent
+        else:
+            messagebox.showinfo("Error", "Can't found your location data!")
+            return None, None, None
 
 def find_location(settings_vars):
     try:
@@ -48,6 +67,7 @@ def find_location(settings_vars):
             print("Location or timezone could not be determined.")
             messagebox.showinfo("Error", "Can't found your location data!")
     except Exception as e:
+        print(f"Error: {e}")
         messagebox.showinfo("Error", "Can't found your location data!")
 
 def open_link(url):

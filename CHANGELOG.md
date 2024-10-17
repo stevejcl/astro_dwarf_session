@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.3] - 2024-10-17
+
+### Add help in Settings Tab
+- Add Help Message
+- Add Button to get location data from address
+
 ## [1.5.2] - 2024-10-16
 
 ### Bugfix

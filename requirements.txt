@@ -13,3 +13,7 @@ tk
 tkcalendar
 
 requests
+
+geopy
+
+timezonefinder

@@ -341,7 +341,8 @@ def save_to_json(settings_vars, config_vars):
     uuid_counter += 1
 
     # Define file name
-    filename = f"{date}-{time.replace(':', '-')}-{target}.json"
+    target_value = target if goto_manual else (target_solar if goto_solar else (target if target else description))
+    filename = f"{date}-{time.replace(':', '-')}-{target_value}.json"
     filepath = os.path.join(SAVE_FOLDER, filename)
 
     # Save the data to a JSON file

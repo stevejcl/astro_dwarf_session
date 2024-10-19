@@ -1,10 +1,12 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-from tkcalendar import DateEntry  # Import DateEntry from tkcalendar
+from tkinter import ttk, messagebox, filedialog
+from tkcalendar import DateEntry
 import json
 import os
 import datetime
+import re
 from fractions import Fraction
+import csv
 from stellarium_connection import StellariumConnection
 
 from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains
@@ -69,7 +71,6 @@ def update_options(device_type, exposure_dropdown, gain_dropdown, ircut_dropdown
         ircut_dropdown['values'] = []
 
 def create_form_fields(scrollable_frame, settings_vars, config_vars):
-
     # Device Type Dropdown Menu
     device_frame = tk.Frame(scrollable_frame)
     device_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -300,7 +301,6 @@ def save_to_json(settings_vars, config_vars):
         setup_wide_camera["gain"] = gain
         setup_wide_camera["count"] = count
 
-
     # Prepare the JSON data
     data = {
         "command": {
@@ -321,6 +321,7 @@ def save_to_json(settings_vars, config_vars):
                 "wait_after": 10
             },
             "goto_solar": {
+                
                 "do_action": goto_solar,
                 "target": target_solar,
                 "wait_after": 10
@@ -422,7 +423,7 @@ def calculate_end_time(settings_vars):
         start_time_str = settings_vars["time"].get()
         exposure_seconds = get_exposure_time(settings_vars)
         if not settings_vars["count"].get():
-           print ("count imainging is not defined")
+           print ("count imaging is not defined")
            return None, None
         count = int(settings_vars["count"].get())
 
@@ -439,13 +440,202 @@ def calculate_end_time(settings_vars):
         end_date = end_datetime.strftime('%Y-%m-%d')
         end_time = end_datetime.strftime('%H:%M:%S')
 
-        # Show a message box with the calculated end time
-        messagebox.showinfo("Calculated End Time", f"End Date: {end_date}\nEnd Time: {end_time}")
-
         return end_date, end_time
     except ValueError as e:
         messagebox.showerror("Error", f"Invalid input: {e}")
         return None, None
+
+def import_csv_and_generate_json(settings_vars, config_vars):
+    # Open file dialog to select CSV file
+    file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+    if not file_path:
+        return  # User cancelled file selection
+
+    json_preview = []
+    current_datetime = datetime.datetime.now()
+
+    with open(file_path, 'r', encoding='utf-8-sig') as csv_file:
+        csv_reader = csv.DictReader(csv_file)
+
+        # Strip whitespace from the column names
+        csv_reader.fieldnames = [field.strip() for field in csv_reader.fieldnames]
+
+        for row in csv_reader:
+            # Extract relevant data from CSV row (now without leading spaces in headers)
+            pane = row['Pane']
+            ra = row['RA']
+            dec = row['DEC']
+
+            # Convert RA and Dec to decimal degrees
+            ra_deg = convert_ra_to_degrees(ra)
+            dec_deg = convert_dec_to_degrees(dec)
+
+            # Set the values in settings_vars
+            settings_vars["description"].set(f"Observation of Mosaic {pane}")
+            settings_vars["target"].set(f"Mosaic {pane}")
+            settings_vars["ra_coord"].set(ra_deg)
+            settings_vars["dec_coord"].set(dec_deg)
+            settings_vars["date"].set(current_datetime.strftime('%Y-%m-%d'))
+            settings_vars["time"].set(current_datetime.strftime('%H:%M:%S'))
+
+            # Set default values if not already set
+            if not settings_vars["max_retries"].get():
+                settings_vars["max_retries"].set("3")
+            if not settings_vars["count"].get():
+                settings_vars["count"].set("10")
+
+            # Ensure goto_manual is set to True
+            settings_vars["goto_manual"].set(True)
+            settings_vars["goto_solar"].set(False)
+            settings_vars["no_goto"].set(False)
+
+            # Generate JSON preview for this row
+            json_data = generate_json_preview(settings_vars, config_vars)
+            json_preview.append(json_data)
+
+            # Calculate end time for this entry
+            end_date, end_time = calculate_end_time(settings_vars)
+            if end_date and end_time:
+                # Set the end time as the start time for the next entry
+                current_datetime = datetime.datetime.strptime(f"{end_date} {end_time}", '%Y-%m-%d %H:%M:%S')
+
+    # Show preview dialog
+    if show_preview_dialog(json_preview):
+        # User confirmed, generate actual JSON files
+        for json_data in json_preview:
+            save_json_to_file(json_data)
+        messagebox.showinfo("Success", "CSV imported and JSON files generated successfully!")
+    else:
+        messagebox.showinfo("Cancelled", "JSON generation cancelled.")
+
+
+def convert_ra_to_degrees(ra_str):
+    # Clean up the RA string to handle the format in the CSV
+    ra_str = ra_str.replace('hr', '').replace("'", '').replace('"', '').strip()
+    h, m, s = map(float, ra_str.split())
+    return (h + m/60 + s/3600) * 15  # 15 degrees per hour
+
+def convert_dec_to_degrees(dec_str):
+    # Remove any non-numeric and non-decimal characters
+    dec_str = re.sub(r'[^\d\.\s-]', '', dec_str)
+    d, m, s = map(float, dec_str.split())
+
+    # If the degrees are negative, treat the minutes and seconds as positive
+    if d < 0:
+        return d - (m / 60) - (s / 3600)
+    else:
+        return d + (m / 60) + (s / 3600)
+
+def generate_json_preview(settings_vars, config_vars):
+    global uuid_counter
+
+    data = {
+        "command": {
+            "id_command": {
+                "uuid": f"{uuid_counter:05d}",
+                "description": settings_vars["description"].get(),
+                "date": settings_vars["date"].get(),
+                "time": settings_vars["time"].get(),
+                "process": "wait",
+                "max_retries": int(settings_vars["max_retries"].get()),
+                "result": False,
+                "message": "",
+                "nb_try": 1
+            },
+            "calibration": {
+                "do_action": settings_vars["calibration"].get(),
+                "wait_before": 10,
+                "wait_after": 10
+            },
+            "goto_solar": {
+                "do_action": False,
+                "target": "",
+                "wait_after": 10
+            },
+            "goto_manual": {
+                "do_action": True,
+                "target": settings_vars["target"].get(),
+                "ra_coord": float(settings_vars["ra_coord"].get()),
+                "dec_coord": float(settings_vars["dec_coord"].get()),
+                "wait_after": 20
+            },
+            "setup_camera": {
+                "do_action": True,
+                "exposure": str(settings_vars["exposure"].get()),
+                "gain": settings_vars["gain"].get(),
+                "binning": "0",
+                "IRCut": ircut_options.get(settings_vars["IRCut"].get(), ""),
+                "count": check_integer(settings_vars["count"].get()),
+                "wait_after": 30
+            },
+            "setup_wide_camera": {
+                "do_action": False,
+                "exposure": "10",
+                "gain": "90",
+                "count": "10",
+                "wait_after": 30
+            }
+        }
+    }
+
+    uuid_counter += 1
+    return data
+
+
+def show_preview_dialog(json_preview):
+    # Create a new window for the preview
+    preview_window = tk.Toplevel()
+    preview_window.title("Preview JSON Data")
+    
+    # Create a text widget to display the preview
+    text_widget = tk.Text(preview_window, wrap='word', height=20, width=50)
+    text_widget.pack(expand=True, fill='both')
+    
+    # Insert the JSON preview data into the text widget
+    for json_data in json_preview:
+        text_widget.insert(tk.END, f"{json_data}\n\n")
+    
+    # Make the text widget read-only
+    text_widget.config(state=tk.DISABLED)
+    
+    # Create a frame for the buttons
+    button_frame = tk.Frame(preview_window)
+    button_frame.pack(pady=10)
+
+    # Add "Confirm" and "Cancel" buttons
+    confirm_button = tk.Button(button_frame, text="Confirm", command=lambda: on_confirm(preview_window))
+    confirm_button.pack(side=tk.LEFT, padx=5)
+    
+    cancel_button = tk.Button(button_frame, text="Cancel", command=lambda: on_cancel(preview_window))
+    cancel_button.pack(side=tk.LEFT, padx=5)
+
+    # Run the window and wait for user action
+    preview_window.wait_window()
+
+    # If the window was confirmed, return True, otherwise return False
+    return preview_window.confirmed
+
+
+def on_confirm(window):
+    # Set an attribute in the window to indicate confirmation
+    window.confirmed = True
+    window.destroy()  # Close the window
+
+def on_cancel(window):
+    # Set an attribute in the window to indicate cancellation
+    window.confirmed = False
+    window.destroy()  # Close the window
+
+def save_json_to_file(json_data):
+    date = json_data["command"]["id_command"]["date"]
+    time = json_data["command"]["id_command"]["time"]
+    target = json_data["command"]["goto_manual"]["target"]
+    
+    filename = f"{date}-{time.replace(':', '-')}-{target}.json"
+    filepath = os.path.join(SAVE_FOLDER, filename)
+
+    with open(filepath, 'w') as outfile:
+        json.dump(json_data, outfile, indent=4)
 
 # Function to create the session tab
 def create_session_tab(tab_create_session, settings_vars, config_vars):
@@ -493,7 +683,6 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
         elif key == "target_type":
             # Create mutually exclusive checkboxes
             label.pack(side=tk.LEFT)
-            entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
             create_mutually_exclusive_checkboxes(row, var_goto_solar, var_goto_manual, var_no_goto, "Solar System", "Manual", "None")
             settings_vars["goto_solar"] = var_goto_solar
             settings_vars["goto_manual"] = var_goto_manual
@@ -517,68 +706,56 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
 
         if key == "target":
             label.pack(side=tk.LEFT)
-            entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
-            # Add button to fetch Stellarium data
-            fetch_stellarium_button = tk.Button(row, text="Fetch Stellarium Data", command=lambda: refresh_stellarium_data(settings_vars, config_vars))
-            fetch_stellarium_button.pack(side=tk.LEFT, padx=(5, 0))  # Place the button to the right of the Target field
-        elif key == "target_solar":
-            label.pack(side=tk.LEFT)
-            entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
-            solar_target_var = tk.StringVar()
-            target_name_dropdown = ttk.Combobox(row, textvariable=solar_target_var)
-            target_name_dropdown['values'] = solar_system_objects
-            target_name_dropdown.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
-            settings_vars["target_solar"] = solar_target_var
-        else:
+            entry.pack(side=tk.LEFT, expand=tk.YES, fill=tk.X)
+            refresh_button = tk.Button(row, text="Refresh", command=lambda: refresh_stellarium_data(settings_vars, config_vars))
+            refresh_button.pack(side=tk.RIGHT)
+        elif key != "target_type" and key != "target_solar":
             label.pack(side=tk.LEFT)
             entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
-  
-   # Add Time selection using Comboboxes for HH:MM:SS
-    time_row = tk.Frame(scrollable_frame)
-    time_label = tk.Label(time_row, width=20, text="Time (HH:MM:SS)", anchor='w')
+
+        if key == "target_solar":
+            label.pack(side=tk.LEFT)
+            var = tk.StringVar()
+            entry = ttk.Combobox(row, textvariable=var, values=solar_system_objects)
+            entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
+            settings_vars[key] = var
+
+    # Time field
+    time_frame = tk.Frame(scrollable_frame)
+    time_label = tk.Label(time_frame, width=20, text="Time (HH:MM:SS)", anchor='w')
+    time_var = tk.StringVar()
+    time_entry = tk.Entry(time_frame, textvariable=time_var)
+    settings_vars["time"] = time_var
+    time_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
     time_label.pack(side=tk.LEFT)
-    
-    hours_var = tk.StringVar()
-    hours_combobox = ttk.Combobox(time_row, textvariable=hours_var, width=3, values=[f"{i:02d}" for i in range(24)])
-    hours_combobox.pack(side=tk.LEFT, padx=5)
-    hours_combobox.set("00")  # Set default value
-    
-    minutes_var = tk.StringVar()
-    minutes_combobox = ttk.Combobox(time_row, textvariable=minutes_var, width=3, values=[f"{i:02d}" for i in range(60)])
-    minutes_combobox.pack(side=tk.LEFT, padx=5)
-    minutes_combobox.set("00")  # Set default value
-    
-    seconds_var = tk.StringVar()
-    seconds_combobox = ttk.Combobox(time_row, textvariable=seconds_var, width=3, values=[f"{i:02d}" for i in range(60)])
-    seconds_combobox.pack(side=tk.LEFT, padx=5)
-    seconds_combobox.set("00")  # Set default value
-    
-    # Combine the time variables into a single StringVar for settings_vars
-    combined_time_var = tk.StringVar(value="00:00:00")
-    settings_vars["time"] = combined_time_var
+    time_entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
 
-    # Function to update combined_time_var when any of the time comboboxes change
-    def update_combined_time(*args):
-        combined_time_var.set(f"{hours_var.get()}:{minutes_var.get()}:{seconds_var.get()}")
-    
-    hours_var.trace_add("write", update_combined_time)
-    minutes_var.trace_add("write", update_combined_time)
-    seconds_var.trace_add("write", update_combined_time)
+    # Calibration checkbox
+    calibration_frame = tk.Frame(scrollable_frame)
+    calibration_var = tk.BooleanVar()
+    calibration_checkbox = tk.Checkbutton(calibration_frame, text="Calibration", variable=calibration_var)
+    settings_vars["calibration"] = calibration_var
+    calibration_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+    calibration_checkbox.pack(side=tk.LEFT)
 
-    time_row.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-
+    # Create form fields for device type, exposure, gain, and filter
     create_form_fields(scrollable_frame, settings_vars, config_vars)
 
-    # Calibration Checkbox
-    var_calibration = tk.BooleanVar()
-    check_calibration = tk.Checkbutton(scrollable_frame, text="Calibration", variable=var_calibration)
-    check_calibration.pack(pady=10)
-    settings_vars["calibration"] = var_calibration
-
-    # Button to calculate session end time
-    calculate_end_button = tk.Button(scrollable_frame, text="Calculate End Time", command=lambda: calculate_end_time(settings_vars))
-    calculate_end_button.pack(pady=10)
-
-    # Save button to save the session data
+    # Save button
     save_button = tk.Button(scrollable_frame, text="Save", command=lambda: save_to_json(settings_vars, config_vars))
-    save_button.pack(pady=20)
+    save_button.pack(pady=10)
+
+ # Create a frame to hold the Import CSV label and button
+    import_frame = tk.Frame(scrollable_frame, borderwidth=2, relief="groove")
+    import_frame.pack(pady=10, padx=5, fill=tk.X)
+
+    # Label for Import CSV button
+    import_label = tk.Label(import_frame, text="Import Telescopius Mosaic CSV, it will take the values from your settings")
+    import_label.pack(pady=(10, 0), padx=10)  # Add padding around the label
+
+    # Import CSV button
+    import_csv_button = ttk.Button(import_frame, text="Import CSV", 
+                                   command=lambda: import_csv_and_generate_json(settings_vars, config_vars))
+    import_csv_button.pack(pady=(0, 10), padx=10)  # Add padding around the button
+
+    import_frame.pack(pady=10)  # Additional padding around the frame

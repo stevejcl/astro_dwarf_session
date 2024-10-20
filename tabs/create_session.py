@@ -386,14 +386,13 @@ def refresh_stellarium_data(settings_vars, config_vars):
     try:
         # Get data from Stellarium
         data = stellarium_connection.get_data()
-        
         # Populate form fields with Stellarium data
-        settings_vars["target"].set(data['name'])
-        settings_vars["ra_coord"].set(data['ra'])
-        settings_vars["dec_coord"].set(data['dec'])
+        settings_vars["target"].set(data['localized-name'] + " - " + data['name'])
+        settings_vars["ra_coord"].set(convert_radeg_to_hourdecimal(data['raJ2000']))
+        settings_vars["dec_coord"].set(data['decJ2000'])
         
         # Update the Stellarium information labels (optional)
-        print(f"RA: {data['ra']}, Dec: {data['dec']}, Target: {data['name']}")
+        print(f"RA: {data['raJ2000']}, Dec: {data['decJ2000']}, Target: {data['name']}")
         
     except Exception as e:
         messagebox.showerror("Error", f"Error retrieving data from Stellarium: {e}")
@@ -454,66 +453,112 @@ def import_csv_and_generate_json(settings_vars, config_vars):
     json_preview = []
     current_datetime = datetime.datetime.now()
 
-    with open(file_path, 'r', encoding='utf-8-sig') as csv_file:
-        csv_reader = csv.DictReader(csv_file)
+    try:
 
-        # Strip whitespace from the column names
-        csv_reader.fieldnames = [field.strip() for field in csv_reader.fieldnames]
+        with open(file_path, 'r', encoding='utf-8-sig') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            bFindType = False
 
-        for row in csv_reader:
-            # Extract relevant data from CSV row (now without leading spaces in headers)
-            pane = row['Pane']
-            ra = row['RA']
-            dec = row['DEC']
+            # Strip whitespace from the column names
+            csv_reader.fieldnames = [field.strip() for field in csv_reader.fieldnames]
 
-            # Convert RA and Dec to decimal degrees
-            ra_deg = convert_ra_to_degrees(ra)
-            dec_deg = convert_dec_to_degrees(dec)
+            # Sort the rows by the first column (csv_reader.fieldnames[0])
+            sorted_rows = sorted(csv_reader, key=lambda row: row[csv_reader.fieldnames[0]])
 
-            # Set the values in settings_vars
-            settings_vars["description"].set(f"Observation of Mosaic {pane}")
-            settings_vars["target"].set(f"Mosaic {pane}")
-            settings_vars["ra_coord"].set(ra_deg)
-            settings_vars["dec_coord"].set(dec_deg)
-            settings_vars["date"].set(current_datetime.strftime('%Y-%m-%d'))
-            settings_vars["time"].set(current_datetime.strftime('%H:%M:%S'))
+            # Process each sorted row
+            for row in sorted_rows:
+               # Determine which format is being used by checking the presence of certain keys
+                if 'Pane' in row and 'RA' in row and 'DEC' in row:
+                    if not bFindType:
+                        print ("Simple Mosaic Telescopius File detected")
+                        bFindType = True
+                    # First format: Pane, RA, DEC, etc.
+                    pane = row['Pane']
+                    ra = row['RA']
+                    dec = row['DEC']
 
-            # Set default values if not already set
-            if not settings_vars["max_retries"].get():
-                settings_vars["max_retries"].set("3")
-            if not settings_vars["count"].get():
-                settings_vars["count"].set("10")
+                    # Description and target based on Pane
+                    description = f"Observation of Mosaic {pane}"
+                    target = f"Mosaic {pane}"
+                
+                elif 'Catalogue Entry' in row and 'Right Ascension' in row and 'Declination' in row:
+                    if bFindType is False:
+                        print ("Observation Mosaic Telescopius List File detected")
+                        bFindType = True
+                    # Second format: Catalogue Entry, Familiar Name, etc.
+                    catalogue_entry = row['Catalogue Entry']
+                    ra = row['Right Ascension']
+                    dec = row['Declination']
 
-            # Ensure goto_manual is set to True
-            settings_vars["goto_manual"].set(True)
-            settings_vars["goto_solar"].set(False)
-            settings_vars["no_goto"].set(False)
+                    # Description and target based on Catalogue Entry
+                    description = f"Mosaic of {catalogue_entry}"
+                    target = catalogue_entry
+                
+                else:
+                    # Neither format matched, show a "bad format" message
+                    raise KeyError("Unrecognized CSV format")
 
-            # Generate JSON preview for this row
-            json_data = generate_json_preview(settings_vars, config_vars)
-            json_preview.append(json_data)
+                # Convert RA to Hour Decimal and Dec to decimal degrees
+                ra_deg = convert_ra_to_hourdecimal(ra)
+                dec_deg = convert_dec_to_degrees(dec)
 
-            # Calculate end time for this entry
-            end_date, end_time = calculate_end_time(settings_vars)
-            if end_date and end_time:
-                # Set the end time as the start time for the next entry
-                current_datetime = datetime.datetime.strptime(f"{end_date} {end_time}", '%Y-%m-%d %H:%M:%S')
+                # Set the values in settings_vars
+                settings_vars["description"].set(description)
+                settings_vars["target"].set(target)
+                settings_vars["ra_coord"].set(ra_deg)
+                settings_vars["dec_coord"].set(dec_deg)
+                settings_vars["date"].set(current_datetime.strftime('%Y-%m-%d'))
+                settings_vars["time"].set(current_datetime.strftime('%H:%M:%S'))
 
-    # Show preview dialog
-    if show_preview_dialog(json_preview):
-        # User confirmed, generate actual JSON files
-        for json_data in json_preview:
-            save_json_to_file(json_data)
-        messagebox.showinfo("Success", "CSV imported and JSON files generated successfully!")
-    else:
-        messagebox.showinfo("Cancelled", "JSON generation cancelled.")
+                # Set default values if not already set
+                if not settings_vars["max_retries"].get():
+                    settings_vars["max_retries"].set("3")
+                if not settings_vars["count"].get():
+                    settings_vars["count"].set("10")
 
+                # Ensure goto_manual is set to True
+                settings_vars["goto_manual"].set(True)
+                settings_vars["goto_solar"].set(False)
+                settings_vars["no_goto"].set(False)
 
-def convert_ra_to_degrees(ra_str):
+                # Generate JSON preview for this row
+                json_data = generate_json_preview(settings_vars, config_vars)
+                json_preview.append(json_data)
+
+                # Calculate end time for this entry
+                end_date, end_time = calculate_end_time(settings_vars)
+                if end_date and end_time:
+                    # Set the end time as the start time for the next entry
+                    current_datetime = datetime.datetime.strptime(f"{end_date} {end_time}", '%Y-%m-%d %H:%M:%S')
+
+        # Show preview dialog
+        if show_preview_dialog(json_preview):
+            # User confirmed, generate actual JSON files
+            for json_data in json_preview:
+                save_json_to_file(json_data)
+            messagebox.showinfo("Success", "CSV imported and JSON files generated successfully!")
+        else:
+            messagebox.showinfo("Cancelled", "JSON generation cancelled.")
+
+    except KeyError as e:
+        # Display a "bad format" error message if a key is missing
+        missing_field = str(e)
+        messagebox.showerror("Bad Format", f"Missing required field: {missing_field}")
+        return None
+
+def convert_radeg_to_hourdecimal(ra_deg):
+    # Transform Ra degrees value in Hour
+    if ra_deg < 0: 
+        ra_deg = 360 + ra_deg
+    # convert to hours
+    return (ra_deg/15)
+
+def convert_ra_to_hourdecimal(ra_str):
     # Clean up the RA string to handle the format in the CSV
-    ra_str = ra_str.replace('hr', '').replace("'", '').replace('"', '').strip()
+    ra_str = ra_str.replace('h', '').replace("r", '').replace("'", '').replace('"', '').strip()
     h, m, s = map(float, ra_str.split())
-    return (h + m/60 + s/3600) * 15  # 15 degrees per hour
+
+    return (h + m/60 + s/3600)
 
 def convert_dec_to_degrees(dec_str):
     # Remove any non-numeric and non-decimal characters
@@ -528,6 +573,8 @@ def convert_dec_to_degrees(dec_str):
 
 def generate_json_preview(settings_vars, config_vars):
     global uuid_counter
+    ircut_selected = settings_vars["IRCut"].get()
+    ircut_value = ircut_options.get(ircut_selected, config_vars["ircut"].get())  # Get the numerical value from the description
 
     data = {
         "command": {
@@ -564,7 +611,7 @@ def generate_json_preview(settings_vars, config_vars):
                 "exposure": str(settings_vars["exposure"].get()),
                 "gain": settings_vars["gain"].get(),
                 "binning": "0",
-                "IRCut": ircut_options.get(settings_vars["IRCut"].get(), ""),
+                "IRCut": ircut_options.get(settings_vars["IRCut"].get(), config_vars["ircut"].get()),
                 "count": check_integer(settings_vars["count"].get()),
                 "wait_after": 30
             },
@@ -586,6 +633,9 @@ def show_preview_dialog(json_preview):
     # Create a new window for the preview
     preview_window = tk.Toplevel()
     preview_window.title("Preview JSON Data")
+    
+    # Default value for confirmed attribute
+    preview_window.confirmed = False
     
     # Create a text widget to display the preview
     text_widget = tk.Text(preview_window, wrap='word', height=20, width=50)
@@ -745,7 +795,7 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
     save_button = tk.Button(scrollable_frame, text="Save", command=lambda: save_to_json(settings_vars, config_vars))
     save_button.pack(pady=10)
 
- # Create a frame to hold the Import CSV label and button
+    # Create a frame to hold the Import CSV label and button
     import_frame = tk.Frame(scrollable_frame, borderwidth=2, relief="groove")
     import_frame.pack(pady=10, padx=5, fill=tk.X)
 

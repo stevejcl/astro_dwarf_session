@@ -128,7 +128,7 @@ def select_session(json_listbox, json_text, select_button):
             json_text.config(state=tk.NORMAL)
             json_text.delete(1.0, tk.END)
             json_text.config(state=tk.DISABLED)
-            select_button.config(state=tk.DISABLED)
+            select_button.config(state=tk.NORMAL)
 
         except Exception as e:
             print(f"Error moving file: {e}")

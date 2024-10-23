@@ -65,12 +65,24 @@ def display_json_content(filepath, json_text):
     description = id_command.get('description', 'N/A')
     date = id_command.get('date', 'N/A')
     time_ = id_command.get('time', 'N/A')
+    status_ = id_command.get('process', 'N/A')
     # Insert description, date, and time
     json_text.insert(tk.END, f"Description: {description}\n")
     json_text.insert(tk.END, f"Date: {date}\n")
     json_text.insert(tk.END, f"Time: {time_}\n")
+    json_text.insert(tk.END, f"Process: {status_}\n")
     # Now check each action and display details if 'do_action' is True
     command = data['command']
+    # Autofocus
+    if command.get('auto_focus', {}).get('do_action', False):
+        json_text.insert(tk.END, "\nAuto focus:\n")
+        json_text.insert(tk.END, f"  Wait Before: {command['auto_focus'].get('wait_before', 'N/A')}\n")
+        json_text.insert(tk.END, f"  Wait After: {command['auto_focus'].get('wait_after', 'N/A')}\n")
+    # infinite_focus
+    if command.get('infinite_focus', {}).get('do_action', False):
+        json_text.insert(tk.END, "\nInfinite focus:\n")
+        json_text.insert(tk.END, f"  Wait Before: {command['infinite_focus'].get('wait_before', 'N/A')}\n")
+        json_text.insert(tk.END, f"  Wait After: {command['infinite_focus'].get('wait_after', 'N/A')}\n")
     # Calibration
     if command.get('calibration', {}).get('do_action', False):
         json_text.insert(tk.END, "\nCalibration:\n")

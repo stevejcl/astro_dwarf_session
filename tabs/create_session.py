@@ -238,6 +238,10 @@ def save_to_json(settings_vars, config_vars):
     date = settings_vars["date"].get()
     time = settings_vars["time"].get()
     max_retries = settings_vars["max_retries"].get()
+    wait_before = settings_vars["wait_before"].get()
+    wait_after = settings_vars["wait_after"].get()
+    auto_focus_action = settings_vars["auto_focus"].get()
+    infinite_focus_action = settings_vars["infinite_focus"].get()
     calibration_action = settings_vars["calibration"].get()
     no_goto = settings_vars["no_goto"].get()
     goto_solar = settings_vars["goto_solar"].get()
@@ -246,12 +250,14 @@ def save_to_json(settings_vars, config_vars):
     target = settings_vars["target"].get()
     ra_coord = settings_vars["ra_coord"].get()
     dec_coord = settings_vars["dec_coord"].get()
+    wait_after_target = settings_vars["wait_after_target"].get()
     exposure = str(settings_vars["exposure"].get())
     gain = settings_vars["gain"].get()
     count = check_integer(settings_vars["count"].get())
     settings_vars["count"].set(count)
     # Get the selected camera type
     selected_camera = settings_vars["camera_type"].get()
+    wait_after_camera = settings_vars["wait_after_camera"].get()
 
     check_values = description and date and time and max_retries
     check_values_goto = no_goto or (goto_solar and target_solar !="") or (goto_manual and target!="" and ra_coord and dec_coord)
@@ -315,23 +321,32 @@ def save_to_json(settings_vars, config_vars):
                 "message": "",
                 "nb_try": 1
             },
+            "auto_focus": {
+                "do_action": auto_focus_action,
+                "wait_before": int(wait_before),
+                "wait_after": int(wait_after)
+            },
+            "infinite_focus": {
+                "do_action": infinite_focus_action,
+                "wait_before": int(wait_before),
+                "wait_after": int(wait_after)
+            },
             "calibration": {
                 "do_action": calibration_action,
-                "wait_before": 10,
-                "wait_after": 10
+                "wait_before": int(wait_before),
+                "wait_after": int(wait_after)
             },
             "goto_solar": {
-                
                 "do_action": goto_solar,
                 "target": target_solar,
-                "wait_after": 10
+                "wait_after": int(wait_after_target)
             },
             "goto_manual": {
                 "do_action": goto_manual,
                 "target": target,
                 "ra_coord": float(ra_coord) if ra_coord not in (None, "")  else "",
                 "dec_coord": float(dec_coord) if dec_coord not in (None, "")  else "",
-                "wait_after": 20
+                "wait_after": int(wait_after_target)
             },
             "setup_camera": setup_camera,
             "setup_wide_camera": setup_wide_camera
@@ -358,7 +373,7 @@ def save_to_json(settings_vars, config_vars):
 
     # Clear other fields
     for key in settings_vars.keys():
-        if key not in ["date", "time", "calibration", "target_type", "goto_solar", "goto_manual", "no_goto"]:  # Don't clear date, time, or calibration checkbox
+        if key not in ["date", "time", "max_retries", "auto_focus", "infinite_focus", "calibration", "target_type", "goto_solar", "goto_manual", "no_goto", "wait_before", "wait_after", "wait_after_target", "wait_after_camera"]:  # Don't clear date, time, or calibration checkbox
             if config_vars.get(key) is not None and config_vars[key].get():
                 settings_vars[key].set(config_vars[key].get())
             else:
@@ -515,6 +530,14 @@ def import_csv_and_generate_json(settings_vars, config_vars):
                     settings_vars["max_retries"].set("3")
                 if not settings_vars["count"].get():
                     settings_vars["count"].set("10")
+                if not settings_vars["wait_before"].get():
+                    settings_vars["wait_before"].set("10")
+                if not settings_vars["wait_after"].get():
+                    settings_vars["wait_after"].set("10")
+                if not settings_vars["wait_after_target"].get():
+                    settings_vars["wait_after_target"].set("10")
+                if not settings_vars["wait_after_camera"].get():
+                    settings_vars["wait_after_camera"].set("10")
 
                 # Ensure goto_manual is set to True
                 settings_vars["goto_manual"].set(True)
@@ -589,22 +612,32 @@ def generate_json_preview(settings_vars, config_vars):
                 "message": "",
                 "nb_try": 1
             },
+            "auto_focus": {
+                "do_action": settings_vars["auto_focus"].get(),
+                "wait_before": int(settings_vars["wait_before"].get()),
+                "wait_after": int(settings_vars["wait_after"].get()),
+            },
+            "infinite_focus": {
+                "do_action": settings_vars["infinite_focus"].get(),
+                "wait_before": int(settings_vars["wait_before"].get()),
+                "wait_after": int(settings_vars["wait_after"].get()),
+            },
             "calibration": {
                 "do_action": settings_vars["calibration"].get(),
-                "wait_before": 10,
-                "wait_after": 10
+                "wait_before": int(settings_vars["wait_before"].get()),
+                "wait_after": int(settings_vars["wait_after"].get()),
             },
             "goto_solar": {
                 "do_action": False,
                 "target": "",
-                "wait_after": 10
+                "wait_after": int(settings_vars["wait_after_target"].get())
             },
             "goto_manual": {
                 "do_action": True,
                 "target": settings_vars["target"].get(),
                 "ra_coord": float(settings_vars["ra_coord"].get()),
                 "dec_coord": float(settings_vars["dec_coord"].get()),
-                "wait_after": 20
+                "wait_after": int(settings_vars["wait_after_target"].get())
             },
             "setup_camera": {
                 "do_action": True,
@@ -613,14 +646,14 @@ def generate_json_preview(settings_vars, config_vars):
                 "binning": "0",
                 "IRCut": ircut_options.get(settings_vars["IRCut"].get(), config_vars["ircut"].get()),
                 "count": check_integer(settings_vars["count"].get()),
-                "wait_after": 30
+                "wait_after": int(settings_vars["wait_after_camera"].get())
             },
             "setup_wide_camera": {
                 "do_action": False,
                 "exposure": "10",
                 "gain": "90",
                 "count": "10",
-                "wait_after": 30
+                "wait_after": int(settings_vars["wait_after_camera"].get())
             }
         }
     }
@@ -709,12 +742,16 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
     fields = [
         ("Description", "description"),
         ("Max Retries", "max_retries"),
+        ("Wait Before Action in s.", "wait_before"),
+        ("Wait After Action in s.", "wait_after"),
         ("Target Type", "target_type"),
         ("Solar System Object", "target_solar"),
         ("Manual Target", "target"),
         ("RA Coord", "ra_coord"),
         ("Dec Coord", "dec_coord"),
+        ("Wait After Goto in s.", "wait_after_target"),
         ("Imaging count", "count"),
+        ("Wait After Session in s.", "wait_after_camera"),
         ("Date (YYYY-MM-DD)", "date")
     ]
 
@@ -749,6 +786,15 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
         if key == "max_retries":
            var.set(2)
 
+        if key == "wait_before":
+           var.set(10)
+        if key == "wait_after":
+           var.set(10)
+        if key == "wait_after_target":
+           var.set(30)
+        if key == "wait_after_camera":
+           var.set(20)
+
         if key != "target_type" and key != "target_solar":
             settings_vars[key] = var  # Store variable for later use
 
@@ -762,6 +808,37 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
         elif key != "target_type" and key != "target_solar":
             label.pack(side=tk.LEFT)
             entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
+
+            if key == "max_retries":
+                # Create a frame for the "ACTIONS" text and checkboxes
+                actions_frame = tk.Frame(scrollable_frame)
+                actions_label = tk.Label(actions_frame, width=20, text="ACTIONS", anchor='w')
+                actions_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+                actions_label.pack(side=tk.LEFT)
+
+                # Auto Focus checkbox
+                #auto_focus_frame = tk.Frame(scrollable_frame)
+                auto_focus_var = tk.BooleanVar()
+                auto_focus_checkbox = tk.Checkbutton(actions_frame, text="Auto Focus", variable=auto_focus_var)
+                settings_vars["auto_focus"] = auto_focus_var
+                #auto_focus_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+                auto_focus_checkbox.pack(side=tk.LEFT, padx=5)
+
+                # Infinite Focus checkbox
+                #infinite_focus_frame = tk.Frame(scrollable_frame)
+                infinite_focus_var = tk.BooleanVar()
+                infinite_focus_checkbox = tk.Checkbutton(actions_frame, text="Infinite Focus", variable=infinite_focus_var)
+                settings_vars["infinite_focus"] = infinite_focus_var
+                #infinite_focus_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+                infinite_focus_checkbox.pack(side=tk.LEFT, padx=5)
+
+                # Calibration checkbox
+                #calibration_frame = tk.Frame(scrollable_frame)
+                calibration_var = tk.BooleanVar()
+                calibration_checkbox = tk.Checkbutton(actions_frame, text="Calibration", variable=calibration_var)
+                settings_vars["calibration"] = calibration_var
+                #calibration_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+                calibration_checkbox.pack(side=tk.LEFT, padx=5)
 
         if key == "target_solar":
             label.pack(side=tk.LEFT)
@@ -779,14 +856,6 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
     time_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
     time_label.pack(side=tk.LEFT)
     time_entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
-
-    # Calibration checkbox
-    calibration_frame = tk.Frame(scrollable_frame)
-    calibration_var = tk.BooleanVar()
-    calibration_checkbox = tk.Checkbutton(calibration_frame, text="Calibration", variable=calibration_var)
-    settings_vars["calibration"] = calibration_var
-    calibration_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-    calibration_checkbox.pack(side=tk.LEFT)
 
     # Create form fields for device type, exposure, gain, and filter
     create_form_fields(scrollable_frame, settings_vars, config_vars)

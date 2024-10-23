@@ -17,6 +17,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_update_camera_setting
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto
+from dwarf_python_api.lib.dwarf_utils import perform_start_autofocus
 
 from dwarf_python_api.lib.dwarf_utils import perform_time
 
@@ -73,7 +74,9 @@ def select_solar_target (target):
 # Define step descriptions
 STEP_DESCRIPTIONS = {
     "step_0": "initialization",
-    "step_1": "Send GO LIVE Command to close previous imaging session",
+    "step_1a": "Send GO LIVE Command to close previous imaging session",
+    "step_1b": "Do Automatic Autofocus",
+    "step_1c": "Do Infinite Autofocus",
     "step_2": "Set Exposure to 1s for Calibration",
     "step_3": "Set Gain to 80 for Calibration",
     "step_4": "Set IR PASS for Calibration",
@@ -132,6 +135,14 @@ def start_dwarf_session(program, type_dwarf = 2):
         log.debug("######################")
 
         # Extracting program parameters, return None if it doesn't exist
+        auto_focus = program.get('auto_focus', {}).get('do_action')
+        if auto_focus:
+            log.notice(f" To do => Automatic Autofocus")
+
+        infinite_focus = program.get('infinite_focus', {}).get('do_action')
+        if infinite_focus:
+            log.notice(f" To do => Infinite Autofocus")
+
         calibration = program.get('calibration', {}).get('do_action')
         if calibration:
             log.notice(f" To do => Calibration")
@@ -204,9 +215,27 @@ def start_dwarf_session(program, type_dwarf = 2):
 
         # Checking update actions
         continue_action = perform_GoLive()
-        verify_action(continue_action, "step_1")
+        verify_action(continue_action, "step_1a")
 
         # Execution of specific actions
+        if auto_focus:
+            wait_before = program.get('auto_focus', {}).get('wait_before', 0)
+            time.sleep(wait_before)
+            log.notice("Processing automatic autofocus")
+            continue_action = perform_start_autofocus(False)
+            verify_action(continue_action, "step_1b")
+            wait_after = program.get('auto_focus', {}).get('wait_after', 0)
+            time.sleep(wait_after)
+
+        if infinite_focus:
+            wait_before = program.get('infinite_focus', {}).get('wait_before', 0)
+            time.sleep(wait_before)
+            log.notice("Processing infinite autofocus")
+            continue_action = perform_start_autofocus(True)
+            verify_action(continue_action, "step_1c")
+            wait_after = program.get('infinite_focus', {}).get('wait_after', 0)
+            time.sleep(wait_after)
+
         if calibration:
             log.notice("Processing Calibration")
             log.notice("    Set Exposure to 1s")

@@ -13,6 +13,8 @@ from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains
 from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposures, allowed_wide_gains
 from dwarf_python_api.lib.data_utils import allowed_exposuresD3, allowed_gainsD3
 from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposuresD3, allowed_wide_gainsD3
+from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
+from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 
 def list_available_names(instance):
     return [entry["name"] for entry in instance.values]
@@ -307,6 +309,19 @@ def save_to_json(settings_vars, config_vars):
         setup_wide_camera["gain"] = gain
         setup_wide_camera["count"] = count
 
+    # convert RA, DEC : Format HH:mm:ss.s and sign DD:mm:ss.s
+    if ra_coord not in (None, ""):
+        try:
+            decimal_RA = float(ra_coord)
+        except ValueError:
+            decimal_RA = parse_ra_to_float(ra_coord)
+
+    if dec_coord not in (None, ""):
+        try:
+            decimal_Dec = float(dec_coord)
+        except ValueError:
+            decimal_Dec = parse_dec_to_float(dec_coord)
+
     # Prepare the JSON data
     data = {
         "command": {
@@ -344,8 +359,8 @@ def save_to_json(settings_vars, config_vars):
             "goto_manual": {
                 "do_action": goto_manual,
                 "target": target,
-                "ra_coord": float(ra_coord) if ra_coord not in (None, "")  else "",
-                "dec_coord": float(dec_coord) if dec_coord not in (None, "")  else "",
+                "ra_coord": float(decimal_RA) if ra_coord not in (None, "")  else "",
+                "dec_coord": float(decimal_Dec) if dec_coord not in (None, "")  else "",
                 "wait_after": int(wait_after_target)
             },
             "setup_camera": setup_camera,
@@ -747,10 +762,10 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
         ("Target Type", "target_type"),
         ("Solar System Object", "target_solar"),
         ("Manual Target", "target"),
-        ("RA Coord", "ra_coord"),
-        ("Dec Coord", "dec_coord"),
+        ("RA (dec or HH:mm:ss.s)", "ra_coord"),
+        ("Dec (dec or ±DD:mm:ss.s)", "dec_coord"),
         ("Wait After Goto in s.", "wait_after_target"),
-        ("Imaging count", "count"),
+        ("Imaging count (0 Not Do)", "count"),
         ("Wait After Session in s.", "wait_after_camera"),
         ("Date (YYYY-MM-DD)", "date")
     ]

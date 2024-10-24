@@ -112,7 +112,7 @@ def try_attemps (function, function_succeed_message, max_attempts = 3):
 
     # If the maximum number of attempts is reached and continue_action is False
     if continue_action is False:
-        log.notice("Action failed after 3 attempts.")
+        log.notice(f"Action failed after {max_attempts} attempts.")
 
     return continue_action
 
@@ -341,10 +341,12 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(wait_after)
             verify_action(continue_action, "step_13")
 
+            time.sleep(2)
             continue_action = perform_takeAstroWidePhoto()
             verify_action(continue_action, "step_14")
 
-            # try mulltiple time due to timeout errors during waiting end of session
+            time.sleep(2)
+            # try multiple time due to timeout errors during waiting end of session
             continue_action = try_attemps (perform_waitEndAstroWidePhoto, "", 5)
 
             verify_action(continue_action, "step_15", True)

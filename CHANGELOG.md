@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.4] - 2024-10-24
+
+### Add help in Settings Tab
+- Add Autofocus option
+- Add Timer for actions
+- Add option to enter coordinnates in DD:MM:SS.s format
+- Change settings page 
+
+### Bugfix
+- Correction on coordinnates values from Stellarium to J2000 values
+- Correction for conversion for coordinnates
+- Correction on Logs trace
+
 ## [1.5.3] - 2024-10-17
 
 ### Add help in Settings Tab

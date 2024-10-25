@@ -88,7 +88,7 @@ def result_session_tab(parent_frame):
 
 def get_observation_files():
     files = [f for f in os.listdir(RESULTS_DIR) if f.endswith('.csv')]
-    files.sort(key=lambda x: os.path.getmtime(os.path.join(RESULTS_DIR, x)), reverse=True)
+    files.sort(reverse=True)
     return files
 
 def load_csv_data(filename):
@@ -118,11 +118,11 @@ def load_csv_data(filename):
             else:
                 row["Lens"] = ""
             if row.get("dwarf") == "D2" :
-                row["IR"] = "Cut" if row.get("ircut") == "0" else "Pass"
+                row["IR"] = "Cut" if row.get("IR") == "0" else "Pass"
             else:
-                if row.get("ircut") == "0":
+                if row.get("IR") == "0":
                     row["IR"] = "VIS"
-                elif row.get("ircut") == "1":
+                elif row.get("IRCut") == "1":
                     row["IR"] = "ASTRO"
                 else:
                     row["IR"] = "DUO B."

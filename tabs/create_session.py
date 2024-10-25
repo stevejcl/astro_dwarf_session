@@ -451,17 +451,44 @@ def calculate_end_time(settings_vars):
         start_date_str = settings_vars["date"].get()
         start_time_str = settings_vars["time"].get()
         exposure_seconds = get_exposure_time(settings_vars)
+
         if not settings_vars["count"].get():
            print ("count imaging is not defined")
            return None, None
+
         count = int(settings_vars["count"].get())
+
+        # add wait time init to 
+        wait_time = 0  
+        if settings_vars["auto_focus"].get():
+          # wait time actions
+          wait_time += 10
+          wait_time += int(settings_vars.get("wait_before", 0).get())
+          wait_time += int(settings_vars.get("wait_after", 0).get())
+        if settings_vars["infinite_focus"].get():
+          # wait time actions
+          wait_time += 5
+          wait_time += int(settings_vars.get("wait_before", 0).get())
+          wait_time += int(settings_vars.get("wait_after", 0).get())
+        if settings_vars["calibration"].get():
+          # wait between actions and time actions
+          wait_time += 10 + 60
+          wait_time += int(settings_vars.get("wait_before", 0).get())
+          wait_time += int(settings_vars.get("wait_after", 0).get())
+        if settings_vars["goto_solar"].get() or settings_vars["goto_manual"].get():
+          wait_time += 30
+          wait_time += int(settings_vars.get("wait_after_target", 0).get())
+
+        # wait time setup camera
+        wait_time += 15
+        wait_time += int(settings_vars.get("wait_after_camera", 0).get())
 
         # Combine date and time into a single datetime object
         start_datetime_str = f"{start_date_str} {start_time_str}"
         start_datetime = datetime.datetime.strptime(start_datetime_str, '%Y-%m-%d %H:%M:%S')
 
         # Calculate the total exposure time
-        total_exposure_time = exposure_seconds * count
+        total_exposure_time = wait_time + (exposure_seconds + 1) * count 
 
         # Calculate end time
         end_datetime = start_datetime + datetime.timedelta(seconds=total_exposure_time)
@@ -770,6 +797,7 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
         ("Date (YYYY-MM-DD)", "date")
     ]
 
+    current_datetime = datetime.datetime.now()
     var_goto_solar = tk.BooleanVar(value=False)
     var_goto_manual = tk.BooleanVar(value=True)
     var_no_goto = tk.BooleanVar(value=False)
@@ -871,6 +899,7 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
     time_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
     time_label.pack(side=tk.LEFT)
     time_entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
+    time_var.set(current_datetime.strftime('%H:%M:%S'))
 
     # Create form fields for device type, exposure, gain, and filter
     create_form_fields(scrollable_frame, settings_vars, config_vars)

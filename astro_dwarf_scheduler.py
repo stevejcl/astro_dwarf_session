@@ -73,7 +73,7 @@ def get_time_to_execute(current_datetime, command):
     return command_datetime
 
 # Update the process status in the JSON file
-def update_process_status(program, status, result=None, message=None, nb_try=None):
+def update_process_status(program, status, result=None, message=None, nb_try=None, dwarf_id=None):
     command = program['command']['id_command']
     command['process'] = status
     if result is not None:
@@ -82,7 +82,11 @@ def update_process_status(program, status, result=None, message=None, nb_try=Non
         command['message'] = message
     if nb_try is not None:
         command['nb_try'] = nb_try
+    if dwarf_id is not None:
+        command['dwarf'] = "D" + str(dwarf_id)
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if status == "pending":
+        command['starting_date'] = current_datetime
     command['processed_date'] = current_datetime
     return program  # Return the updated entire program object
 
@@ -155,12 +159,17 @@ def check_and_execute_commands(askBluetooth = False):
                     del last_hourly_log[filename]
 
                 try:
+                    # Get The Dwarf Type
+                    data_config = get_config_data()
+                    dwarf_id = "2"
+                    if data_config["dwarf_id"]:
+                        dwarf_id = data_config['dwarf_id']
                     # Execute the session
                     max_retries = int(program['command']['id_command'].get('max_retries', 3))
                     nb_try = retry_procedure(program)
 
                     # If successful, update process and result
-                    program = update_process_status(program, 'ended', True, "Action completed successfully.", nb_try)
+                    program = update_process_status(program, 'ended', True, "Action completed successfully.", nb_try, dwarf_id)
                     save_json(current_filepath, program)
 
                     # Move file to "Done" folder
@@ -171,7 +180,7 @@ def check_and_execute_commands(askBluetooth = False):
                     error_message = f"Error during execution: {e}"
                     log.error(error_message)
 
-                    program = update_process_status(program, 'ended', False, error_message, max_retries)
+                    program = update_process_status(program, 'ended', False, error_message, max_retries, dwarf_id)
                     save_json(current_filepath, program)
 
                     # Move file to "Error" folder

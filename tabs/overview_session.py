@@ -16,7 +16,7 @@ def overview_session_tab(parent_frame):
     json_label.pack(pady=5)
     
     # Listbox to show available JSON files
-    json_listbox = tk.Listbox(parent_frame, height=13)
+    json_listbox = tk.Listbox(parent_frame, height=13, selectmode=tk.EXTENDED)
     json_listbox.pack(fill=tk.BOTH, padx=10, pady=5)
     json_listbox.bind('<<ListboxSelect>>', lambda event: on_json_select(event, json_listbox, json_text))
     
@@ -49,7 +49,9 @@ def on_json_select(event, json_listbox, json_text):
     """Triggered when a JSON file is selected, and displays its content."""
     selection = json_listbox.curselection()
     if selection:
-        selected_file = json_listbox.get(selection[0])
+        # Get the last selected item
+        last_selected_index = selection[-1]
+        selected_file = json_listbox.get(last_selected_index)
         filepath = os.path.join('./Astro_Sessions', selected_file)
         display_json_content(filepath, json_text)
 
@@ -121,26 +123,29 @@ def display_json_content(filepath, json_text):
     json_text.config(state=tk.DISABLED)
 
 def select_session(json_listbox, json_text, select_button):
-    """Moves the selected JSON file to the ToDo folder."""
+    """Moves the selected JSON files to the ToDo folder."""
+
     selection = json_listbox.curselection()
     if selection:
-        selected_file = json_listbox.get(selection[0])
-        source_path = os.path.join('./Astro_Sessions', selected_file)
-        destination_path = os.path.join(TODO_DIR, selected_file)
-        
-        try:
-            # Move the file to the ToDo directory
-            shutil.move(source_path, destination_path)
-            print(f"Moved {selected_file} to ToDo folder.")
-
-            # Refresh the listbox
-            populate_json_list(json_listbox)
+        for index in selection:
+            selected_file = json_listbox.get(index)
+            source_path = os.path.join('./Astro_Sessions', selected_file)
+            destination_path = os.path.join(TODO_DIR, selected_file)
             
-            # Clear the text area and disable the select button
-            json_text.config(state=tk.NORMAL)
-            json_text.delete(1.0, tk.END)
-            json_text.config(state=tk.DISABLED)
-            select_button.config(state=tk.NORMAL)
+            try:
+                # Move the file to the ToDo directory
+                shutil.move(source_path, destination_path)
+                print(f"Moved {selected_file} to ToDo folder.")
 
-        except Exception as e:
-            print(f"Error moving file: {e}")
+            except Exception as e:
+                print(f"Error moving file {selected_file}: {e}")
+
+        # Refresh the listbox after moving all files
+        populate_json_list(json_listbox)
+
+        # Clear the text area and disable the select button
+        json_text.config(state=tk.NORMAL)
+        json_text.delete(1.0, tk.END)
+        json_text.config(state=tk.DISABLED)
+        select_button.config(state=tk.NORMAL)
+

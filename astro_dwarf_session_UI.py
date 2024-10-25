@@ -14,6 +14,7 @@ from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
 from tabs import settings
 from tabs import create_session
 from tabs import overview_session
+from tabs import result_session
 
 # Directories
 TODO_DIR = './Astro_Sessions/ToDo'
@@ -81,11 +82,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.tab_main = ttk.Frame(self.tab_control)
         self.tab_settings = ttk.Frame(self.tab_control)
         self.tab_overview_session = ttk.Frame(self.tab_control)
+        self.tab_result_session = ttk.Frame(self.tab_control)
         self.tab_create_session = ttk.Frame(self.tab_control)
         
         self.tab_control.add(self.tab_main, text="Main")
         self.tab_control.add(self.tab_settings, text="Settings")
         self.tab_control.add(self.tab_overview_session, text="Session Overview")
+        self.tab_control.add(self.tab_result_session, text="Results Session")
         self.tab_control.add(self.tab_create_session, text="Create Session")
         
         self.create_main_tab()
@@ -93,6 +96,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.config_vars = {}
         settings.create_settings_tab(self.tab_settings, self.config_vars) 
         overview_session.overview_session_tab(self.tab_overview_session)
+        result_session.result_session_tab(self.tab_result_session)
         create_session.create_session_tab(self.tab_create_session, self.settings_vars, self.config_vars)
 
         self.result = False

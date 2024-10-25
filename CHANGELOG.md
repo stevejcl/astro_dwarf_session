@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.5] - 2024-10-25
+
+### Add Results Analysing
+- Add Results Page
+- Add Multi Select in Overview Page
+
+- Since version 1.5.4 : Telescopius List management
+- Import Mosaic List or Object List from Telescopius
+- Import Custom Mosaic List from Telescopius too
+ 
+### Bugfix
+- Add retry during Imaging Session
+- Timers taking in account for calculating session duration
+
 ## [1.5.4] - 2024-10-24
 
 ### Add help in Settings Tab

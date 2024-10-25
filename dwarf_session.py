@@ -318,10 +318,13 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(wait_after)
             verify_action(continue_action, "step_10")
 
+            time.sleep(2)
             continue_action = perform_takeAstroPhoto()
             verify_action(continue_action, "step_11")
 
-            continue_action = perform_waitEndAstroPhoto()
+            time.sleep(2)
+            # try multiple time due to timeout errors during waiting end of session
+            continue_action = try_attemps (perform_waitEndAstroPhoto, "", 5)
             verify_action(continue_action, "step_12")
 
         if take_widephoto:
@@ -348,8 +351,7 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(2)
             # try multiple time due to timeout errors during waiting end of session
             continue_action = try_attemps (perform_waitEndAstroWidePhoto, "", 5)
-
-            verify_action(continue_action, "step_15", True)
+            verify_action(continue_action, "step_15")
 
     except Exception as e:
         log.error(f"Error during session : {e}")

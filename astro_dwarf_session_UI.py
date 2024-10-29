@@ -100,6 +100,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         create_session.create_session_tab(self.tab_create_session, self.settings_vars, self.config_vars)
 
         self.result = False
+        self.bluetooth_connected = False
         self.stellarium_connection = None
         self.scheduler_running = False
         self.scheduler_stopped = True
@@ -185,9 +186,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def bluetooth_connect_thread(self):
         try:
+            self.bluetooth_connected = False
             self.result = start_connection()
             if self.result:
                 self.log("Bluetooth connected successfully.")
+                self.bluetooth_connected = True
                 # Enable the start scheduler button
                 self.start_button.config(state=tk.NORMAL)
             else:
@@ -200,6 +203,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def skip_bluetooth(self):
         self.log("Bluetooth connection skipped.")
         # Enable the start scheduler button
+        self.bluetooth_connected = False
         self.start_button.config(state=tk.NORMAL)
 
     def start_scheduler(self):
@@ -246,7 +250,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             result = False
             while not result and attempt < 3 and self.scheduler_running:
                 attempt += 1
-                result = start_STA_connection()
+                result = start_STA_connection(not self.bluetooth_connected)
             if result:
                 self.log("Connected to the Dwarf")
             while result and self.scheduler_running:

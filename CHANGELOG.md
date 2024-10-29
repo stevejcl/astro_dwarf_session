@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.6] - 2024-10-29
+
+### Bugfix
+- Check Dwarf type during STA connection if not using bluetooth
+
 ## [1.5.5] - 2024-10-25
 
 ### Add Results Analysing

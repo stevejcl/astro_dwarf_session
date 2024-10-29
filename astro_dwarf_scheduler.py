@@ -17,6 +17,7 @@ from dwarf_python_api.get_config_data import get_config_data, update_config_data
 
 from dwarf_python_api.get_live_data_dwarf import fn_wait_for_user_input
 import dwarf_python_api.lib.my_logger as log
+import requests
 
 # Directories
 TODO_DIR = './Astro_Sessions/ToDo'
@@ -258,15 +259,64 @@ def start_connection(startSTA = False):
     
     return result
 
-def start_STA_connection():
+def start_STA_connection(CheckDwarfId = False):
 
-    #init Frame : TIME and TIMEZONE
-    result = perform_time()
+    result = False
+    data_config = get_config_data()
+    dwarf_ip = data_config["ip"]
+    dwarf_id = data_config["dwarf_id"]
+
+    if not dwarf_ip:
+        log.error("The dwarf Ip has not been set , need Bluetooth First, can't connect to wifi")
+    else:
+        #init Frame : TIME and TIMEZONE
+        log.notice(f'Connecting to the dwarf {dwarf_id} on {dwarf_ip}')
+        result = perform_time()
        
-    if result:
-       perform_timezone()
-    
+        if result:
+            perform_timezone()
+
+        if result and CheckDwarfId:
+            update_dwarf_data = update_get_config_data(dwarf_ip)
+
+            if update_dwarf_data['id'] != dwarf_id:
+                log.success(f'Updated Dwarf Type to dwarf {update_dwarf_data['id']}')
+
     return result
+
+def get_default_params_config(IP):
+    return f"http://{IP}:8082/getDefaultParamsConfig"
+
+def update_get_config_data(IPDwarf=None):
+    try:
+        # Determine the request address
+        request_addr = get_default_params_config(IPDwarf) if IPDwarf else None
+        
+        if request_addr:
+            # Make the HTTP GET request to the specified URL
+            response = requests.get(request_addr)
+            
+            # Check if the response has data
+            if response.status_code == 200 and 'data' in response.json():
+                data = response.json().get('data')
+                new_id = data.get('id') + 1 
+                name = data.get('name')
+                
+                print(f"ID: {new_id}")
+                print(f"Name: {name}")
+
+                update_config_data( 'dwarf_id', new_id)
+
+                return {'id': new_id, 'name': name}
+            else:
+                print("update_get_config_data : No data found in the response.")
+                return None
+        else:
+            print("Invalid request for update_get_config_data.")
+            return None
+    except requests.RequestException as error:
+        print("Error fetching config data:", error)
+        return None
 
 # Main loop to check files in ToDo folder
 def main():

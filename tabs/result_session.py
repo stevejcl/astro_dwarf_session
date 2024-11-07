@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+import tkinter.font as tkFont
 import json
 import os
 import csv
@@ -20,6 +21,22 @@ columns_KO = ["Description", "Dwarf", "Starting", "Ending",
            "Message", "Calibration", "Goto", "Target", 
            "RA", "Dec", "Lens", 
            "exposure", "gain", "IR", "count"]
+
+def autosize_columns(treeview, padding, max_width_col = 0):
+    for col in treeview["columns"]:
+        max_width = tk.font.Font().measure(col)  # Start with the width of the header
+
+        # Check each row to find the maximum width in the column
+        for item in treeview.get_children():
+            cell_value = treeview.set(item, col)
+            cell_width = tkFont.Font().measure(cell_value)
+            max_width = max(max_width, cell_width)
+
+        if max_width_col !=0:
+            max_width = min(max_width, max_width_col)
+ 
+        # Set the column width based on the maximum width found
+        treeview.column(col, width=max_width + padding)  # Add padding
 
 def result_session_tab(parent_frame):
 
@@ -45,17 +62,11 @@ def result_session_tab(parent_frame):
     ok_label.pack()
 
     ok_treeview = ttk.Treeview(ok_frame, columns=columns_OK, show='headings', height=10)
+    default_width = 100
     for col in columns_OK:
         ok_treeview.heading(col, text=col)
-        ok_treeview.column(col, anchor="center")
+        ok_treeview.column(col, anchor="center", width=default_width)
     ok_treeview.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-    #ok_vscrollbar = ttk.Scrollbar(ok_frame, orient="vertical", command=ok_treeview.yview)
-    #ok_treeview.configure(yscroll=ok_vscrollbar.set)
-    #ok_vscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-    #ok_hscrollbar = ttk.Scrollbar(ok_frame, orient="horizontal", command=ok_treeview.xview)
-    #ok_treeview.configure(xscroll=ok_hscrollbar.set)
-    #ok_hscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
 
     # Error Treeview
     error_frame = ttk.Frame(table_frame)
@@ -70,19 +81,19 @@ def result_session_tab(parent_frame):
         error_treeview.column(col, anchor="center")
     error_treeview.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    #error_vscrollbar = ttk.Scrollbar(error_frame, orient="vertical", command=error_treeview.yview)
-    #error_treeview.configure(yscroll=error_vscrollbar.set)
-    #error_vscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    #error_hscrollbar = ttk.Scrollbar(error_frame, orient="horizontal", command=error_treeview.xview)
-    #error_treeview.configure(xscroll=error_hscrollbar.set)
-    #error_hscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
-
     # init results
     refresh_observation_list(combobox, ok_treeview, error_treeview)
 
     update_button = ttk.Button(top_frame, text="Update Results", command=lambda: refresh_observation_list(combobox, ok_treeview, error_treeview))
     update_button.pack(side=tk.LEFT, padx=10)
+
+    # Autosize the columns based on the content
+    padding = 1
+    max_width_col = 40
+    autosize_columns(ok_treeview, padding, max_width_col)
+    padding = 1
+    max_width_col = 40
+    autosize_columns(error_treeview, padding, max_width_col)
 
     combobox.bind("<<ComboboxSelected>>", lambda event: on_file_select(event, combobox, ok_treeview, error_treeview))
 

@@ -75,6 +75,11 @@ def display_json_content(filepath, json_text):
     json_text.insert(tk.END, f"Process: {status_}\n")
     # Now check each action and display details if 'do_action' is True
     command = data['command']
+    # EQ Solving
+    if command.get('eq_solving', {}).get('do_action', False):
+        json_text.insert(tk.END, "\nEQ Solving:\n")
+        json_text.insert(tk.END, f"  Wait Before: {command['eq_solving'].get('wait_before', 'N/A')}\n")
+        json_text.insert(tk.END, f"  Wait After: {command['eq_solving'].get('wait_after', 'N/A')}\n")
     # Autofocus
     if command.get('auto_focus', {}).get('do_action', False):
         json_text.insert(tk.END, "\nAuto focus:\n")

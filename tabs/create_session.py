@@ -242,6 +242,7 @@ def save_to_json(settings_vars, config_vars):
     max_retries = settings_vars["max_retries"].get()
     wait_before = settings_vars["wait_before"].get()
     wait_after = settings_vars["wait_after"].get()
+    eq_solving_action = settings_vars["eq_solving"].get()
     auto_focus_action = settings_vars["auto_focus"].get()
     infinite_focus_action = settings_vars["infinite_focus"].get()
     calibration_action = settings_vars["calibration"].get()
@@ -336,6 +337,11 @@ def save_to_json(settings_vars, config_vars):
                 "message": "",
                 "nb_try": 1
             },
+            "eq_solving": {
+                "do_action": eq_solving_action,
+                "wait_before": int(wait_before),
+                "wait_after": int(wait_after)
+            },
             "auto_focus": {
                 "do_action": auto_focus_action,
                 "wait_before": int(wait_before),
@@ -388,7 +394,7 @@ def save_to_json(settings_vars, config_vars):
 
     # Clear other fields
     for key in settings_vars.keys():
-        if key not in ["date", "time", "max_retries", "auto_focus", "infinite_focus", "calibration", "target_type", "goto_solar", "goto_manual", "no_goto", "wait_before", "wait_after", "wait_after_target", "wait_after_camera"]:  # Don't clear date, time, or calibration checkbox
+        if key not in ["date", "time", "max_retries", "eq_solving", "auto_focus", "infinite_focus", "calibration", "target_type", "goto_solar", "goto_manual", "no_goto", "wait_before", "wait_after", "wait_after_target", "wait_after_camera"]:  # Don't clear date, time, or calibration checkbox
             if config_vars.get(key) is not None and config_vars[key].get():
                 settings_vars[key].set(config_vars[key].get())
             else:
@@ -460,6 +466,11 @@ def calculate_end_time(settings_vars):
 
         # add wait time init to 
         wait_time = 0  
+        if settings_vars["eq_solving"].get():
+          # wait time actions
+          wait_time += 60
+          wait_time += int(settings_vars.get("wait_before", 0).get())
+          wait_time += int(settings_vars.get("wait_after", 0).get())
         if settings_vars["auto_focus"].get():
           # wait time actions
           wait_time += 10
@@ -653,6 +664,11 @@ def generate_json_preview(settings_vars, config_vars):
                 "result": False,
                 "message": "",
                 "nb_try": 1
+            },
+            "eq_solving": {
+                "do_action": settings_vars["eq_solving"].get(),
+                "wait_before": int(settings_vars["wait_before"].get()),
+                "wait_after": int(settings_vars["wait_after"].get()),
             },
             "auto_focus": {
                 "do_action": settings_vars["auto_focus"].get(),
@@ -858,6 +874,14 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
                 actions_label = tk.Label(actions_frame, width=20, text="ACTIONS", anchor='w')
                 actions_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
                 actions_label.pack(side=tk.LEFT)
+
+                # EQ Solving checkbox
+                #eq_solving_frame = tk.Frame(scrollable_frame)
+                eq_solving_var = tk.BooleanVar()
+                eq_solving_checkbox = tk.Checkbutton(actions_frame, text="EQ Solving", variable=eq_solving_var)
+                settings_vars["eq_solving"] = eq_solving_var
+                #eq_solving_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+                eq_solving_checkbox.pack(side=tk.LEFT, padx=5)
 
                 # Auto Focus checkbox
                 #auto_focus_frame = tk.Frame(scrollable_frame)

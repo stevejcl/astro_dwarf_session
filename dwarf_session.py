@@ -18,7 +18,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_update_camera_setting
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_start_autofocus
-
+from dwarf_python_api.lib.dwarf_utils import start_polar_align
 from dwarf_python_api.lib.dwarf_utils import perform_time
 
 from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_setting
@@ -75,8 +75,9 @@ def select_solar_target (target):
 STEP_DESCRIPTIONS = {
     "step_0": "initialization",
     "step_1a": "Send GO LIVE Command to close previous imaging session",
-    "step_1b": "Do Automatic Autofocus",
-    "step_1c": "Do Infinite Autofocus",
+    "step_1b": "Do EQ Solving",
+    "step_1c": "Do Automatic Autofocus",
+    "step_1d": "Do Infinite Autofocus",
     "step_2": "Set Exposure to 1s for Calibration",
     "step_3": "Set Gain to 80 for Calibration",
     "step_4": "Set IR PASS for Calibration",
@@ -133,6 +134,11 @@ def start_dwarf_session(program, type_dwarf = 2):
         log.notice("######################")
         log.debug(f"program: {dump_json}")
         log.debug("######################")
+
+        # Extracting program parameters, return None if it doesn't exist
+        eq_solving = program.get('eq_solving', {}).get('do_action')
+        if eq_solving:
+            log.notice(f" To do => Automatic EQ Solving")
 
         # Extracting program parameters, return None if it doesn't exist
         auto_focus = program.get('auto_focus', {}).get('do_action')
@@ -218,12 +224,25 @@ def start_dwarf_session(program, type_dwarf = 2):
         verify_action(continue_action, "step_1a")
 
         # Execution of specific actions
+        if eq_solving:
+            continue_action = perform_stop_goto()
+            verify_action(continue_action, "step_6")
+            time.sleep(5)
+
+            wait_before = program.get('eq_solving', {}).get('wait_before', 0)
+            time.sleep(wait_before)
+            log.notice("Processing EQ Solving")
+            continue_action = start_polar_align()
+            verify_action(continue_action, "step_1b")
+            wait_after = program.get('eq_solving', {}).get('wait_after', 0)
+            time.sleep(wait_after)
+
         if auto_focus:
             wait_before = program.get('auto_focus', {}).get('wait_before', 0)
             time.sleep(wait_before)
             log.notice("Processing automatic autofocus")
             continue_action = perform_start_autofocus(False)
-            verify_action(continue_action, "step_1b")
+            verify_action(continue_action, "step_1c")
             wait_after = program.get('auto_focus', {}).get('wait_after', 0)
             time.sleep(wait_after)
 
@@ -232,7 +251,7 @@ def start_dwarf_session(program, type_dwarf = 2):
             time.sleep(wait_before)
             log.notice("Processing infinite autofocus")
             continue_action = perform_start_autofocus(True)
-            verify_action(continue_action, "step_1c")
+            verify_action(continue_action, "step_1d")
             wait_after = program.get('infinite_focus', {}).get('wait_after', 0)
             time.sleep(wait_after)
 

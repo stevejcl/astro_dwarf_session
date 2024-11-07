@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection
 from dwarf_ble_connect.connect_bluetooth import connect_bluetooth
-from dwarf_python_api.lib.dwarf_utils import perform_disconnect
+from dwarf_python_api.lib.dwarf_utils import perform_disconnect, unset_HostMaster, set_HostMaster
 import logging
 import dwarf_python_api.lib.my_logger as log
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
@@ -104,6 +104,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.stellarium_connection = None
         self.scheduler_running = False
         self.scheduler_stopped = True
+        self.unset_lock_device_mode = True
         self.protocol("WM_DELETE_WINDOW", self.quit_method)
 
     def quit_method(self):
@@ -170,11 +171,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
         scheduler_frame = tk.Frame(self.tab_main)
         scheduler_frame.pack(anchor="w", padx=10, pady=10)
         
-        self.start_button = tk.Button(scheduler_frame, text="Start Scheduler", command=self.start_scheduler, state=tk.DISABLED, width=15)
+        self.start_button = tk.Button(scheduler_frame, text="Start Scheduler", command=self.start_scheduler, state=tk.DISABLED, width=16)
         self.start_button.grid(row=0, column=0, padx=5)
         
-        self.stop_button = tk.Button(scheduler_frame, text="Stop Scheduler", command=self.stop_scheduler, state=tk.DISABLED, width=15)
+        self.stop_button = tk.Button(scheduler_frame, text="Stop Scheduler", command=self.stop_scheduler, state=tk.DISABLED, width=16)
         self.stop_button.grid(row=0, column=1, padx=5)
+
+        self.unlock_button = tk.Button(scheduler_frame, text="Unset Device as Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
+        self.unlock_button.grid(row=0, column=2, padx=5)
         
         # Log text area
         self.log_text = tk.Text(self.tab_main, wrap=tk.WORD, height=15)
@@ -212,6 +216,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.start_logHandler()
             self.start_button.config(state=tk.DISABLED)
             self.stop_button.config(state=tk.NORMAL)
+            self.unlock_button.config(state=tk.NORMAL)
             self.log("Astro_Dwarf_Scheduler is starting...")
             self.scheduler_thread = threading.Thread(target=self.run_scheduler)
             self.scheduler_thread.start()
@@ -222,12 +227,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_running = False
             self.start_button.config(state=tk.NORMAL)
             self.stop_button.config(state=tk.DISABLED)
+            self.unlock_button.config(state=tk.DISABLED)
             self.verifyCountdown(15)
             self.log("Scheduler is stopping...")
         else:
             self.start_button.config(state=tk.NORMAL)
             self.stop_button.config(state=tk.DISABLED)
+            self.unlock_button.config(state=tk.DISABLED)
             self.log("Scheduler is stopped")
+
+    def unset_lock_device(self):
+        self.scheduler_thread = threading.Thread(target=self.run_unset_lock_device)
+        self.scheduler_thread.start()
 
     def verifyCountdown(self, wait):
         '''
@@ -263,6 +274,28 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.log("Disconnected from the Dwarf.")
             self.scheduler_running = False
             self.scheduler_stopped = True
+
+    def run_unset_lock_device(self):
+        try:
+            attempt = 0
+            result = False
+            while not result and attempt < 3:
+                attempt += 1
+                if self.unset_lock_device_mode:
+                    result = unset_HostMaster()
+                else:
+                    result = set_HostMaster()
+                if not result:
+                    time.sleep(10)  # Sleep for 10 seconds between checks
+            if result:
+                if self.unset_lock_device_mode:
+                    self.unlock_button.config(text="Set Device as Host")
+                else:
+                    self.unlock_button.config(text="Unset Device as Host")
+                self.unset_lock_device_mode = not self.unset_lock_device_mode
+                self.unlock_button.update()
+        except KeyboardInterrupt:
+            self.log("Operation interrupted by the user.")
 
     def start_logHandler(self):
 

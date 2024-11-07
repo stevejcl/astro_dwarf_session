@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.7] - 2024-11-07
+
+### Add autom EQ Mode functionnality
+- Neet to validate this new functionnality
+
 ## [1.5.6] - 2024-10-29
 
 ### Bugfix

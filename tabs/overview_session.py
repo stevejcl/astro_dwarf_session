@@ -4,10 +4,7 @@ import shutil
 import tkinter as tk
 from tkinter import messagebox
 
-TODO_DIR = './Astro_Sessions/ToDo'
-CURRENT_DIR = './Astro_Sessions/Current'
-DONE_DIR = './Astro_Sessions/Done'
-ERROR_DIR = './Astro_Sessions/Error'
+from astro_dwarf_scheduler import LIST_ASTRO_DIR_DEFAULT
 
 def overview_session_tab(parent_frame):
     """Initializes the session overview tab."""
@@ -39,7 +36,7 @@ def populate_json_list(json_listbox):
     """Populates the listbox with JSON files from the Astro_Sessions folder."""
     json_listbox.delete(0, tk.END)
     try:
-        for filename in os.listdir('./Astro_Sessions'):
+        for filename in os.listdir(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"]):
             if filename.endswith('.json'):
                json_listbox.insert(tk.END, filename)
     except Exception as e:
@@ -52,7 +49,7 @@ def on_json_select(event, json_listbox, json_text):
         # Get the last selected item
         last_selected_index = selection[-1]
         selected_file = json_listbox.get(last_selected_index)
-        filepath = os.path.join('./Astro_Sessions', selected_file)
+        filepath = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], selected_file)
         display_json_content(filepath, json_text)
 
 def display_json_content(filepath, json_text):
@@ -128,14 +125,17 @@ def display_json_content(filepath, json_text):
     json_text.config(state=tk.DISABLED)
 
 def select_session(json_listbox, json_text, select_button):
+    # import directories
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
     """Moves the selected JSON files to the ToDo folder."""
 
     selection = json_listbox.curselection()
     if selection:
         for index in selection:
             selected_file = json_listbox.get(index)
-            source_path = os.path.join('./Astro_Sessions', selected_file)
-            destination_path = os.path.join(TODO_DIR, selected_file)
+            source_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], selected_file)
+            destination_path = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], selected_file)
             
             try:
                 # Move the file to the ToDo directory

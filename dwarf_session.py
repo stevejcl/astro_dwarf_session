@@ -28,7 +28,9 @@ from dwarf_python_api.lib.data_utils import get_exposure_name_by_index
 from dwarf_python_api.lib.data_utils import get_gain_name_by_index
 from dwarf_python_api.lib.data_wide_utils import get_wide_exposure_name_by_index
 from dwarf_python_api.lib.data_wide_utils import get_wide_gain_name_by_index
-from dwarf_python_api.get_config_data import get_config_data
+
+# import data for config.py
+import dwarf_python_api.get_config_data
 
 import dwarf_python_api.lib.my_logger as log
 
@@ -119,7 +121,7 @@ def try_attemps (function, function_succeed_message, max_attempts = 3):
 
 def start_dwarf_session(program, type_dwarf = 2):
     try:
-        data_config = get_config_data()
+        data_config = dwarf_python_api.get_config_data.get_config_data()
         dwarf_id = "2"
         if data_config["dwarf_id"]:
             dwarf_id = data_config['dwarf_id']
@@ -223,20 +225,6 @@ def start_dwarf_session(program, type_dwarf = 2):
         continue_action = perform_GoLive()
         verify_action(continue_action, "step_1a")
 
-        # Execution of specific actions
-        if eq_solving:
-            continue_action = perform_stop_goto()
-            verify_action(continue_action, "step_6")
-            time.sleep(5)
-
-            wait_before = program.get('eq_solving', {}).get('wait_before', 0)
-            time.sleep(wait_before)
-            log.notice("Processing EQ Solving")
-            continue_action = start_polar_align()
-            verify_action(continue_action, "step_1b")
-            wait_after = program.get('eq_solving', {}).get('wait_after', 0)
-            time.sleep(wait_after)
-
         if auto_focus:
             wait_before = program.get('auto_focus', {}).get('wait_before', 0)
             time.sleep(wait_before)
@@ -253,6 +241,20 @@ def start_dwarf_session(program, type_dwarf = 2):
             continue_action = perform_start_autofocus(True)
             verify_action(continue_action, "step_1d")
             wait_after = program.get('infinite_focus', {}).get('wait_after', 0)
+            time.sleep(wait_after)
+
+        # Execution of specific actions
+        if eq_solving:
+            continue_action = perform_stop_goto()
+            verify_action(continue_action, "step_6")
+            time.sleep(5)
+
+            wait_before = program.get('eq_solving', {}).get('wait_before', 0)
+            time.sleep(wait_before)
+            log.notice("Processing EQ Solving")
+            continue_action = start_polar_align()
+            verify_action(continue_action, "step_1b")
+            wait_after = program.get('eq_solving', {}).get('wait_after', 0)
             time.sleep(wait_after)
 
         if calibration:
@@ -409,7 +411,7 @@ def print_camera_data():
     result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
-    data_config = get_config_data()
+    data_config = dwarf_python_api.get_config_data.get_config_data()
     dwarf_id = data_config['dwarf_id'] 
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {dwarf_id}")
@@ -537,7 +539,7 @@ def print_wide_camera_data():
     result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
-    data_config = get_config_data()
+    data_config = dwarf_python_api.get_config_data.get_config_data()
     dwarf_id = data_config['dwarf_id'] 
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {dwarf_id}")

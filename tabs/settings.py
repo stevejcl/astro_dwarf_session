@@ -8,7 +8,7 @@ from geopy.geocoders import Photon
 from timezonefinder import TimezoneFinder
 from geopy.exc import GeocoderInsufficientPrivileges
 
-CONFIG_FILE = 'config.ini'
+CONFIG_INI_FILE = 'config.ini'
 
 def get_lat_long_and_timezone(address, agent = 1):
     try:
@@ -76,13 +76,13 @@ def open_link(url):
 # Load and save configuration settings from config.ini
 def load_config():
     config = configparser.ConfigParser()
-    config.read(CONFIG_FILE)
+    config.read(CONFIG_INI_FILE)
     return config['CONFIG']
 
 def save_config(config_data):
     config = configparser.ConfigParser()
     config['CONFIG'] = config_data
-    with open(CONFIG_FILE, 'w') as configfile:
+    with open(CONFIG_INI_FILE, 'w') as configfile:
         config.write(configfile)
 
 # Create the settings tab

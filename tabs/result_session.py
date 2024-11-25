@@ -7,9 +7,6 @@ import csv
 from datetime import datetime, timedelta
 
 # Directories
-ASTRO_SESSIONS_DIR = '.\\Astro_Sessions'
-RESULTS_DIR = os.path.join(ASTRO_SESSIONS_DIR, 'Results') 
-RESULTS_LIST_PATH = os.path.join(RESULTS_DIR, 'results_list.txt')
 TIME_CHANGE_DAY = 18
 
 # Define columns to display in Treeviews
@@ -84,7 +81,11 @@ def result_session_tab(parent_frame):
     # init results
     refresh_observation_list(combobox, ok_treeview, error_treeview)
 
-    update_button = ttk.Button(top_frame, text="Update Results", command=lambda: refresh_observation_list(combobox, ok_treeview, error_treeview))
+    # Closure function for refreshing
+    def refresh():
+        refresh_observation_list(combobox, ok_treeview, error_treeview)
+
+    update_button = ttk.Button(top_frame, text="Update Results", command=lambda: refresh)
     update_button.pack(side=tk.LEFT, padx=10)
 
     # Autosize the columns based on the content
@@ -97,12 +98,24 @@ def result_session_tab(parent_frame):
 
     combobox.bind("<<ComboboxSelected>>", lambda event: on_file_select(event, combobox, ok_treeview, error_treeview))
 
+    return refresh
+
 def get_observation_files():
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    # Directories
+    RESULTS_DIR = LIST_ASTRO_DIR["SESSIONS_DIR"] + '/Results'
+
     files = [f for f in os.listdir(RESULTS_DIR) if f.endswith('.csv')]
     files.sort(reverse=True)
     return files
 
 def load_csv_data(filename):
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    # Directories
+    RESULTS_DIR = LIST_ASTRO_DIR["SESSIONS_DIR"] + '/Results'
+
     ok_data = []
     error_data = []
     with open(os.path.join(RESULTS_DIR, filename), newline='') as csvfile:
@@ -175,9 +188,18 @@ def refresh_observation_list(combobox, ok_treeview, error_treeview):
         ok_data, error_data = load_csv_data(files[0])
         update_treeview(ok_treeview, ok_data, columns_OK)
         update_treeview(error_treeview, error_data, columns_KO)
+    else:
+        combobox.set("")  # Clear the combobox
+        # Clear the treeviews and display only column headers
+        update_treeview(ok_treeview, [], columns_OK)
+        update_treeview(error_treeview, [], columns_KO)
 
 # Function to load already processed filenames
 def load_processed_files():
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
+
     if os.path.exists(RESULTS_LIST_PATH):
         with open(RESULTS_LIST_PATH, 'r') as file:
             return set(line.strip() for line in file.readlines())
@@ -185,6 +207,10 @@ def load_processed_files():
 
 # Function to save processed filename
 def save_processed_file(filename):
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
+
     with open(RESULTS_LIST_PATH, 'a') as file:
         file.write(filename + '\n')
 
@@ -198,11 +224,16 @@ def get_observation_night(starting_date):
 
 # Function to analyze JSON files and generate CSV
 def analyze_files():
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    # Directories
+    RESULTS_DIR = LIST_ASTRO_DIR["SESSIONS_DIR"] + '/Results'
+
     processed_files = load_processed_files()
 
     # Paths to Done and Error directories
     for status_dir in ['Done', 'Error']:
-        dir_path = os.path.join(ASTRO_SESSIONS_DIR, status_dir)
+        dir_path = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], status_dir)
         if not os.path.exists(dir_path):
             continue
 

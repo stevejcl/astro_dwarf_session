@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.8] - 2024-11-25
+
+### Add multi Configuration mode
+- Permits to use more than one device alternatively with keeping the data separate for D2 or D3
+- Can launch multiple parallel sessions with multiple instances of the program for more than one device
+
+###  EQ Mode functionnality validated
+
 ## [1.5.7] - 2024-11-07
 
 ### Add autom EQ Mode functionnality

@@ -875,14 +875,6 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
                 actions_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
                 actions_label.pack(side=tk.LEFT)
 
-                # EQ Solving checkbox
-                #eq_solving_frame = tk.Frame(scrollable_frame)
-                eq_solving_var = tk.BooleanVar()
-                eq_solving_checkbox = tk.Checkbutton(actions_frame, text="EQ Solving", variable=eq_solving_var)
-                settings_vars["eq_solving"] = eq_solving_var
-                #eq_solving_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-                eq_solving_checkbox.pack(side=tk.LEFT, padx=5)
-
                 # Auto Focus checkbox
                 #auto_focus_frame = tk.Frame(scrollable_frame)
                 auto_focus_var = tk.BooleanVar()
@@ -898,6 +890,14 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
                 settings_vars["infinite_focus"] = infinite_focus_var
                 #infinite_focus_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
                 infinite_focus_checkbox.pack(side=tk.LEFT, padx=5)
+
+                # EQ Solving checkbox
+                #eq_solving_frame = tk.Frame(scrollable_frame)
+                eq_solving_var = tk.BooleanVar()
+                eq_solving_checkbox = tk.Checkbutton(actions_frame, text="EQ Solving", variable=eq_solving_var)
+                settings_vars["eq_solving"] = eq_solving_var
+                #eq_solving_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+                eq_solving_checkbox.pack(side=tk.LEFT, padx=5)
 
                 # Calibration checkbox
                 #calibration_frame = tk.Frame(scrollable_frame)

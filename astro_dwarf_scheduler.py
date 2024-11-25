@@ -13,17 +13,111 @@ from dwarf_python_api.lib.dwarf_utils import perform_timezone
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
 from dwarf_python_api.lib.dwarf_utils import save_bluetooth_config_from_ini_file
-from dwarf_python_api.get_config_data import get_config_data, update_config_data
-
 from dwarf_python_api.get_live_data_dwarf import fn_wait_for_user_input
+
+# import data for config.py
+import dwarf_python_api.get_config_data
+
 import dwarf_python_api.lib.my_logger as log
-import requests
 
 # Directories
-TODO_DIR = './Astro_Sessions/ToDo'
-CURRENT_DIR = './Astro_Sessions/Current'
-DONE_DIR = './Astro_Sessions/Done'
-ERROR_DIR = './Astro_Sessions/Error'
+CONFIG_DEFAULT = "Default"
+BASE_DIR = os.path.abspath(".")
+DEVICES_DIR = os.path.join(BASE_DIR, "Devices_Sessions")
+SESSIONS_DIR =  os.path.join(BASE_DIR, 'Astro_Sessions')
+
+LIST_ASTRO_DIR_DEFAULT = {
+    "SESSIONS_DIR": SESSIONS_DIR,
+    "RESULTS_DIR": os.path.join('.', 'Results'),
+    "TODO_DIR": os.path.join(".", "ToDo"),
+    "CURRENT_DIR": os.path.join(".", "Current"),
+    "DONE_DIR": os.path.join(".", "Done"),
+    "ERROR_DIR": os.path.join(".", "Error")
+}
+
+LIST_ASTRO_DIR = {
+    "SESSIONS_DIR": SESSIONS_DIR,
+    "RESULTS_DIR": os.path.join(SESSIONS_DIR, 'Results'),
+    "TODO_DIR": os.path.join(SESSIONS_DIR, 'ToDo'),
+    "CURRENT_DIR": os.path.join(SESSIONS_DIR, 'Current'),
+    "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
+    "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
+}
+
+import requests
+
+def setup_new_config(config_name):
+    global LIST_ASTRO_DIR
+
+    if config_name == CONFIG_DEFAULT:
+        dwarf_python_api.get_config_data.set_config_data(
+            config_file='config.py',
+            config_file_tmp='config.tmp',
+            lock_file='config.lock',
+            print_log=True
+        )
+
+        SESSIONS_DIR =  os.path.join(BASE_DIR, 'Astro_Sessions')
+        LIST_ASTRO_DIR = {
+            "SESSIONS_DIR": SESSIONS_DIR,
+            "RESULTS_DIR": os.path.join(SESSIONS_DIR, 'Results'),
+            "TODO_DIR": os.path.join(SESSIONS_DIR, 'ToDo'),
+            "CURRENT_DIR": os.path.join(SESSIONS_DIR, 'Current'),
+            "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
+            "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
+        }
+
+    else:
+        new_config_file = f"config_{config_name}.py"
+        new_config_file_tmp = f"config_{config_name}.tmp"
+        new_lock_file = f"config_{config_name}.lock"
+
+        # Update CONFIG variables using the set_config_data function
+        dwarf_python_api.get_config_data.set_config_data(
+            config_file=new_config_file,
+            config_file_tmp=new_config_file_tmp,
+            lock_file=new_lock_file,
+            print_log=True
+        )
+
+        config_filemname = os.path.join(BASE_DIR, new_config_file)
+        if not os.path.exists(config_filemname):
+
+            try:
+                # Copy the original config file if not exist
+                shutil.copy('config.py', new_config_file)
+                print(f"'{'config.py'}' successfully copied to '{new_config_file}'.")
+            except FileNotFoundError:
+                print(f"Error: '{'config.py'}' not found.")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+
+            # get Original log_file
+            data_config = dwarf_python_api.get_config_data.get_config_data("config.py")
+            if data_config['log_file'] == "False":
+                log_file = None
+            else: 
+                log_file = "app.log" if data_config['log_file'] == "" else data_config['log_file']
+
+            if log_file is not None:
+                name, ext = log_file.rsplit(".", 1)
+                new_log_file = f"{name}_{config_name}.{ext}"
+                dwarf_python_api.get_config_data.update_config_data( "log_file", new_log_file, True)
+
+        config_dir = os.path.join(DEVICES_DIR, config_name)
+        SESSIONS_DIR = os.path.join(config_dir, 'Astro_Sessions')
+        # Define the list of directories
+        LIST_ASTRO_DIR = {
+            "SESSIONS_DIR": SESSIONS_DIR,
+            "RESULTS_DIR": os.path.join(SESSIONS_DIR, 'Results'),
+            "TODO_DIR": os.path.join(SESSIONS_DIR, 'ToDo'),
+            "CURRENT_DIR": os.path.join(SESSIONS_DIR, 'Current'),
+            "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
+            "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
+        }
+
+    # update log
+    log.update_log_file()
 
 # Load the JSON file
 def load_json(filepath):
@@ -114,8 +208,9 @@ last_hourly_log = {}  # Dictionary to track the last hourly log time for each fi
 
 # Main function to check and execute the commands
 def check_and_execute_commands(askBluetooth = False):
-    for filename in os.listdir(TODO_DIR):
-        filepath = os.path.join(TODO_DIR, filename)
+    global LIST_ASTRO_DIR
+    for filename in os.listdir(LIST_ASTRO_DIR["TODO_DIR"]):
+        filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
         if filepath.endswith('.json'):
             program = load_json(filepath)
             if program is False:
@@ -128,8 +223,8 @@ def check_and_execute_commands(askBluetooth = False):
             if not command:
                 log.error(f"Mandatory commands not found in file, the file {filename} is ignored")
                 # Move file to "Error" folder
-                current_filepath = os.path.join(TODO_DIR, filename)
-                move_file(current_filepath, os.path.join(ERROR_DIR, filename))
+                current_filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
+                move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
                 log.notice("----------------------")
                 log.notice("----------------------")
 
@@ -137,8 +232,8 @@ def check_and_execute_commands(askBluetooth = False):
             elif command.get('process') is not None and command.get('process') != 'wait':
                 log.warning(f"Process value is not 'wait', the file {filename} is ignored")
                 # Move file to "Error" folder
-                current_filepath = os.path.join(TODO_DIR, filename)
-                move_file(current_filepath, os.path.join(ERROR_DIR, filename))
+                current_filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
+                move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
                 log.notice("----------------------")
                 log.notice("----------------------")
             # Check if the execution time has been reached
@@ -148,7 +243,7 @@ def check_and_execute_commands(askBluetooth = False):
                 log.debug(f"Executing command {command.get('uuid')}")
 
                 # Move to "Current" folder and update status
-                current_filepath = os.path.join(CURRENT_DIR, filename)
+                current_filepath = os.path.join(LIST_ASTRO_DIR["CURRENT_DIR"], filename)
                 program = update_process_status(program, 'pending')
                 save_json(filepath, program)
                 move_file(filepath, current_filepath)
@@ -161,7 +256,7 @@ def check_and_execute_commands(askBluetooth = False):
 
                 try:
                     # Get The Dwarf Type
-                    data_config = get_config_data()
+                    data_config = dwarf_python_api.get_config_data.get_config_data()
                     dwarf_id = "2"
                     if data_config["dwarf_id"]:
                         dwarf_id = data_config['dwarf_id']
@@ -174,7 +269,7 @@ def check_and_execute_commands(askBluetooth = False):
                     save_json(current_filepath, program)
 
                     # Move file to "Done" folder
-                    move_file(current_filepath, os.path.join(DONE_DIR, filename))
+                    move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["DONE_DIR"], filename))
 
                 except Exception as e:
                     # Handle errors and update process and result
@@ -185,7 +280,7 @@ def check_and_execute_commands(askBluetooth = False):
                     save_json(current_filepath, program)
 
                     # Move file to "Error" folder
-                    move_file(current_filepath, os.path.join(ERROR_DIR, filename))
+                    move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
                     log.notice("----------------------")
                     log.notice("----------------------")
                     if (askBluetooth and fn_wait_for_user_input(60, "An error occuring during last Action, do you want to reconnect to bluetooth or continue ?\nThe program will contine if you don't press CTRL-C within 60 seconds:" ))  == 1:
@@ -262,7 +357,7 @@ def start_connection(startSTA = False):
 def start_STA_connection(CheckDwarfId = False):
 
     result = False
-    data_config = get_config_data()
+    data_config = dwarf_python_api.get_config_data.get_config_data()
     dwarf_ip = data_config["ip"]
     dwarf_id = data_config["dwarf_id"]
 
@@ -305,7 +400,7 @@ def update_get_config_data(IPDwarf=None):
                 print(f"ID: {new_id}")
                 print(f"Name: {name}")
 
-                update_config_data( 'dwarf_id', new_id)
+                dwarf_python_api.get_config_data.update_config_data( 'dwarf_id', new_id)
 
                 return {'id': new_id, 'name': name}
             else:
@@ -350,12 +445,12 @@ def main():
                         sys.exit(1)
                 i += 1
             if dwarf_id:
-                update_config_data( 'dwarf_id', dwarf_id)
+                dwarf_python_api.get_config_data.update_config_data( 'dwarf_id', dwarf_id)
             if dwarf_ip:
-                update_config_data( 'ip', dwarf_ip)
+                dwarf_python_api.get_config_data.update_config_data( 'ip', dwarf_ip)
 
         # test if Ip and Id is set
-        data_config = get_config_data()
+        data_config = dwarf_python_api.get_config_data.get_config_data()
         if data_config["dwarf_id"]:
             dwarf_id = data_config['dwarf_id']
         if data_config["ip"]:

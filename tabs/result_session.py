@@ -85,7 +85,7 @@ def result_session_tab(parent_frame):
     def refresh():
         refresh_observation_list(combobox, ok_treeview, error_treeview)
 
-    update_button = ttk.Button(top_frame, text="Update Results", command=lambda: refresh)
+    update_button = ttk.Button(top_frame, text="Update Results", command=lambda: refresh())
     update_button.pack(side=tk.LEFT, padx=10)
 
     # Autosize the columns based on the content

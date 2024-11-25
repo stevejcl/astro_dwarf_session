@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.9] - 2024-11-25
+
+### Bugfix
+- Correction for Update Results Tab Page not working
+
 ## [1.5.8] - 2024-11-25
 
 ### Add multi Configuration mode

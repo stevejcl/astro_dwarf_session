@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.0] - 2024-12-21
+
+### Add Direct Bluetooth connection
+- Permits to choose direct or web based bluetooth connection
+
 ## [1.5.9] - 2024-11-25
 
 ### Bugfix

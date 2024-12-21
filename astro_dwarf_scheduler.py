@@ -12,8 +12,9 @@ from dwarf_python_api.lib.dwarf_utils import perform_time
 from dwarf_python_api.lib.dwarf_utils import perform_timezone
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
-from dwarf_python_api.lib.dwarf_utils import save_bluetooth_config_from_ini_file
+from dwarf_python_api.lib.dwarf_utils import save_bluetooth_config_from_ini_file, read_bluetooth_ble_psd, read_bluetooth_ble_STA_ssid, read_bluetooth_ble_STA_pwd
 from dwarf_python_api.get_live_data_dwarf import fn_wait_for_user_input
+from dwarf_ble_connect.lib.connect_direct_bluetooth import connect_ble_dwarf_win
 
 # import data for config.py
 import dwarf_python_api.get_config_data
@@ -334,23 +335,31 @@ def log_command_status(filename, command_datetime, interval=None, first_time=Fal
         log.notice("######################")
         log.notice(f"{interval} log:  {filename}, not yet ready, will execute not earlier than {command_datetime}")
 
-def start_connection(startSTA = False):
+def start_connection(startSTA = False, use_web_page = False):
 
-    if not save_bluetooth_config_from_ini_file():
-        log.error("No Wifi Data have been found, can't connect to wifi")
-        log.error("Need to update the config file with Wifi Informations.") 
-        result = False
+    result = False
+    if use_web_page:
+        if not save_bluetooth_config_from_ini_file():
+            log.error("No Wifi Data have been found, can't connect to wifi")
+            log.error("Need to update the config file with Wifi Informations.") 
+        else:
+            result = connect_bluetooth()
 
     else:
-        result = connect_bluetooth()
+        ble_psd = read_bluetooth_ble_psd() or "DWARF_12345678"
+        ble_STA_ssid = read_bluetooth_ble_STA_ssid() or ""
+        ble_STA_pwd = read_bluetooth_ble_STA_pwd() or ""
+    
+        if ble_psd and ble_STA_ssid and ble_STA_pwd:
+            result = connect_ble_dwarf_win(ble_psd, ble_STA_ssid, ble_STA_pwd)
 
-        if startSTA and result is not False and result!= "":
+    if startSTA and result is not False and result!= "":
         
-            #init Frame : TIME and TIMEZONE
-            result = perform_time()
+        #init Frame : TIME and TIMEZONE
+        result = perform_time()
        
-            if result:
-               perform_timezone()
+        if result:
+           perform_timezone()
     
     return result
 

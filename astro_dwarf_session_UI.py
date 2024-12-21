@@ -357,11 +357,23 @@ class AstroDwarfSchedulerApp(tk.Tk):
         # Bluetooth connection prompt label
         self.label1 = tk.Label(self.tab_main, text="Dwarf connection", font=("Arial", 12))
         self.label1.pack(anchor="w", padx=10, pady=5)
-        self.label2 = tk.Label(self.tab_main, text="Do you want to start the Bluetooth connection?", font=("Arial", 10))
-        self.label2.pack(anchor="w", padx=10, pady=5)
+
+        # Checkbox to toggle between Bluetooth commands
+        self.use_web = tk.BooleanVar(value=False)
+        self.checkbox_commandBluetooth = tk.Checkbutton(
+            self.tab_main,
+            text="Use Web Browser for Bluetooth",
+            variable=self.use_web
+        )
+        self.checkbox_commandBluetooth.pack(anchor="w", padx=10, pady=5)
+
+        # Add tooltip to the checkbox
+        Tooltip(self.checkbox_commandBluetooth, "Use the direct Bluetooth function if unchecked.\nUse the web browser for Bluetooth if checked.")
 
         # Tooltip for Bluetooth connection prompt
-        Tooltip(self.label2, "Select Yes to open the Webbrowser for Bluetooth connection or No to skip the connection.")
+        self.label2 = tk.Label(self.tab_main, text="Do you want to start the Bluetooth connection?", font=("Arial", 10))
+        self.label2.pack(anchor="w", padx=10, pady=5)
+        Tooltip(self.label2, "Select Yes to launch the command for Bluetooth connection or No to skip the connection.")
 
         # Frame for Bluetooth connection buttons
         bluetooth_frame = tk.Frame(self.tab_main)
@@ -407,7 +419,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def bluetooth_connect_thread(self):
         try:
             self.bluetooth_connected = False
-            self.result = start_connection()
+            self.result = start_connection(False, self.use_web.get())
             if self.result:
                 self.log("Bluetooth connected successfully.")
                 self.bluetooth_connected = True

@@ -32,7 +32,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Build the executable with setupUI.py
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-local.txt --target .
+          pip install cx_Freeze
+
+      - name: Build the executable with setupBle.py
         run: |
           python setupBle.py build
 

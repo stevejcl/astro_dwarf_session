@@ -55,7 +55,7 @@ jobs:
       - name: Compress with tar (preserve symlinks)
         run: |
           # Use tar to create a .tar.gz archive and preserve symlinks
-          tar -czf AstroDwarfScheduler-GUI.tar.gz -C build exe.win-amd64-3.12/
+          tar -czf AstroDwarfScheduler-GUI.tar.gz -C .\build\exe.win-amd64-3.12/
 
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
@@ -115,7 +115,7 @@ jobs:
       - name: Compress with tar (preserve symlinks)
         run: |
           # Use tar to create a .tar.gz archive and preserve symlinks
-          tar -czf AstroDwarfScheduler-CMD.tar.gz -C build exe.win-amd64-3.12/
+          tar -czf AstroDwarfScheduler-CMD.tar.gz -C .\build\exe.win-amd64-3.12/
 
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4

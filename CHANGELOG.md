@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.1] - 2024-12-24
+
+### Bugfix
+- Correction for creating exe working for direct bluetooth connections
+
 ## [1.6.0] - 2024-12-21
 
 ### Add Direct Bluetooth connection

@@ -52,17 +52,16 @@ jobs:
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
-      - name: Install 7-Zip
-        run: choco install 7zip -y
-
-      - name: Create ZIP with 7-Zip
-        run: 7z a -l AstroDwarfScheduler-GUI.zip build\exe.win-amd64-3.12\
+      - name: Compress with tar (preserve symlinks)
+        run: |
+          # Use tar to create a .tar.gz archive and preserve symlinks
+          tar -czf AstroDwarfScheduler-GUI.tar.gz -C build exe.win-amd64-3.12/
 
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI
-          path: AstroDwarfScheduler-GUI.zip
+          path: AstroDwarfScheduler-GUI.tar.gz
 
   build_console:
     runs-on: windows-latest
@@ -113,17 +112,16 @@ jobs:
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
-      - name: Install 7-Zip
-        run: choco install 7zip -y
-
-      - name: Create ZIP with 7-Zip
-        run: 7z a -l AstroDwarfScheduler-Console.zip build\exe.win-amd64-3.12\
+      - name: Compress with tar (preserve symlinks)
+        run: |
+          # Use tar to create a .tar.gz archive and preserve symlinks
+          tar -czf AstroDwarfScheduler-CMD.tar.gz -C build exe.win-amd64-3.12/
 
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console
-          path: AstroDwarfScheduler-Console.zip
+          path: AstroDwarfScheduler-Console.tar.gz
 
   release:
     runs-on: ubuntu-latest

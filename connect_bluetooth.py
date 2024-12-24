@@ -33,7 +33,7 @@ if __name__ == "__main__":
         
         i = 1
         while i < len(sys.argv):
-            if sys.argv[i] == "--cmd":
+            if sys.argv[i] == "--web":
                 win = False
             elif sys.argv[i] == "--psd":
                 if i + 1 < len(sys.argv):

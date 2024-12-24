@@ -53,9 +53,14 @@ jobs:
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
       - name: Compress with tar (preserve symlinks)
-        run: |
-          # Use tar to create a .tar.gz archive and preserve symlinks
-          tar -czf AstroDwarfScheduler-GUI.tar.gz -C build exe.win-amd64-3.12/
+        uses: a7ul/tar-action@v1.1.0
+        id: compress
+        with:
+          command: c
+          cwd: ./build/exe.win-amd64-3.12
+          files: |
+            ./
+          outPath: AstroDwarfScheduler-CMD.tar.gz
 
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
@@ -113,9 +118,14 @@ jobs:
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
       - name: Compress with tar (preserve symlinks)
-        run: |
-          # Use tar to create a .tar.gz archive and preserve symlinks
-          tar -czf AstroDwarfScheduler-CMD.tar.gz -C build exe.win-amd64-3.12/
+        uses: a7ul/tar-action@v1.1.0
+        id: compress
+        with:
+          command: c
+          cwd: ./build/exe.win-amd64-3.12
+          files: |
+            ./
+          outPath: AstroDwarfScheduler-CMD.tar.gz
 
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4

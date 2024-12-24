@@ -305,7 +305,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.log(f"New configuration '{config_name}' created.")
             else:
                 self.log(f"Configuration '{config_name}' selected.")
-            self.log(f"  Session directory is : '{LIST_ASTRO_DIR["SESSIONS_DIR"]}'.")
+            self.log(f"  Session directory is : '{LIST_ASTRO_DIR['SESSIONS_DIR']}'.")
 
         self.refresh_data()
 

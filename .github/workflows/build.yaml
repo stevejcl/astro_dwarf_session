@@ -11,7 +11,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -26,6 +26,24 @@ jobs:
       - name: Build the executable with setupUI.py
         run: |
           python setupUI.py build
+
+      - name: Set up Python3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build the executable with setupUI.py
+        run: |
+          python setupBle.py build
+
+      - name: Mode and rename to extern
+        run: |
+          powershell Move-Item -Path build\exe.win-amd64-3.11 -Destination build\exe.win-amd64-3.12\extern
+
+      - name: create symbolic link
+        run: |
+           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
+           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
       - name: Zip the GUI executable
         run: |
@@ -60,6 +78,24 @@ jobs:
       - name: Build the executable with setupCMD.py
         run: |
           python setupCMD.py build
+
+      - name: Set up Python3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build the executable with setupUI.py
+        run: |
+          python setupBle.py build
+
+      - name: Mode and rename to extern
+        run: |
+          powershell Move-Item -Path build\exe.win-amd64-3.11 -Destination build\exe.win-amd64-3.12\extern
+
+      - name: create symbolic link
+        run: |
+           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
+           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
       - name: Zip the Console executable
         run: |

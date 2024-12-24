@@ -3,10 +3,8 @@ import sys
 
 # Include additional files and folders
 buildOptions = dict(
-    packages=["bleak"],
     include_files=[
         ('dwarf_ble_connect/','./dwarf_ble_connect'),
-        ('Install/','.')
     ]
 )
 
@@ -14,9 +12,9 @@ buildOptions = dict(
 base = 'Win32GUI' if sys.platform=='win32' else None
 # Setup function
 setup(
-    name="Astro Dwarf Scheduler",
+    name="Dwarfium BLE CONNECT",
     version="1.0",
-    description="Dwarf Astro Scheduler",
+    description="Dwarfium BLE CONNECT",
     options = dict(build_exe = buildOptions),
-    executables=[Executable("astro_dwarf_session_UI.py")]
+    executables=[Executable("connect_bluetooth.py")]
 )

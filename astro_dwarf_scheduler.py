@@ -6,15 +6,15 @@ import time
 from datetime import datetime, timedelta
 
 from dwarf_session import start_dwarf_session
-from dwarf_ble_connect.connect_bluetooth import connect_bluetooth
 
 from dwarf_python_api.lib.dwarf_utils import perform_time
 from dwarf_python_api.lib.dwarf_utils import perform_timezone
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
-from dwarf_python_api.lib.dwarf_utils import save_bluetooth_config_from_ini_file, read_bluetooth_ble_psd, read_bluetooth_ble_STA_ssid, read_bluetooth_ble_STA_pwd
+from dwarf_python_api.lib.dwarf_utils import save_bluetooth_config_from_ini_file
 from dwarf_python_api.get_live_data_dwarf import fn_wait_for_user_input
-from dwarf_ble_connect.lib.connect_direct_bluetooth import connect_ble_dwarf_win
+
+import subprocess
 
 # import data for config.py
 import dwarf_python_api.get_config_data
@@ -338,20 +338,20 @@ def log_command_status(filename, command_datetime, interval=None, first_time=Fal
 def start_connection(startSTA = False, use_web_page = False):
 
     result = False
-    if use_web_page:
-        if not save_bluetooth_config_from_ini_file():
-            log.error("No Wifi Data have been found, can't connect to wifi")
-            log.error("Need to update the config file with Wifi Informations.") 
-        else:
-            result = connect_bluetooth()
-
+    if not save_bluetooth_config_from_ini_file():
+        log.error("No Wifi Data have been found, can't connect to wifi")
+        log.error("Need to update the config file with Wifi Informations.") 
     else:
-        ble_psd = read_bluetooth_ble_psd() or "DWARF_12345678"
-        ble_STA_ssid = read_bluetooth_ble_STA_ssid() or ""
-        ble_STA_pwd = read_bluetooth_ble_STA_pwd() or ""
-    
-        if ble_psd and ble_STA_ssid and ble_STA_pwd:
-            result = connect_ble_dwarf_win(ble_psd, ble_STA_ssid, ble_STA_pwd)
+        if use_web_page:
+            subprocess.run(["extern\\connect_bluetooth.exe", "--cmd"])
+        else:
+            dwarf_python_api.get_config_data.update_config_data( "ip", "", True)
+            subprocess.run(["extern\\connect_bluetooth.exe"])
+      
+        # Parse the returned value
+        data_config = dwarf_python_api.get_config_data.get_config_data()
+        dwarf_ip = data_config["ip"]
+        result = True if dwarf_ip else False
 
     if startSTA and result is not False and result!= "":
         

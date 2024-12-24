@@ -6,7 +6,6 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_ble_connect.connect_bluetooth import connect_bluetooth
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect, unset_HostMaster, set_HostMaster, start_polar_align, motor_action
 
 # import data for config.py

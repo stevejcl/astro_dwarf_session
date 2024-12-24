@@ -52,9 +52,11 @@ jobs:
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
-      - name: Zip the GUI executable
-        run: |
-          powershell Compress-Archive -Path build\exe.win-amd64-3.12\* -DestinationPath AstroDwarfScheduler-GUI.zip
+      - name: Install 7-Zip
+        run: choco install 7zip -y
+
+      - name: Create ZIP with 7-Zip
+        run: 7z a -l AstroDwarfScheduler-GUI.zip build\exe.win-amd64-3.12\
 
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
@@ -91,7 +93,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Build the executable with setupUI.py
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-local.txt --target .
+          pip install cx_Freeze
+
+      - name: Build the executable with setupBle.py
         run: |
           python setupBle.py build
 
@@ -104,9 +113,11 @@ jobs:
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
            cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
-      - name: Zip the Console executable
-        run: |
-          powershell Compress-Archive -Path build\exe.win-amd64-3.12\* -DestinationPath AstroDwarfScheduler-Console.zip
+      - name: Install 7-Zip
+        run: choco install 7zip -y
+
+      - name: Create ZIP with 7-Zip
+        run: 7z a -l AstroDwarfScheduler-Console.zip build\exe.win-amd64-3.12\
 
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4

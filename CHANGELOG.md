@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.2] - 2025-03-25
+
+### Integrate New Bluetooth API
+- DirectBluetooth Cmd has more parameter: select first device found or by Name
+
 ## [1.6.1] - 2024-12-24
 
 ### Bugfix

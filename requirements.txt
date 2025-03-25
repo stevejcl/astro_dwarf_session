@@ -17,3 +17,5 @@ requests
 geopy
 
 timezonefinder
+
+inputimeout

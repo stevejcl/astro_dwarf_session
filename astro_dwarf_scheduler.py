@@ -4,6 +4,7 @@ import json
 import shutil
 import time
 import subprocess
+import re
 
 from datetime import datetime, timedelta
 
@@ -192,12 +193,14 @@ def update_process_status(program, status, result=None, message=None, nb_try=Non
     command['processed_date'] = current_datetime
     return program  # Return the updated entire program object
 
-def retry_procedure(program, max_retries =3):
+def retry_procedure(program, max_retries=3, stop_event=None):
     attempt = 0
     while attempt < max_retries:
+        if stop_event is not None and stop_event.is_set():
+            raise Exception("Session interrupted by user.")
         try:
             # Execute the session
-            start_dwarf_session(program['command'])
+            start_dwarf_session(program['command'], stop_event=stop_event)
             return attempt + 1
         except Exception as e:
             attempt += 1
@@ -213,125 +216,203 @@ def retry_procedure(program, max_retries =3):
 last_logged = {}  # Dictionary to track when each file was last logged
 last_hourly_log = {}  # Dictionary to track the last hourly log time for each filename
 
+
+# Helper to get JSON files sorted by uuid
+def get_json_files_sorted_by_uuid(directory):
+    files_with_uuid = []
+    for fname in os.listdir(directory):
+        if fname.endswith('.json'):
+            fpath = os.path.join(directory, fname)
+            try:
+                with open(fpath, 'r') as f:
+                    data = json.load(f)
+                uuid = data.get('command', {}).get('id_command', {}).get('uuid', '')
+            except Exception:
+                uuid = ''
+            files_with_uuid.append((uuid, fname))
+    files_with_uuid.sort(key=lambda x: (x[0] == '', x[0]))
+    return [fname for uuid, fname in files_with_uuid]
+
 # Main function to check and execute the commands
-def check_and_execute_commands(askBluetooth = False):
-    global LIST_ASTRO_DIR
-    for filename in os.listdir(LIST_ASTRO_DIR["TODO_DIR"]):
-        filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
-        if filepath.endswith('.json'):
-            program = load_json(filepath)
-            if program is False:
-                return
-
-            # Extract command info
-            command = program.get('command', {}).get('id_command')
-
-            # ignore file if command or id_command doesn't exist
-            if not command:
-                log.error(f"Mandatory commands not found in file, the file {filename} is ignored")
-                # Move file to "Error" folder
-                current_filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
-                move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
-                log.notice("----------------------")
-                log.notice("----------------------")
-
-            # Ignore file if process exists and is different from 'wait' 
-            elif command.get('process') is not None and command.get('process') != 'wait':
-                log.warning(f"Process value is not 'wait', the file {filename} is ignored")
-                # Move file to "Error" folder
-                current_filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
-                move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
-                log.notice("----------------------")
-                log.notice("----------------------")
-            # Check if the execution time has been reached
-            elif is_time_to_execute(command) and command.get('process', 'wait') == 'wait':
-                log.notice("######################")
-                log.notice(f"Find File  {filename}, that is ready to execute")
-                log.debug(f"Executing command {command.get('uuid')}")
-
-                # Move to "Current" folder and update status
-                current_filepath = os.path.join(LIST_ASTRO_DIR["CURRENT_DIR"], filename)
-                program = update_process_status(program, 'pending')
-                save_json(filepath, program)
-                move_file(filepath, current_filepath)
-
-                # Remove from the logging dictionary as it's been executed
-                if filename in last_logged:
-                    del last_logged[filename]
-                if filename in last_hourly_log:
-                    del last_hourly_log[filename]
-
-                try:
-                    # Get The Dwarf Type
-                    data_config = dwarf_python_api.get_config_data.get_config_data()
-                    dwarf_id = "2"
-                    if data_config["dwarf_id"]:
-                        dwarf_id = data_config['dwarf_id']
-                    # Execute the session
-                    max_retries = int(program['command']['id_command'].get('max_retries', 3))
-                    nb_try = retry_procedure(program)
-
-                    # If successful, update process and result
-                    program = update_process_status(program, 'ended', True, "Action completed successfully.", nb_try, dwarf_id)
-                    save_json(current_filepath, program)
-
-                    # Move file to "Done" folder
-                    move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["DONE_DIR"], filename))
-
-                except Exception as e:
-                    # Handle errors and update process and result
-                    error_message = f"Error during execution: {e}"
-                    log.error(error_message)
-
-                    program = update_process_status(program, 'ended', False, error_message, max_retries, dwarf_id)
-                    save_json(current_filepath, program)
-
-                    # Move file to "Error" folder
-                    move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
-                    log.notice("----------------------")
-                    log.notice("----------------------")
-                    if (askBluetooth and fn_wait_for_user_input(60, "An error occuring during last Action, do you want to reconnect to bluetooth or continue ?\nThe program will contine if you don't press CTRL-C within 60 seconds:" ))  == 1:
-                        log.notice('continuing ....')
-                    elif askBluetooth:
-                        start_connection(True)
-                    else:
-                        log.notice('continuing ....')
-                    pass
-
-            # Log Ignore time
-            elif command.get('process', 'wait') == 'wait':
-                # Get current date and time
-                current_datetime = datetime.now()
-                command_datetime = get_time_to_execute(current_datetime, command)
-
-                # If the file isn't ready, log it based on the time since the last log
-                if filename not in last_logged:
-                    # Log the first time
-                    log_command_status(filename, command_datetime, first_time=True)
-                    last_logged[filename] = current_datetime
-                    last_hourly_log[filename] = current_datetime  # Initialize hourly log
+def check_and_execute_commands(stop_event=None, skip_time_checks=False):
+    """
+    Check for JSON command files and execute them based on their scheduled time.
+    
+    Args:
+        stop_event: Optional event to signal stopping
+        skip_time_checks: If True, ignore scheduled time and execute immediately
+    
+    Returns:
+        bool: True if any sessions were processed, False otherwise
+    """
+    sessions_processed = False
+    
+    try:
+        # Get all JSON files from ToDo directory
+        todo_files = []
+        if os.path.exists(LIST_ASTRO_DIR["TODO_DIR"]):
+            for filename in os.listdir(LIST_ASTRO_DIR["TODO_DIR"]):
+                if filename.endswith('.json'):
+                    todo_files.append(filename)
+        
+        if not todo_files:
+            return sessions_processed
+        
+        # Sort files naturally
+        def natural_sort_key(text):
+            return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', text)]
+        
+        todo_files.sort(key=lambda x: natural_sort_key(x))
+        
+        current_time = datetime.now()
+        
+        for filename in todo_files:
+            if stop_event and stop_event.is_set():
+                break
+                
+            filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
+            
+            try:
+                with open(filepath, 'r') as f:
+                    command_data = json.load(f)
+                
+                # Extract scheduled time
+                id_command = command_data.get('command', {}).get('id_command', {})
+                scheduled_date = id_command.get('date', '')
+                scheduled_time = id_command.get('time', '')
+                
+                # Check if we should skip time checks
+                if skip_time_checks:
+                    log.notice(f"Skipping time check for {filename} - executing immediately")
+                    time_ready = True
                 else:
-                    # Check for hourly log
-                    if current_datetime - last_hourly_log[filename] >= timedelta(hours=1):
-                        log_command_status(filename, command_datetime, interval="Hourly")
-                        last_hourly_log[filename] = current_datetime  # Update last hourly log
-
-                    # Check for 30 minutes, 15 minutes, and 5 minutes before execution
-                    time_intervals = {
-                        '5 minutes': timedelta(minutes=5),
-                        '15 minutes': timedelta(minutes=15),
-                        '30 minutes': timedelta(minutes=30)
-                    }
+                    # Check if it's time to execute
+                    time_ready = False
+                    if scheduled_date and scheduled_time:
+                        try:
+                            scheduled_datetime = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
+                            time_ready = current_time >= scheduled_datetime
+                            
+                            if not time_ready:
+                                time_diff = scheduled_datetime - current_time
+                                log.debug(f"Session {filename} scheduled for {scheduled_datetime}, waiting {time_diff}")
+                        except ValueError as e:
+                            log.warning(f"Invalid date/time format in {filename}: {e}")
+                            continue
+                    else:
+                        log.warning(f"Missing date/time in {filename}")
+                        continue
+                
+                if time_ready:
+                    log.notice(f"Executing session: {filename}")
                     
-                    for interval, delta in time_intervals.items():
-                        # Check if the time until the command execution exceeds the interval
-                        if command_datetime - current_datetime <= delta:
-                            # Only log if we haven't logged this interval yet
-                            if filename not in last_logged or last_logged[filename] != interval:
-                                log_command_status(filename, command_datetime, interval)
-                                last_logged[filename] = interval  # Update last logged interval
-                            break  # Break to avoid logging multiple times for the same interval
+                    # Move to Current directory
+                    current_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Current", filename)
+                    os.makedirs(os.path.dirname(current_path), exist_ok=True)
+                    shutil.move(filepath, current_path)
+                    
+                    # Execute the session
+                    try:
+                        # Update session status
+                        id_command['process'] = 'running'
+                        id_command['result'] = False
+                        id_command['message'] = 'Session started'
+                        
+                        # Save updated status
+                        with open(current_path, 'w') as f:
+                            json.dump(command_data, f, indent=4)
+                        
+                        # Start the session
+                        start_dwarf_session(command_data['command'], stop_event=stop_event)
+                        
+                        # Session completed successfully
+                        id_command['process'] = 'done'
+                        id_command['result'] = True
+                        id_command['message'] = 'Session completed successfully'
+                        
+                        # Capture Dwarf device ID from config
+                        data_config = dwarf_python_api.get_config_data.get_config_data()
+                        dwarf_id = data_config.get("dwarf_id")
+                        if dwarf_id:
+                            id_command['dwarf'] = f"D{dwarf_id}"
+                        else:
+                            id_command['dwarf'] = "Unknown"
 
+                        # Capture actual camera settings used during the session
+                        try:
+                            from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_setting
+                            camera_settings = perform_get_all_camera_setting()
+                            if camera_settings:
+                                # Get the actual IR setting used
+                                ir_cut_value = camera_settings.get('IRCut')
+                                if ir_cut_value is not None:
+                                    # Convert numeric IR value to readable format
+                                    ir_mapping = {0: 'IR CUT', 1: 'DUO BAND', 2: 'FULL SPECTRUM'}
+                                    id_command['ir_actual'] = ir_mapping.get(ir_cut_value, f'Unknown({ir_cut_value})')
+                                
+                                # Store other actual settings used
+                                id_command['exposure_actual'] = camera_settings.get('exposure')
+                                id_command['gain_actual'] = camera_settings.get('gain')
+                        except Exception as e:
+                            log.warning(f"Could not capture actual camera settings: {e}")
+                            # Fallback to planned settings from session data
+                            setup_camera = command_data.get('command', {}).get('setup_camera', {})
+                            if setup_camera.get('do_action', False):
+                                id_command['ir_actual'] = setup_camera.get('IRCut', 'Unknown')
+                        
+                        # Move to Done directory
+                        done_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Done", filename)
+                        os.makedirs(os.path.dirname(done_path), exist_ok=True)
+                        
+                        with open(done_path, 'w') as f:
+                            json.dump(command_data, f, indent=4)
+                        
+                        os.remove(current_path)
+                        
+                        sessions_processed = True
+                        update_process_status(command_data, 'done')
+
+                        log.success(f"Session {filename} completed successfully")
+                        
+                    except Exception as e:
+                        # Session failed
+                        log.error(f"Session {filename} failed: {e}")
+                        
+                        id_command['process'] = 'error'
+                        id_command['result'] = False
+                        id_command['message'] = f'Session failed: {str(e)}'
+                        
+                        # ADD: Still capture Dwarf device ID even on failure
+                        data_config = dwarf_python_api.get_config_data.get_config_data()
+                        dwarf_id = data_config.get("dwarf_id")
+                        if dwarf_id:
+                            id_command['dwarf'] = f"D{dwarf_id}"
+                        else:
+                            id_command['dwarf'] = "Unknown"
+                        
+                        # Move to Error directory
+                        error_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Error", filename)
+                        os.makedirs(os.path.dirname(error_path), exist_ok=True)
+                        
+                        with open(error_path, 'w') as f:
+                            json.dump(command_data, f, indent=4)
+                        
+                        if os.path.exists(current_path):
+                            os.remove(current_path)
+                        
+                        sessions_processed = True
+                    
+                    # Only process one session at a time
+                    break
+                        
+            except Exception as e:
+                log.error(f"Error processing {filename}: {e}")
+                continue
+    
+    except Exception as e:
+        log.error(f"Error in check_and_execute_commands: {e}")
+    
+    return sessions_processed
 
 def log_command_status(filename, command_datetime, interval=None, first_time=False):
     if first_time:
@@ -353,7 +434,7 @@ def start_connection(startSTA = False, use_web_page = False):
         # python script running
         log.info("local bluetooth connection")
         if use_web_page:
-            result = connect_bluetooth()
+            result = connect_bluetooth() 
 
         else:
             ble_psd = read_bluetooth_ble_psd() or "DWARF_12345678"

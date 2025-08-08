@@ -85,8 +85,27 @@ def result_session_tab(parent_frame):
     def refresh():
         refresh_observation_list(combobox, ok_treeview, error_treeview)
 
+
+    def delete_selected_file():
+        selected_file = combobox.get()
+        if not selected_file:
+            return
+        from astro_dwarf_scheduler import LIST_ASTRO_DIR
+        RESULTS_DIR = LIST_ASTRO_DIR["SESSIONS_DIR"] + '/Results'
+        file_path = os.path.join(RESULTS_DIR, selected_file)
+        if os.path.exists(file_path):
+            import tkinter.messagebox as messagebox
+            if messagebox.askyesno("Delete File", f"Are you sure you want to delete '{selected_file}'?"):
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    messagebox.showerror("Error", f"Could not delete file: {e}")
+        refresh()
+
     update_button = ttk.Button(top_frame, text="Update Results", command=lambda: refresh())
     update_button.pack(side=tk.LEFT, padx=10)
+    delete_button = ttk.Button(top_frame, text="Delete File", command=delete_selected_file)
+    delete_button.pack(side=tk.LEFT, padx=10)
 
     # Autosize the columns based on the content
     padding = 1
@@ -146,7 +165,7 @@ def load_csv_data(filename):
             else:
                 if row.get("IR") == "0":
                     row["IR"] = "VIS"
-                elif row.get("IRCut") == "1":
+                elif row.get("IR") == "1":
                     row["IR"] = "ASTRO"
                 else:
                     row["IR"] = "DUO B."
@@ -280,7 +299,7 @@ def analyze_files():
                 'description': data["command"]["id_command"]["description"],
                 'dwarf': typeDwarf,
                 'starting_date': starting_date,
-                'processed_date': data["command"]["id_command"]["processed_date"],
+                'processed_date': data["command"]["id_command"].get("processed_date", ""),
                 'result': data["command"]["id_command"]["result"],
                 'message': data["command"]["id_command"]["message"],
                 'calibration': data["command"].get("calibration", {}).get("do_action", False),

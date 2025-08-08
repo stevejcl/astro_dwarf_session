@@ -8,36 +8,14 @@ import re
 from fractions import Fraction
 import csv
 from stellarium_connection import StellariumConnection
-
-from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains
-from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposures, allowed_wide_gains
-from dwarf_python_api.lib.data_utils import allowed_exposuresD3, allowed_gainsD3
-from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposuresD3, allowed_wide_gainsD3
 from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
 from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
+from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains, allowed_exposuresD3, allowed_gainsD3
+from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposures, allowed_wide_gains, allowed_wide_exposuresD3, allowed_wide_gainsD3
+
 
 def list_available_names(instance):
     return [entry["name"] for entry in instance.values]
-
-# Retrieve available exposure and gain names
-available_exposure_names = list_available_names(allowed_exposures)
-available_gain_names = list_available_names(allowed_gains)
-available_wide_exposure_names = list_available_names(allowed_wide_exposures)
-available_wide_gains_names = list_available_names(allowed_wide_gains)
-
-available_exposure_namesD3 = list_available_names(allowed_exposuresD3)
-available_gain_namesD3 = list_available_names(allowed_gainsD3)
-available_wide_exposure_namesD3 = list_available_names(allowed_wide_exposuresD3)
-available_wide_gains_namesD3 = list_available_names(allowed_wide_gainsD3)
-
-# Filter options for different devices
-ircut_options = {
-    "D2: IRCut": "0",
-    "D2: IRPass": "1",
-    "D3: VIS Filter": "0",
-    "D3: Astro Filter": "1",
-    "D3: DUAL Band": "2"
-}
 
 # Define the available solar system objects
 solar_system_objects = [
@@ -52,11 +30,6 @@ solar_system_objects = [
     "Neptune",
     "Sun"
 ]
-
-binning_options = {
-    "4k": 0,
-    "2k": 1
-}
 
 def create_form_fields(scrollable_frame, settings_vars, config_vars):
     # Use grid layout for neat alignment and resizable behavior
@@ -88,6 +61,7 @@ def create_form_fields(scrollable_frame, settings_vars, config_vars):
     else:
         exposure_var.set("30")
     settings_vars["exposure"] = exposure_var
+    settings_vars["exposure_dropdown"] = exposure_dropdown  # Store dropdown reference
     add_row(row, "Exposure", exposure_dropdown)
     row += 1
 
@@ -97,6 +71,7 @@ def create_form_fields(scrollable_frame, settings_vars, config_vars):
     if config_vars.get("gain") is not None and config_vars["gain"].get():
         gain_var.set(config_vars["gain"].get())
     settings_vars["gain"] = gain_var
+    settings_vars["gain_dropdown"] = gain_dropdown  # Store dropdown reference
     add_row(row, "Gain", gain_dropdown)
     row += 1
 
@@ -1052,6 +1027,18 @@ def update_exposure_gain_fields(settings_vars):
         # Load configuration from config.ini
         config = load_from_config()
         
+        # Get device type from config
+        device_type = config.get("CONFIG", "device_type", fallback="Dwarf II")
+        
+        # Update dropdown options based on device type
+        if "exposure_dropdown" in settings_vars and "gain_dropdown" in settings_vars:
+            exposure_dropdown = settings_vars["exposure_dropdown"]
+            gain_dropdown = settings_vars["gain_dropdown"]
+            # Create dummy ircut dropdown since update_options expects it
+            ircut_dropdown = type('obj', (object,), {'__setitem__': lambda self, key, value: None})()
+            
+            update_options(device_type, exposure_dropdown, gain_dropdown, ircut_dropdown)
+        
         # Update exposure from config.ini
         if "exposure" in settings_vars:
             config_exposure = config.get("CONFIG", "exposure", fallback="30")
@@ -1077,15 +1064,31 @@ def update_exposure_gain_fields(settings_vars):
         if "count" in settings_vars:
             settings_vars["count"].set("1")
 
-# Function to bind tab change event for Create Session tab
-def bind_create_session_tab_update(tab_control, tab_create_session, settings_vars):
-    """Bind the tab change event to update Exposure and Gain fields from config.ini when Create Session tab is selected."""
-    def on_tab_changed(event):
-        selected_tab = event.widget.select()
-        tab_text = event.widget.tab(selected_tab, "text")
-        if tab_text == "Create Session":
-            update_exposure_gain_fields(settings_vars)
+def update_options(device_type, exposure_dropdown, gain_dropdown, ircut_dropdown):
+    """Update the exposure, gain, and filter options based on the selected device type."""    
+    # Helper function to get available names
+    def get_available_names(instance):
+        return [entry["name"] for entry in instance.values]
     
-    tab_control.bind("<<NotebookTabChanged>>", on_tab_changed)
-
-
+    if device_type == "Dwarf II":
+        available_exposure_names = get_available_names(allowed_exposures)
+        available_gain_names = get_available_names(allowed_gains)
+        exposure_dropdown['values'] = list(reversed(available_exposure_names))
+        gain_dropdown['values'] = available_gain_names
+        ircut_dropdown['values'] = ["D2: IRCut", "D2: IRPass"]
+    elif device_type == "Dwarf 3 Tele Lens":
+        available_exposure_namesD3 = get_available_names(allowed_exposuresD3)
+        available_gain_namesD3 = get_available_names(allowed_gainsD3)
+        exposure_dropdown['values'] = list(reversed(available_exposure_namesD3))
+        gain_dropdown['values'] = available_gain_namesD3
+        ircut_dropdown['values'] = ["D3: VIS Filter", "D3: Astro Filter", "D3: DUAL Band"]
+    elif device_type == "Dwarf 3 Wide Lens":
+        available_wide_exposure_namesD3 = get_available_names(allowed_wide_exposuresD3)
+        available_wide_gains_namesD3 = get_available_names(allowed_wide_gainsD3)
+        exposure_dropdown['values'] = list(reversed(available_wide_exposure_namesD3))
+        gain_dropdown['values'] = available_wide_gains_namesD3
+        ircut_dropdown['values'] = []
+    else:
+        exposure_dropdown['values'] = []
+        gain_dropdown['values'] = []
+        ircut_dropdown['values'] = []

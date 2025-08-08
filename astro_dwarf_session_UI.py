@@ -245,6 +245,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     self.overview_refresh()
                 if self.edit_sessions_refresh:
                     self.edit_sessions_refresh()
+            # Update Exposure and Gain fields when Create Session tab is selected
+            elif tab == 'Create Session':
+                create_session.update_exposure_gain_fields(self.settings_vars)
+
         self.tab_control.bind('<<NotebookTabChanged>>', on_tab_changed)
 
 

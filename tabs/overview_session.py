@@ -184,7 +184,7 @@ def display_json_content(filepath, json_text):
         json_text.insert(tk.END, f"  Exposure: {setup_camera.get('exposure', 'N/A')}\n")
         json_text.insert(tk.END, f"  Gain: {setup_camera.get('gain', 'N/A')}\n")
         json_text.insert(tk.END, f"  Binning: {setup_camera.get('binning', 'N/A')}\n")
-        json_text.insert(tk.END, f"  IRCut: {setup_camera.get('IRCut', 'N/A')}\n")
+        json_text.insert(tk.END, f"  IRCut: {setup_camera.get('ircut', 'N/A')}\n")
         json_text.insert(tk.END, f"  Count: {setup_camera.get('count', 'N/A')}\n")
         json_text.insert(tk.END, f"  Wait After: {setup_camera.get('wait_after', 'N/A')}\n")
     

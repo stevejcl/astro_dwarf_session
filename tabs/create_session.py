@@ -201,11 +201,6 @@ def save_to_json(settings_vars, config_vars):
     wait_after_camera = settings_vars["wait_after_camera"].get()
     ircut = config_vars.get("CONFIG", "ircut")
 
-    #binning_value = binning_options.get(config_vars['binning'].get())  # Get the numerical value from the description
-    #ircut_value = ircut_options.get(config_vars["ircut"].get())  # Get the numerical value from the description
-
-    print(f"[DEBUG] Generating JSON preview for camera: {selected_camera}, count: {count}, exposure: {exposure}, gain: {gain}, binning: {binning}, ircut: {ircut}") 
-
     # Ensure all required fields are non-empty (except booleans)
     required_fields = [
         ("Description", description),
@@ -726,8 +721,8 @@ def generate_json_preview(settings_vars, config_vars):
     gain = settings_vars["gain"].get()
     selected_camera = config_vars.get("CONFIG", "camera_type")
     exposure = check_integer(settings_vars["exposure"].get())
-    binning_value = binning_options.get(config_vars.get("CONFIG", "binning"))
-    ircut_value = ircut_options.get(config_vars.get("CONFIG", "ircut"))
+    binning_value = config_vars.get("CONFIG", "binning")
+    ircut_value = config_vars.get("CONFIG", "ircut")
 
     # Initialize the camera setup with default values for "Tele Camera"
     setup_camera = {
@@ -1049,4 +1044,48 @@ def load_from_config():
     config.read(config_file)
     
     return config
+
+# Utility to update Exposure and Gain fields from config.ini
+def update_exposure_gain_fields(settings_vars):
+    """Update Exposure and Gain fields from config.ini when Create Session tab is selected."""
+    try:
+        # Load configuration from config.ini
+        config = load_from_config()
+        
+        # Update exposure from config.ini
+        if "exposure" in settings_vars:
+            config_exposure = config.get("CONFIG", "exposure", fallback="30")
+            settings_vars["exposure"].set(config_exposure)
+        
+        # Update gain from config.ini
+        if "gain" in settings_vars:
+            config_gain = config.get("CONFIG", "gain", fallback="90")
+            settings_vars["gain"].set(config_gain)
+
+        # Update count from config.ini
+        if "count" in settings_vars:
+            config_count = config.get("CONFIG", "count", fallback="1")
+            settings_vars["count"].set(config_count)
+
+    except Exception as e:
+        print(f"[ERROR] Failed to update exposure/gain from config.ini: {e}")
+        # Fallback to default values if config loading fails
+        if "exposure" in settings_vars:
+            settings_vars["exposure"].set("30")
+        if "gain" in settings_vars:
+            settings_vars["gain"].set("90")
+        if "count" in settings_vars:
+            settings_vars["count"].set("1")
+
+# Function to bind tab change event for Create Session tab
+def bind_create_session_tab_update(tab_control, tab_create_session, settings_vars):
+    """Bind the tab change event to update Exposure and Gain fields from config.ini when Create Session tab is selected."""
+    def on_tab_changed(event):
+        selected_tab = event.widget.select()
+        tab_text = event.widget.tab(selected_tab, "text")
+        if tab_text == "Create Session":
+            update_exposure_gain_fields(settings_vars)
     
+    tab_control.bind("<<NotebookTabChanged>>", on_tab_changed)
+
+

@@ -915,29 +915,24 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
             settings_vars["goto_solar"] = var_goto_solar
             settings_vars["goto_manual"] = var_goto_manual
             settings_vars["no_goto"] = var_no_goto
-        elif key == "target_solar":
-            var = tk.StringVar()
-            entry = ttk.Combobox(scrollable_frame, textvariable=var, values=solar_system_objects)
-            settings_vars[key] = var
-        else:
+        elif key != "target_solar":
             var = tk.StringVar()
             entry = tk.Entry(scrollable_frame, textvariable=var)
 
-        # Always define var for assignment to settings_vars[key]
         if key != "date" and key != "target_type" and key != "target_solar":
-            var = tk.StringVar()
             if config_vars.get(key) is not None and config_vars[key].get():
                 var.set(config_vars[key].get())
-            if key == "max_retries":
-                var.set("2")
-            if key == "wait_before":
-                var.set("10")
-            if key == "wait_after":
-                var.set("10")
-            if key == "wait_after_target":
-                var.set("30")
-            if key == "wait_after_camera":
-                var.set("20")
+        if key == "max_retries":
+            var.set(2)
+        if key == "wait_before":
+            var.set(10)
+        if key == "wait_after":
+            var.set(10)
+        if key == "wait_after_target":
+            var.set(30)
+        if key == "wait_after_camera":
+            var.set(20)
+        if key != "target_type" and key != "target_solar":
             settings_vars[key] = var
 
         label.grid(row=grid_row, column=0, sticky='e', padx=(5,2), pady=6)
@@ -949,15 +944,19 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
             settings_vars[key] = var
             entry = tk.Entry(target_frame := tk.Frame(scrollable_frame), textvariable=var)
             target_frame.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
+            target_frame.grid_columnconfigure(0, weight=1)
+            entry.grid(row=0, column=0, sticky='we')
+            refresh_button = tk.Button(target_frame, text="Refresh from Stellarium", command=lambda: refresh_stellarium_data(settings_vars, config_vars))
+            refresh_button.grid(row=0, column=1, sticky='e', padx=(6,0))
         elif key == "target_type":
             entry.grid(row=grid_row, column=1, sticky='w', padx=(2,10), pady=6)
         elif key == "target_solar":
-            entry.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
-        else:
-            # Always define var before using it
             var = tk.StringVar()
+            entry = ttk.Combobox(scrollable_frame, textvariable=var, values=solar_system_objects)
             entry.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
             settings_vars[key] = var
+        else:
+            entry.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
         if key == "max_retries":
             # ACTIONS checkboxes row
             actions_label = tk.Label(scrollable_frame, width=20, text="ACTIONS", anchor='w')

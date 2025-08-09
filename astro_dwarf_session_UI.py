@@ -580,21 +580,24 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def start_bluetooth(self):
         self.disable_controls()
         self.log("Starting Bluetooth connection in a separate thread...")
-        threading.Thread(target=self.bluetooth_connect_thread).start()
+        # Only start if not already running
+        if not hasattr(self, 'bluetooth_thread') or not self.bluetooth_thread.is_alive():
+            self.bluetooth_thread = threading.Thread(target=self.bluetooth_connect_thread, daemon=True)
+            self.bluetooth_thread.start()
 
     def bluetooth_connect_thread(self):
         try:
             self.bluetooth_connected = False
             self.result = start_connection(False, self.use_web.get())
             if self.result:
-                self.log("Bluetooth connected successfully.")
+                self.after(0, lambda: self.log("Bluetooth connected successfully."))
                 self.bluetooth_connected = True
                 # Enable the start scheduler button
-                self.start_button.config(state=tk.NORMAL)
+                self.after(0, lambda: self.start_button.config(state=tk.NORMAL))
             else:
-                self.log("Bluetooth connection failed.")
+                self.after(0, lambda: self.log("Bluetooth connection failed."))
         except Exception as e:
-            self.log(f"Bluetooth connection failed: {e}")
+            self.after(0, lambda e=e: self.log(f"Bluetooth connection failed: {e}"))
 
       #  self.after(0, self.start_scheduler)
 
@@ -610,15 +613,17 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_running = True
             self.scheduler_stop_event.clear()
             self.start_logHandler()
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.NORMAL)
-            self.unlock_button.config(state=tk.NORMAL)
-            self.eq_button.config(state=tk.NORMAL)
-            self.polar_button.config(state=tk.NORMAL)
-            self.log("Astro_Dwarf_Scheduler is starting...")
+            self.after(0, lambda: self.start_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.stop_button.config(state=tk.NORMAL))
+            self.after(0, lambda: self.unlock_button.config(state=tk.NORMAL))
+            self.after(0, lambda: self.eq_button.config(state=tk.NORMAL))
+            self.after(0, lambda: self.polar_button.config(state=tk.NORMAL))
+            self.after(0, lambda: self.log("Astro_Dwarf_Scheduler is starting..."))
             self.scheduler_start_time = datetime.now()  # Track when the scheduler starts
-            self.scheduler_thread = threading.Thread(target=self.run_scheduler)
-            self.scheduler_thread.start()
+            # Only start if not already running
+            if not hasattr(self, 'scheduler_thread') or not self.scheduler_thread.is_alive():
+                self.scheduler_thread = threading.Thread(target=self.run_scheduler, daemon=True)
+                self.scheduler_thread.start()
             self.update_session_info()  # Start updating session info
         # Update file counts when scheduler starts
         if hasattr(self, 'update_session_counts'):
@@ -629,24 +634,24 @@ class AstroDwarfSchedulerApp(tk.Tk):
         if self.scheduler_running:
             self.scheduler_running = False
             self.scheduler_stop_event.set()
-            self.log("Scheduler is stopping...")
+            self.after(0, lambda: self.log("Scheduler is stopping..."))
 
             # Update UI immediately
-            self.start_button.config(state=tk.NORMAL)
-            self.stop_button.config(state=tk.DISABLED)
-            self.unlock_button.config(state=tk.DISABLED)
-            self.eq_button.config(state=tk.DISABLED)
-            self.polar_button.config(state=tk.DISABLED)
+            self.after(0, lambda: self.start_button.config(state=tk.NORMAL))
+            self.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.unlock_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.eq_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.polar_button.config(state=tk.DISABLED))
 
             # Wait for thread to finish with timeout
             self.verifyCountdown(10)  # Reduced timeout
         else:
-            self.start_button.config(state=tk.NORMAL)
-            self.stop_button.config(state=tk.DISABLED)
-            self.unlock_button.config(state=tk.DISABLED)
-            self.eq_button.config(state=tk.DISABLED)
-            self.polar_button.config(state=tk.DISABLED)
-            self.log("Scheduler is stopped")
+            self.after(0, lambda: self.start_button.config(state=tk.NORMAL))
+            self.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.unlock_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.eq_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.polar_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.log("Scheduler is stopped"))
             self.enable_controls()
 
         # Hide session info when scheduler stops
@@ -657,16 +662,22 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.update_session_counts()
 
     def unset_lock_device(self):
-        self.scheduler_thread = threading.Thread(target=self.run_unset_lock_device)
-        self.scheduler_thread.start()
+        # Only start if not already running
+        if not hasattr(self, 'unset_thread') or not self.unset_thread.is_alive():
+            self.unset_thread = threading.Thread(target=self.run_unset_lock_device, daemon=True)
+            self.unset_thread.start()
 
     def start_eq_solving(self):
-        self.scheduler_thread = threading.Thread(target=self.run_start_eq_solving)
-        self.scheduler_thread.start()
+        # Only start if not already running
+        if not hasattr(self, 'eq_thread') or not self.eq_thread.is_alive():
+            self.eq_thread = threading.Thread(target=self.run_start_eq_solving, daemon=True)
+            self.eq_thread.start()
 
     def start_polar_position(self):
-        self.scheduler_thread = threading.Thread(target=self.run_start_polar_position)
-        self.scheduler_thread.start()
+        # Only start if not already running
+        if not hasattr(self, 'polar_thread') or not self.polar_thread.is_alive():
+            self.polar_thread = threading.Thread(target=self.run_start_polar_position, daemon=True)
+            self.polar_thread.start()
 
     def verifyCountdown(self, wait):
         '''

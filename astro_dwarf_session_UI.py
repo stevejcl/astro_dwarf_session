@@ -410,7 +410,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.combobox_label = tk.Label(multiple_frame, text="Current Config:")
         self.combobox_label.grid(row=0, column=1, sticky="e", padx=(0, 4), pady=2)
         self.config_combobox = ttk.Combobox(multiple_frame, state="readonly", width=27)
-        self.config_combobox["values"] = (CONFIG_DEFAULT,)
+        self.config_combobox["values"] = (CONFIG_DEFAULT)
         self.config_combobox.set(CONFIG_DEFAULT)
         self.config_combobox.grid(row=0, column=2, sticky="w", padx=(0, 8), pady=2)
 

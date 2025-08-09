@@ -148,6 +148,31 @@ class TextHandler(logging.Handler):
         super().__init__()
         self.text_widget = text_widget
         self.text_widget.config(state=tk.NORMAL)
+    
+    def emit(self, record):
+        # Format the log message
+        msg = self.format(record)
+        # Determine color and emoji based on log level
+        if record.levelno >= logging.ERROR:
+            color = 'red'
+            emoji = '❌ '
+        elif record.levelno == logging.WARNING:
+            color = 'orange'
+            emoji = '⚠️ '
+        elif record.levelno == logging.INFO:
+            color = 'blue'
+            emoji = 'ℹ️ '
+        elif hasattr(logging, 'SUCCESS') and record.levelno == logging.INFO:
+            color = 'green'
+            emoji = '✅ '
+        else:
+            color = 'black'
+            emoji = ''
+        # Insert with tag for color
+        self.text_widget.config(state=tk.NORMAL)
+        self.text_widget.insert(tk.END, emoji + msg + '\n', color)
+        self.text_widget.tag_config(color, foreground=color)
+        self.text_widget.yview(tk.END)
 
 # GUI Application class
 class AstroDwarfSchedulerApp(tk.Tk):
@@ -712,7 +737,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 perform_disconnect()
                 self.after(0, lambda: self.log("Disconnected from the Dwarf."))
             except Exception as e:
-                self.after(0, lambda: self.log(f"Error during disconnect: {e}", level="error"))
+                self.after(0, lambda e=e: self.log(f"Error during disconnect: {e}", level="error"))
 
             # Update UI state on main thread
             def update_ui_after_scheduler():

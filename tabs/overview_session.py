@@ -2,8 +2,6 @@ import os
 import json
 import shutil
 import tkinter as tk
-from tkinter import messagebox
-import re
 
 from astro_dwarf_scheduler import LIST_ASTRO_DIR_DEFAULT
 
@@ -12,35 +10,40 @@ def overview_session_tab(parent_frame, refresh_setter=None):
     # Use grid layout for resizable content and sticky buttons
     parent_frame.grid_rowconfigure(1, weight=0)  # label
     parent_frame.grid_rowconfigure(2, weight=0)  # listbox
-    parent_frame.grid_rowconfigure(3, weight=1)  # text area (expandable)
-    parent_frame.grid_rowconfigure(4, weight=0)  # buttons
+    parent_frame.grid_rowconfigure(3, weight=0)  # labels/buttons row
+    parent_frame.grid_rowconfigure(4, weight=1)  # text area (expandable)
     parent_frame.grid_columnconfigure(0, weight=1)
+    parent_frame.grid_columnconfigure(1, weight=1)
+    parent_frame.grid_columnconfigure(2, weight=1)
 
     # JSON session management section
-    json_label = tk.Label(parent_frame, text="Available Sessions:", font=("Arial", 12))
-    json_label.grid(row=1, column=0, sticky="ew", pady=(5,0))
+    json_label = tk.Label(parent_frame, text="Available Sessions", font=("Arial", 12))
+    json_label.grid(row=1, column=0, columnspan=3, sticky="new", pady=(8, 0))
     # Listbox to show available JSON files
     json_listbox = tk.Listbox(parent_frame, height=13, selectmode=tk.EXTENDED)
-    json_listbox.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+    json_listbox.grid(row=2, column=0, columnspan=3, sticky="nsew", padx=10, pady=5)
+
+    # Auto-save info label at the bottom (light grey)
+    autosave_label1 = tk.Label(parent_frame, text="Double click session names to toggle.", fg="#555555", font=("Arial", 11, "italic"))
+    autosave_label1.grid(row=3, column=0, pady=(5, 0), padx=(10, 2), sticky='e')
+
+    select_button = tk.Button(parent_frame, text="Select Sessions", command=lambda: select_session(json_listbox, json_text, select_button), state=tk.NORMAL)
+    select_button.grid(row=3, column=1, pady=(5, 0), padx=2, sticky='ew')
+
+    autosave_label2 = tk.Label(parent_frame, text="Hold shift to select multiple sessions.", fg="#555555", font=("Arial", 11, "italic"))
+    autosave_label2.grid(row=3, column=2, pady=(5, 0), padx=(2, 10), sticky='w')
+
     # Text area to display JSON file content (resizable)
     json_text = tk.Text(parent_frame, state=tk.DISABLED)
-    json_text.grid(row=3, column=0, sticky="nsew", padx=10, pady=5)
+    json_text.grid(row=4, column=0, columnspan=3, sticky="nsew", padx=10, pady=10)
     json_listbox.bind('<<ListboxSelect>>', lambda event: on_json_select(event, json_listbox, json_text))
+
     # Bind double-click to select_session
-    json_listbox.bind('<Double-Button-1>', lambda event: select_session(json_listbox, json_text, select_button))
-    # --- Place Select Session and Refresh JSON List buttons on the same line, always at the bottom ---
-    button_frame = tk.Frame(parent_frame)
-    button_frame.grid(row=4, column=0, sticky="ew", pady=10)
-    # Center the buttons using an internal frame with pack and expand
-    inner_button_frame = tk.Frame(button_frame)
-    inner_button_frame.pack(expand=True)
-    select_button = tk.Button(inner_button_frame, text="Select Session", command=lambda: select_session(json_listbox, json_text, select_button), state=tk.NORMAL)
-    select_button.pack(side="left", padx=(0, 10))
+    json_listbox.bind('<Double-Button-1>', lambda event: select_session(json_listbox, json_text, refresh_json_list))
+
+    # Populate JSON list
     def refresh_json_list():
         populate_json_list(json_listbox)
-    refresh_button = tk.Button(inner_button_frame, text="Refresh JSON List", command=refresh_json_list)
-    refresh_button.pack(side="left")
-    # Populate JSON list
     refresh_json_list()
     # Register the refresh function for external use
     if refresh_setter is not None:
@@ -243,5 +246,4 @@ def select_session(json_listbox, json_text, select_button):
         json_text.config(state=tk.NORMAL)
         json_text.delete(1.0, tk.END)
         json_text.config(state=tk.DISABLED)
-        select_button.config(state=tk.NORMAL)
 

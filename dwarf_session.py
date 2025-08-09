@@ -1,9 +1,5 @@
 import json
-
-import configparser
 import time
-
-from datetime import datetime
 
 from dwarf_python_api.lib.dwarf_utils import perform_GoLive
 from dwarf_python_api.lib.dwarf_utils import perform_calibration
@@ -31,7 +27,6 @@ from dwarf_python_api.lib.data_wide_utils import get_wide_gain_name_by_index
 
 # import data for config.py
 import dwarf_python_api.get_config_data
-
 import dwarf_python_api.lib.my_logger as log
 
 def select_solar_target (target):
@@ -98,7 +93,6 @@ STEP_DESCRIPTIONS = {
 
 def try_attemps (function, function_succeed_message, max_attempts = 3):
     # Try to perform the action up to 3 times by default
-    max_attempts
     attempts = 0
     continue_action = False
 
@@ -121,7 +115,7 @@ def try_attemps (function, function_succeed_message, max_attempts = 3):
     return continue_action
 
 
-def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
+def start_dwarf_session(program, stop_event=None):
     try:
         def interrupted():
             return stop_event is not None and stop_event.is_set()
@@ -197,7 +191,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             exp_val = program['setup_camera'].get('exposure', None)
             gain_val = program['setup_camera'].get('gain', None)
             binning_val = program['setup_camera'].get('binning', None)
-            IR_val = program['setup_camera'].get('IRCut', None)
+            IR_val = program['setup_camera'].get('ircut', None)
             count_val = program['setup_camera'].get('count', None)
 
             if exp_val or gain_val or binning_val or IR_val or count_val:
@@ -242,6 +236,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
         if auto_focus:
             wait_before = program.get('auto_focus', {}).get('wait_before', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
             if interrupted(): return
             log.notice("Processing automatic autofocus")
@@ -250,6 +245,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             verify_action(continue_action, "step_1c")
             wait_after = program.get('auto_focus', {}).get('wait_after', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             if interrupted(): return
 
@@ -257,6 +253,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
         if infinite_focus:
             wait_before = program.get('infinite_focus', {}).get('wait_before', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
             if interrupted(): return
             log.notice("Processing infinite autofocus")
@@ -265,6 +262,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             verify_action(continue_action, "step_1d")
             wait_after = program.get('infinite_focus', {}).get('wait_after', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             if interrupted(): return
 
@@ -278,6 +276,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             if interrupted(): return
             wait_before = program.get('eq_solving', {}).get('wait_before', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
             if interrupted(): return
             log.notice("Processing EQ Solving")
@@ -286,6 +285,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             verify_action(continue_action, "step_1b")
             wait_after = program.get('eq_solving', {}).get('wait_after', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             if interrupted(): return
 
@@ -329,6 +329,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             log.notice("Starting Calibration")
             wait_before = program.get('calibration', {}).get('wait_before', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
             if interrupted(): return
             continue_action = perform_calibration()
@@ -336,6 +337,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             verify_action(continue_action, "step_7")
             wait_after = program.get('calibration', {}).get('wait_after', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             if interrupted(): return
 
@@ -348,6 +350,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             verify_action(continue_action, "step_8")
             wait_after = program.get('goto_solar', {}).get('wait_after', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             if interrupted(): return
 
@@ -370,6 +373,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             verify_action(continue_action, "step_9")
             wait_after = program.get('goto_manual', {}).get('wait_after', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             if interrupted(): return
 
@@ -404,6 +408,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             
             wait_after = program.get('setup_camera', {}).get('wait_after', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             if interrupted(): return
             
@@ -442,6 +447,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
             
             wait_after = program.get('setup_wide_camera', {}).get('wait_after', 0)
             if interrupted(): return
+            log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             if interrupted(): return
             

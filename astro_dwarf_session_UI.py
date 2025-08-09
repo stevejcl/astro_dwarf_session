@@ -1,5 +1,4 @@
 import os
-import shutil
 import time
 import threading
 from datetime import datetime
@@ -13,7 +12,6 @@ import signal
 import dwarf_python_api.get_config_data
 
 import logging
-import dwarf_python_api.lib.my_logger as log
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
 
 from tabs import settings
@@ -160,14 +158,18 @@ class TextHandler(logging.Handler):
             color = 'orange'
             emoji = '⚠️ '
         elif record.levelno == logging.INFO:
+            color = 'gray'
+            emoji = 'ℹ '
+        elif hasattr(logging, 'NOTICE'):
             color = 'blue'
-            emoji = 'ℹ️ '
-        elif hasattr(logging, 'SUCCESS') and record.levelno == logging.INFO:
+            emoji = '⇒ '
+        elif hasattr(logging, 'SUCCESS'):
             color = 'green'
             emoji = '✅ '
         else:
             color = 'black'
-            emoji = ''
+            emoji = '⇒ '
+
         # Insert with tag for color
         self.text_widget.config(state=tk.NORMAL)
         self.text_widget.insert(tk.END, emoji + msg + '\n', color)
@@ -176,6 +178,11 @@ class TextHandler(logging.Handler):
 
 # GUI Application class
 class AstroDwarfSchedulerApp(tk.Tk):
+    def set_scheduler_buttons_state(self, state):
+        """Enable or disable the unlock, polar, and eq buttons on the Scheduler tab."""
+        self.unlock_button.config(state=state)
+        self.polar_button.config(state=state)
+        self.eq_button.config(state=state)
 
     def __init__(self):
         super().__init__()
@@ -193,7 +200,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         # Create tabs
         self.tab_control = ttk.Notebook(self)
-        self.tab_control.pack(expand=1, fill="both")
+        self.tab_control.pack(expand=1, fill="both", pady=(5, 0))
 
         self.tab_main = ttk.Frame(self.tab_control)
         self.tab_settings = ttk.Frame(self.tab_control)
@@ -597,7 +604,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             else:
                 self.after(0, lambda: self.log("Bluetooth connection failed."))
         except Exception as e:
-            self.after(0, lambda e=e: self.log(f"Bluetooth connection failed: {e}"))
+            self.after(0, lambda: self.log(f"Bluetooth connection failed: {e}"))
 
       #  self.after(0, self.start_scheduler)
 
@@ -698,6 +705,12 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_stopped = True
             self.enable_controls()
 
+    def toggle_scheduler_buttons_state(self, state):
+        # Toggle the state of the scheduler buttons
+        self.after(0, lambda: self.start_button.config(state=state))
+        self.after(0, lambda: self.eq_button.config(state=state))
+        self.after(0, lambda: self.polar_button.config(state=state))    
+
     def run_scheduler(self):
         try:
             self.scheduler_stopped = False
@@ -715,7 +728,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 try:
                     # Execute commands and check if any sessions were processed
                     self.session_running = True  # Mark session as running
-                    sessions_processed = check_and_execute_commands(stop_event=self.scheduler_stop_event)
+
+                    sessions_processed = check_and_execute_commands(self, stop_event=self.scheduler_stop_event)
 
                     # If sessions were processed, continue the loop to check for more sessions
                     if sessions_processed:
@@ -734,13 +748,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                             total_sleep += 0.1
 
                 except Exception as e:
-                    self.after(0, lambda: self.log(f"Error in scheduler loop: {e}", level="error"))
+                    self.after(0, lambda e=e: self.log(f"Error in scheduler loop: {e}", level="error"))
                     break
 
         except KeyboardInterrupt:
             self.log("Operation interrupted by the user.")
         except Exception as e:
-            self.after(0, lambda: self.log(f"Scheduler error: {e}", level="error"))
+            self.after(0, lambda e=e: self.log(f"Scheduler error: {e}", level="error"))
         finally:
             self.session_running = False  # Ensure session state is reset
             # Ensure proper cleanup
@@ -748,7 +762,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 perform_disconnect()
                 self.after(0, lambda: self.log("Disconnected from the Dwarf."))
             except Exception as e:
-                self.after(0, lambda e=e: self.log(f"Error during disconnect: {e}", level="error"))
+                self.after(0, lambda: self.log(f"Error during disconnect: {e}", level="error"))
 
             # Update UI state on main thread
             def update_ui_after_scheduler():
@@ -789,7 +803,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     self.unlock_button.update()
                 self.after(0, update_unlock_button)
         except Exception as e:
-            self.after(0, lambda: self.log(f"Error in unset_lock_device: {e}", level="error"))
+            self.after(0, lambda e=e: self.log(f"Error in unset_lock_device: {e}", level="error"))
 
     def run_start_eq_solving(self):
         try:
@@ -802,7 +816,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
         except Exception as e:
-            self.after(0, lambda: self.log(f"Error in EQ Solving: {e}", level="error"))
+            self.after(0, lambda e=e: self.log(f"Error in EQ Solving: {e}", level="error"))
 
     def run_start_polar_position(self):
         try:
@@ -839,7 +853,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
         except Exception as e:
-            self.after(0, lambda: self.log(f"Error in Polar Align positionning: {e}", level="error"))
+            self.after(0, lambda e=e: self.log(f"Error in Polar Align positionning: {e}", level="error"))
 
     def start_logHandler(self):
 
@@ -861,20 +875,20 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def log(self, message, level="info"):
         # Add color and emoji for direct log calls
         if level == "error":
-            color = "red"
-            emoji = "❌ "
+            color = 'red'
+            emoji = '❌ '
         elif level == "warning":
-            color = "orange"
-            emoji = "⚠️ "
-        elif level == "success":
-            color = "green"
-            emoji = "✅ "
+            color = 'orange'
+            emoji = '⚠️ '
         elif level == "info":
-            color = "blue"
-            emoji = "ℹ️ "
+            color = 'blue'
+            emoji = '⇒ '
+        elif level == "success":
+            color = 'green'
+            emoji = '✅ '
         else:
-            color = "black"
-            emoji = ""
+            color = 'black'
+            emoji = '⇒ '
             
         if self.log_text is not None:
             self.log_text.config(state=tk.NORMAL)
@@ -922,6 +936,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                             id_command = session_data.get('command', {}).get('id_command', {})
                             scheduled_date = id_command.get('date', 'Unknown')
                             scheduled_time = id_command.get('time', 'Unknown')
+                            scheduled_target = id_command.get('target', 'Unknown')
 
                             # Calculate countdown
                             try:
@@ -931,11 +946,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
                                     countdown = scheduled_datetime - now
                                     countdown_str = str(countdown).split('.')[0]  # Format as HH:MM:SS
                                     self.session_info_label.config(
-                                        text=f"Next session: {next_session_file} at {scheduled_date} {scheduled_time} (in {countdown_str})"
+                                        text=f"Next session: {scheduled_target} at {scheduled_date} {scheduled_time} (in {countdown_str})"
                                     )
                                 else:
                                     self.session_info_label.config(
-                                        text=f"Next session: {next_session_file} at {scheduled_date} {scheduled_time} (starting soon)"
+                                        text=f"Next session: {scheduled_target} at {scheduled_date} {scheduled_time} (starting soon)"
                                     )
                             except ValueError:
                                 self.session_info_label.config(text="Error parsing next session time.")

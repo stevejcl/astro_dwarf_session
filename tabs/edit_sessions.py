@@ -99,7 +99,7 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
             
         try:
             id_cmd = data['command']['id_command']
-            for key in ["uuid", "description", "date", "time", "process", "max_retries", "result", "message", "nb_try"]:
+            for key in ["description", "date", "time", "process", "max_retries", "result", "message", "nb_try"]:
                 if ('id_command', key) in entries:
                     val = entries[('id_command', key)].get()
                     if key in ["max_retries", "nb_try"]:
@@ -155,7 +155,7 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
         row += 1
 
         # Build id_command fields with reduced width
-        for key in ["uuid", "description", "date", "time", "process", "max_retries", "result", "message", "nb_try"]:
+        for key in ["description", "date", "time", "process", "max_retries", "result", "message", "nb_try"]:
             label = tk.Label(form_frame, text=key+":")
             label.grid(row=row, column=0, sticky="e")
             ent = tk.Entry(form_frame, width=22)
@@ -241,7 +241,7 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
                 
         # Populate id_command fields
         id_cmd = data['command']['id_command']
-        for key in ["uuid", "description", "date", "time", "process", "max_retries", "result", "message", "nb_try"]:
+        for key in ["description", "date", "time", "process", "max_retries", "result", "message", "nb_try"]:
             if ('id_command', key) in entries:
                 widget = entries[('id_command', key)]
                 widget.delete(0, tk.END)

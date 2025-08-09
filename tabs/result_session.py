@@ -21,7 +21,7 @@ columns_KO = ["Description", "Dwarf", "Starting", "Ending",
 
 def autosize_columns(treeview, padding, max_width_col = 0):
     for col in treeview["columns"]:
-        max_width = tk.font.Font().measure(col)  # Start with the width of the header
+        max_width = tkFont.Font().measure(col)  # Start with the width of the header
 
         # Check each row to find the maximum width in the column
         for item in treeview.get_children():
@@ -140,6 +140,7 @@ def load_csv_data(filename):
     with open(os.path.join(RESULTS_DIR, filename), newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
+            
             row["Description"] = row.get("description")
             row["Dwarf"] = row.get("dwarf")
             row["Starting"] = row.get("starting_date")[11:]
@@ -312,7 +313,7 @@ def analyze_files():
                 'Wide Angle': data["command"].get("setup_wide_camera", {}).get("do_action", False),
                 'exposure': data["command"].get("setup_camera", {}).get("exposure", ""),
                 'gain': data["command"].get("setup_camera", {}).get("gain", ""),
-                'IR': data["command"].get("setup_camera", {}).get("IRCut", ""),
+                'IR': data["command"].get("setup_camera", {}).get("ircut", ""),
                 'count': data["command"].get("setup_camera", {}).get("count", ""),
             }
 

@@ -219,7 +219,7 @@ def get_json_files_sorted(directory):
     return [fname for datetime_str, fname in files_with_datetime]
 
 # Main function to check and execute the commands
-def check_and_execute_commands(stop_event=None, skip_time_checks=False):
+def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
     """
     Check for JSON command files and execute them based on their scheduled time.
     
@@ -289,6 +289,7 @@ def check_and_execute_commands(stop_event=None, skip_time_checks=False):
                         continue
                 
                 if time_ready:
+                    self.toggle_scheduler_buttons_state("disabled")
                     log.notice(f"Executing session: {filename}")
                     
                     # Move to Current directory
@@ -302,14 +303,16 @@ def check_and_execute_commands(stop_event=None, skip_time_checks=False):
                         id_command['process'] = 'running'
                         id_command['result'] = False
                         id_command['message'] = 'Session started'
-                        
+
                         # Save updated status
                         with open(current_path, 'w') as f:
                             json.dump(command_data, f, indent=4)
                         
                         # Start the session
+                        id_command['time'] = datetime.now().strftime("%H:%M:%S")
+
                         start_dwarf_session(command_data['command'], stop_event=stop_event)
-                        
+
                         # Session completed successfully
                         id_command['process'] = 'done'
                         id_command['result'] = True
@@ -396,8 +399,9 @@ def check_and_execute_commands(stop_event=None, skip_time_checks=False):
                             os.remove(current_path)
                         
                         sessions_processed = True
-                    
-                    # Only process one session at a time
+                        self.toggle_scheduler_buttons_state("normal")
+
+                    # Only process one session at a time                    
                     break
                         
             except Exception as e:

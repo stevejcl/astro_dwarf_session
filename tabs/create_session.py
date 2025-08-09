@@ -12,7 +12,7 @@ from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
 from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains, allowed_exposuresD3, allowed_gainsD3
 from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposures, allowed_wide_gains, allowed_wide_exposuresD3, allowed_wide_gainsD3
-
+import uuid
 
 def list_available_names(instance):
     return [entry["name"] for entry in instance.values]
@@ -126,6 +126,10 @@ uuid_counter = 1
 
 SAVE_FOLDER = 'Astro_Sessions'
 
+def generate_uuid():
+    file_uuid = uuid.uuid4()
+    return str(file_uuid)
+
 def check_integer(value):
     # Try to convert the value to an integer
     try:
@@ -173,7 +177,6 @@ def save_to_json(settings_vars, config_vars):
     count = check_integer(settings_vars["count"].get())
     binning = config_vars.get("CONFIG", "binning")
     selected_camera = config_vars.get("CONFIG", "camera_type")
-    wait_after_camera = settings_vars["wait_after_camera"].get()
     ircut = config_vars.get("CONFIG", "ircut")
 
     # Ensure all required fields are non-empty (except booleans)
@@ -264,7 +267,7 @@ def save_to_json(settings_vars, config_vars):
     data = {
         "command": {
             "id_command": {
-                "uuid": f"{uuid_counter:05d}",
+                "uuid": f"{generate_uuid()}-{uuid_counter:05d}",
                 "description": description,
                 "date": settings_vars["date"].get(),
                 "time": settings_vars["time"].get(),
@@ -615,6 +618,9 @@ def import_csv_and_generate_json(settings_vars, config_vars):
                 settings_vars["goto_solar"].set(False)
                 settings_vars["no_goto"].set(False)
 
+                # Generate a unique identifier for this session
+                settings_vars["uuid"].set(generate_uuid())
+
                 # Generate JSON preview for this row
                 json_data = generate_json_preview(settings_vars, config_vars)
                 json_preview.append(json_data)
@@ -737,7 +743,7 @@ def generate_json_preview(settings_vars, config_vars):
     data = {
         "command": {
             "id_command": {
-                "uuid": f"{uuid_counter:05d}",
+                "uuid": f"{settings_vars['uuid'].get()}-{uuid_counter:05d}",
                 "description": settings_vars["description"].get(),
                 "date": settings_vars["date"].get(),
                 "time": settings_vars["time"].get(),

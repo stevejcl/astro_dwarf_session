@@ -1,4 +1,3 @@
-
 import configparser
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -364,7 +363,7 @@ def create_settings_tab(tab_settings, settings_vars):
         grid_row += 1
 
     # Auto-save info label at the bottom (light grey)
-    autosave_label = tk.Label(scrollable_frame, text="Updates are saved automatically.", fg="#888888", font=("Arial", 11, "italic"))
+    autosave_label = tk.Label(scrollable_frame, text="Updates are saved automatically.", fg="#555555", font=("Arial", 11, "italic"))
     autosave_label.grid(row=grid_row, column=0, columnspan=2, pady=20, padx=10, sticky='ew')
 
     def on_tab_focus_out(event):

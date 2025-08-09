@@ -57,8 +57,8 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
         """Convert a string into a list of mixed strings and integers for natural sorting."""
         return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', text)]
 
-    def get_json_files_sorted_by_uuid(directory):
-        files_with_uuid = []
+    def get_json_files_sorted(directory):
+        files_with_datetime = []
         if os.path.exists(directory):
             for fname in os.listdir(directory):
                 if fname.endswith('.json'):
@@ -66,17 +66,21 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
                     try:
                         with open(fpath, 'r') as f:
                             data = json.load(f)
-                        uuid = data.get('command', {}).get('id_command', {}).get('uuid', '')
+                        id_command = data.get('command', {}).get('id_command', {})
+                        date_str = id_command.get('date', '')
+                        time_str = id_command.get('time', '')
+                        # Combine date and time for sorting
+                        datetime_str = f"{date_str} {time_str}"
                     except Exception:
-                        uuid = ''
-                    files_with_uuid.append((uuid, fname))
-            # Use natural sorting for UUIDs
-            files_with_uuid.sort(key=lambda x: (x[0] == '', natural_sort_key(x[0])))
-        return [fname for uuid, fname in files_with_uuid]
+                        datetime_str = ''
+                    files_with_datetime.append((datetime_str, fname))
+            # Sort by datetime (empty datetime strings go to end)
+            files_with_datetime.sort(key=lambda x: (x[0] == '', x[0]))
+        return [fname for datetime_str, fname in files_with_datetime]
 
     def refresh_list():
         listbox.delete(0, tk.END)
-        for fname in get_json_files_sorted_by_uuid(session_dir):
+        for fname in get_json_files_sorted(session_dir):
             listbox.insert(tk.END, fname)
         clear_form()
         selected_file['name'] = None
@@ -372,7 +376,5 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     def cleanup():
         save_json()
     
-    # Store cleanup function for external access
-    frame.cleanup = cleanup
-    
-    return refresh_list
+    # Return both refresh_list and cleanup for external access
+    return refresh_list, cleanup

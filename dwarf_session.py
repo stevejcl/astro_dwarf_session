@@ -120,29 +120,8 @@ def try_attemps (function, function_succeed_message, max_attempts = 3):
 
     return continue_action
 
-def updateRA(originalRA, hoursPassed):
-  return (originalRA + hoursPassed) % 24
 
 def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
-    """
-    # Update RA for elapsed time since session creation (no Stellarium)
-    goto_manual = program.get('goto_manual', {}).get('do_action')
-    if goto_manual:
-        try:
-            session_date = program.get('id_command', {}).get('date')
-            session_time = program.get('id_command', {}).get('time')
-            if session_date and session_time:
-                session_dt = datetime.strptime(f"{session_date} {session_time}", "%Y-%m-%d %H:%M:%S")
-                now_dt = datetime.now()
-                elapsed_hours = (now_dt - session_dt).total_seconds() / 3600.0
-                orig_ra = float(program['goto_manual'].get('ra_coord', 0))
-                # Add elapsed hours, wrap around 24
-                new_ra = updateRA(orig_ra, elapsed_hours)
-                program['goto_manual']['ra_coord'] = new_ra
-                log.notice(f"Adjusted RA for elapsed time: original={orig_ra}, elapsed_hours={elapsed_hours:.2f}, new RA={new_ra}")
-        except Exception as e:
-            log.warning(f"Could not adjust RA for elapsed time: {e}")
-    """
     try:
         def interrupted():
             return stop_event is not None and stop_event.is_set()
@@ -173,6 +152,16 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
         take_photo = program.get('setup_camera', {}).get('do_action')
         take_widephoto = program.get('setup_wide_camera', {}).get('do_action')
 
+        # Initialize camera parameter variables to avoid unbound errors
+        exp_val = None
+        gain_val = None
+        binning_val = None
+        IR_val = None
+        count_val = None
+        wide_exp_val = None
+        wide_gain_val = None
+        wide_count_val = None
+
         # Log what will be done
         if auto_focus:
             log.notice(f" To do => Automatic Autofocus")
@@ -193,10 +182,10 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
                 goto_solar = False
 
         # Validate goto_manual parameters
+        manual_RA = program.get('goto_manual', {}).get('ra_coord')
+        manual_declination = program.get('goto_manual', {}).get('dec_coord')
+        target_name = program.get('goto_manual', {}).get('target')
         if goto_manual:
-            manual_RA = program.get('goto_manual', {}).get('ra_coord')
-            manual_declination = program.get('goto_manual', {}).get('dec_coord')
-            target_name = program.get('goto_manual', {}).get('target')
             if target_name and manual_RA and manual_declination:
                 log.notice(f" To do => GOTO : {target_name}")
             else:
@@ -352,6 +341,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
 
         # Goto Solar System
         if goto_solar:
+            target_name = program.get('goto_solar', {}).get('target')
             log.notice(f"Processing Goto Solar System : {target_name}")
             continue_action = select_solar_target(target_name)
             if interrupted(): return
@@ -363,6 +353,7 @@ def start_dwarf_session(program, type_dwarf = 3, stop_event=None):
 
         # Goto Manual
         if goto_manual:
+            target_name = program.get('goto_manual', {}).get('target')
             log.notice(f"Processing Goto : {target_name}")
             try:
                 decimal_RA = float(manual_RA)
@@ -503,12 +494,12 @@ def print_camera_data():
 
     # get dwarf type id
     data_config = dwarf_python_api.get_config_data.get_config_data()
-    dwarf_id = data_config['dwarf_id'] 
+    dwarf_id = str(data_config['dwarf_id']) if data_config.get('dwarf_id') is not None else "3"
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {dwarf_id}")
 
     # ALL PARAMS
-    if (result):
+    if isinstance(result, dict) and "all_params" in result:
         # get Camera
         target_id = 0
 
@@ -568,7 +559,7 @@ def print_camera_data():
        log.notice("the IRfilter has not been found")
 
     # ALL FEATURE PARAMS
-    if result_feature : 
+    if isinstance(result_feature, dict) and "all_feature_params" in result_feature:
         # get binning
         target_id = 0
 
@@ -631,12 +622,12 @@ def print_wide_camera_data():
 
     # get dwarf type id
     data_config = dwarf_python_api.get_config_data.get_config_data()
-    dwarf_id = data_config['dwarf_id'] 
+    dwarf_id = str(data_config['dwarf_id']) if data_config.get('dwarf_id') is not None else "3"
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {dwarf_id}")
 
     # ALL PARAMS
-    if (result):
+    if isinstance(result, dict) and "all_params" in result:
         # get Camera
         target_id = 0
 
@@ -673,7 +664,7 @@ def print_wide_camera_data():
        log.notice("the gain has not been found")
 
     # ALL FEATURE PARAMS
-    if result_feature : 
+    if isinstance(result_feature, dict) and "all_feature_params" in result_feature:
         # get camera_count
         target_id = 1
 

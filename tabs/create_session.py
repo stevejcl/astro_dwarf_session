@@ -252,8 +252,8 @@ def save_to_json(settings_vars, config_vars):
         except ValueError:
             decimal_Dec = parse_dec_to_float(dec_coord)
 
-    # Calculate the end time and update the date and time fields
-    end_date, end_time = calculate_end_time(settings_vars)
+    end_date = settings_vars["date"].get()
+    end_time = settings_vars["time"].get() 
 
     # Prepare the JSON data
     data = {
@@ -466,67 +466,6 @@ def get_exposure_time(settings_vars):
         print(f"Invalid exposure time: {exposure_string}. Defaulting to 0.")
         return 0.0  # Return a default value if conversion fails
 
-def calculate_end_time(settings_vars):
-    try:
-        # Get the starting date, time, exposure, and count
-        start_date_str = settings_vars["date"].get()
-        start_time_str = settings_vars["time"].get()
-        exposure_seconds = get_exposure_time(settings_vars)
-
-        if not settings_vars["count"].get():
-           print ("count imaging is not defined")
-           return None, None
-
-        count = int(settings_vars["count"].get())
-
-        # add wait time init to 
-        wait_time = 0  
-        if settings_vars["eq_solving"].get():
-          # wait time actions
-          wait_time += 60
-          wait_time += int(settings_vars.get("wait_before", 0).get())
-          wait_time += int(settings_vars.get("wait_after", 0).get())
-        if settings_vars["auto_focus"].get():
-          # wait time actions
-          wait_time += 10
-          wait_time += int(settings_vars.get("wait_before", 0).get())
-          wait_time += int(settings_vars.get("wait_after", 0).get())
-        if settings_vars["infinite_focus"].get():
-          # wait time actions
-          wait_time += 5
-          wait_time += int(settings_vars.get("wait_before", 0).get())
-          wait_time += int(settings_vars.get("wait_after", 0).get())
-        if settings_vars["calibration"].get():
-          # wait between actions and time actions
-          wait_time += 10 + 60
-          wait_time += int(settings_vars.get("wait_before", 0).get())
-          wait_time += int(settings_vars.get("wait_after", 0).get())
-        if settings_vars["goto_solar"].get() or settings_vars["goto_manual"].get():
-          wait_time += 30
-          wait_time += int(settings_vars.get("wait_after_target", 0).get())
-
-        # wait time setup camera
-        wait_time += 15
-        wait_time += int(settings_vars.get("wait_after_camera", 0).get())
-
-        # Combine date and time into a single datetime object
-        start_datetime_str = f"{start_date_str} {start_time_str}"
-        start_datetime = datetime.datetime.strptime(start_datetime_str, '%Y-%m-%d %H:%M:%S')
-
-        # Calculate the total exposure time
-        total_exposure_time = wait_time + (exposure_seconds + 1) * count 
-
-        # Calculate end time
-        end_datetime = start_datetime + datetime.timedelta(seconds=total_exposure_time)
-
-        end_date = end_datetime.strftime('%Y-%m-%d')
-        end_time = end_datetime.strftime('%H:%M:%S')
-
-        return end_date, end_time
-    except ValueError as e:
-        messagebox.showerror("Error", f"Invalid input: {e}")
-        return None, None
-
 def import_csv_and_generate_json(settings_vars, config_vars):
     # Open file dialog to select CSV file
     file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
@@ -612,10 +551,11 @@ def import_csv_and_generate_json(settings_vars, config_vars):
                 json_preview.append(json_data)
 
                 # Calculate end time for this entry
-                end_date, end_time = calculate_end_time(settings_vars)
-                if end_date and end_time:
-                    # Set the end time as the start time for the next entry
-                    current_datetime = datetime.datetime.strptime(f"{end_date} {end_time}", '%Y-%m-%d %H:%M:%S')
+                end_date = settings_vars["date"].get()
+                end_time = settings_vars["time"].get()    
+
+                # Set the end time as the start time for the next entry
+                current_datetime = datetime.datetime.strptime(f"{end_date} {end_time}", '%Y-%m-%d %H:%M:%S')
 
         # Show preview dialog
         if show_preview_dialog(json_preview):

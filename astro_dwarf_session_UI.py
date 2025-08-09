@@ -162,7 +162,7 @@ class TextHandler(logging.Handler):
         elif record.levelno == logging.INFO:
             color = 'blue'
             emoji = 'ℹ️ '
-        elif hasattr(logging, 'SUCCESS') and record.levelno == logging.SUCCESS:
+        elif hasattr(logging, 'SUCCESS') and record.levelno == logging.INFO:
             color = 'green'
             emoji = '✅ '
         else:
@@ -265,9 +265,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_stop_event.set()
             self.log("Forcing scheduler to stop...")
 
-        # Force close any connections
-        self.force_stop_connect_bluetooth()
-        
         # Schedule the close with a shorter delay
         self.after(2000, self.finalize_close)  # Reduced to 2 seconds
 
@@ -303,14 +300,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.after(1000, self.countdown, wait - 1)
         else:
             self.log("Timeout reached, force closing...")
-            # Force terminate the scheduler thread if it's still running
+            # Cannot forcibly terminate threads safely in Python; log and proceed to close
             if hasattr(self, 'scheduler_thread') and self.scheduler_thread.is_alive():
-                try:
-                    # This is a harsh measure, but sometimes necessary
-                    import threading
-                    self.scheduler_thread._stop()
-                except:
-                    pass
+                self.log("Scheduler thread is still running and cannot be forcibly stopped safely.", level="warning")
             self.after(500, self.destroy)
 
     def toggle_multiple(self):
@@ -576,9 +568,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.update_session_info()
 
     def clear_log_output(self):
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.delete(1.0, tk.END)
-        self.log_text.config(state=tk.NORMAL)
+        if self.log_text is not None:
+            self.log_text.config(state=tk.NORMAL)
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.config(state=tk.NORMAL)
         # Update file counts in case log clearing is related to session changes
         if hasattr(self, 'update_session_counts'):
             self.update_session_counts()
@@ -870,17 +863,19 @@ class AstroDwarfSchedulerApp(tk.Tk):
         else:
             color = "black"
             emoji = ""
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.insert(tk.END, emoji + message + "\n", color)
-        self.log_text.tag_config(color, foreground=color)
-        self.log_text.see(tk.END)
+            
+        if self.log_text is not None:
+            self.log_text.config(state=tk.NORMAL)
+            self.log_text.insert(tk.END, emoji + message + "\n", color)
+            self.log_text.tag_config(color, foreground=color)
+            self.log_text.see(tk.END)
 
     def update_session_info(self):
         """
         Update the session information label with the next session's start time,
         the runtime of the current session, or a countdown to the next session.
         """
-        from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted_by_uuid
+        from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
         import os
         import json
         from datetime import datetime, timedelta
@@ -905,7 +900,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 # Check for the next session in the ToDo directory
                 todo_dir = LIST_ASTRO_DIR["TODO_DIR"]
                 if os.path.exists(todo_dir):
-                    todo_files = get_json_files_sorted_by_uuid(todo_dir)
+                    todo_files = get_json_files_sorted(todo_dir)
                     if todo_files:
                         next_session_file = todo_files[0]
                         next_session_path = os.path.join(todo_dir, next_session_file)
@@ -945,7 +940,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             # Check if there are any sessions in ToDo to provide useful information
             todo_dir = LIST_ASTRO_DIR["TODO_DIR"]
             if os.path.exists(todo_dir):
-                todo_files = get_json_files_sorted_by_uuid(todo_dir)
+                todo_files = get_json_files_sorted(todo_dir)
                 if todo_files:
                     self.session_info_label.config(
                         text=f"Ready to start - {len(todo_files)} session(s) waiting. Click 'Start Scheduler' to begin.",

@@ -51,27 +51,6 @@ def populate_json_list(json_listbox):
     """Populates the listbox with JSON files from the Astro_Sessions folder."""
     json_listbox.delete(0, tk.END)
     
-    def natural_sort_key(text):
-        """Convert a string into a list of mixed strings and integers for natural sorting."""
-        return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', text)]
-    
-    # Helper to get sorted files by uuid
-    def get_json_files_sorted_by_uuid(directory):
-        files_with_uuid = []
-        if os.path.exists(directory):
-            for fname in os.listdir(directory):
-                if fname.endswith('.json'):
-                    fpath = os.path.join(directory, fname)
-                    try:
-                        with open(fpath, 'r') as f:
-                            data = json.load(f)
-                        uuid = data.get('command', {}).get('id_command', {}).get('uuid', '')
-                    except Exception:
-                        uuid = ''
-                    files_with_uuid.append((uuid, fname))
-            files_with_uuid.sort(key=lambda x: (x[0] == '', natural_sort_key(x[0])))
-        return [fname for uuid, fname in files_with_uuid]
-
     # Get files from all session subdirectories
     from astro_dwarf_scheduler import LIST_ASTRO_DIR
     sessions_dir = LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"]
@@ -94,15 +73,19 @@ def populate_json_list(json_listbox):
                     try:
                         with open(fpath, 'r') as f:
                             data = json.load(f)
-                        uuid = data.get('command', {}).get('id_command', {}).get('uuid', '')
+                        id_command = data.get('command', {}).get('id_command', {})
+                        date_str = id_command.get('date', '')
+                        time_str = id_command.get('time', '')
+                        # Combine date and time for sorting
+                        datetime_str = f"{date_str} {time_str}"
                     except Exception:
-                        uuid = ''
-                    files_with_origin.append((uuid, fname, dirpath, label, info['color'], info['font']))
-    # Sort all by uuid (empty uuid last) with natural sorting
-    files_with_origin.sort(key=lambda x: (x[0] == '', natural_sort_key(x[0])))
+                        datetime_str = ''
+                    files_with_origin.append((datetime_str, fname, dirpath, label, info['color'], info['font']))
+    # Sort all by datetime (empty datetime last)
+    files_with_origin.sort(key=lambda x: (x[0] == '', x[0]))
     # Insert into listbox and build mapping
     json_listbox.file_origin_map = {}
-    for uuid, fname, dirpath, label, color, font in files_with_origin:
+    for datetime_str, fname, dirpath, label, color, font in files_with_origin:
         display_name = fname + label
         json_listbox.insert(tk.END, display_name)
         if font:
@@ -235,13 +218,13 @@ def select_session(json_listbox, json_text, select_button):
                         # Remove the original file
                         os.remove(source_path)
                         
-                        print(f"Moved {fname} back to {parent_dir} and reset session state.")
+                        #print(f"Moved {fname} back to {parent_dir} and reset session state.")
                     except Exception as e:
                         print(f"Error moving and resetting file {fname}: {e}")
                         # Try to move without reset if JSON modification fails
                         try:
                             shutil.move(source_path, dest_path)
-                            print(f"Moved {fname} back to {parent_dir} (without reset).")
+                            #print(f"Moved {fname} back to {parent_dir} (without reset).")
                         except Exception as move_error:
                             print(f"Error moving file {fname}: {move_error}")
                 else:
@@ -251,7 +234,7 @@ def select_session(json_listbox, json_text, select_button):
                     destination_path = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], fname)
                     try:
                         shutil.move(source_path, destination_path)
-                        print(f"Moved {fname} to ToDo folder.")
+                        #print(f"Moved {fname} to ToDo folder.")
                     except Exception as e:
                         print(f"Error moving file {fname}: {e}")
         # Refresh the listbox after moving all files

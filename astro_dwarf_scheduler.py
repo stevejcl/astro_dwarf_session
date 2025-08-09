@@ -217,21 +217,25 @@ last_logged = {}  # Dictionary to track when each file was last logged
 last_hourly_log = {}  # Dictionary to track the last hourly log time for each filename
 
 
-# Helper to get JSON files sorted by uuid
-def get_json_files_sorted_by_uuid(directory):
-    files_with_uuid = []
+# Helper to get JSON files sorted by date and time
+def get_json_files_sorted(directory):
+    files_with_datetime = []
     for fname in os.listdir(directory):
         if fname.endswith('.json'):
             fpath = os.path.join(directory, fname)
             try:
                 with open(fpath, 'r') as f:
                     data = json.load(f)
-                uuid = data.get('command', {}).get('id_command', {}).get('uuid', '')
+                id_command = data.get('command', {}).get('id_command', {})
+                date_str = id_command.get('date', '')
+                time_str = id_command.get('time', '')
+                # Combine date and time for sorting
+                datetime_str = f"{date_str} {time_str}"
             except Exception:
-                uuid = ''
-            files_with_uuid.append((uuid, fname))
-    files_with_uuid.sort(key=lambda x: (x[0] == '', x[0]))
-    return [fname for uuid, fname in files_with_uuid]
+                datetime_str = ''
+            files_with_datetime.append((datetime_str, fname))
+    files_with_datetime.sort(key=lambda x: (x[0] == '', x[0]))
+    return [fname for datetime_str, fname in files_with_datetime]
 
 # Main function to check and execute the commands
 def check_and_execute_commands(stop_event=None, skip_time_checks=False):
@@ -344,33 +348,41 @@ def check_and_execute_commands(stop_event=None, skip_time_checks=False):
                             camera_settings = perform_get_all_camera_setting()
                             if camera_settings:
                                 # Get the actual IR setting used
-                                ir_cut_value = camera_settings.get('IRCut')
+                                if isinstance(camera_settings, dict):
+                                    ir_cut_value = camera_settings.get('ircut')
+                                else:
+                                    ir_cut_value = None
                                 if ir_cut_value is not None:
                                     # Convert numeric IR value to readable format
-                                    ir_mapping = {0: 'IR CUT', 1: 'DUO BAND', 2: 'FULL SPECTRUM'}
+                                    ir_mapping = {0: 'Vis', 1: 'Astro Filter', 2: 'DUAL Band'}
                                     id_command['ir_actual'] = ir_mapping.get(ir_cut_value, f'Unknown({ir_cut_value})')
                                 
                                 # Store other actual settings used
-                                id_command['exposure_actual'] = camera_settings.get('exposure')
-                                id_command['gain_actual'] = camera_settings.get('gain')
+                                if isinstance(camera_settings, dict):
+                                    id_command['exposure_actual'] = camera_settings.get('exposure')
+                                    id_command['gain_actual'] = camera_settings.get('gain')
+                                else:
+                                    id_command['exposure_actual'] = camera_settings if isinstance(camera_settings, (int, float, str)) else None
+                                    id_command['gain_actual'] = camera_settings if isinstance(camera_settings, (int, float, str)) else None
                         except Exception as e:
                             log.warning(f"Could not capture actual camera settings: {e}")
                             # Fallback to planned settings from session data
                             setup_camera = command_data.get('command', {}).get('setup_camera', {})
                             if setup_camera.get('do_action', False):
-                                id_command['ir_actual'] = setup_camera.get('IRCut', 'Unknown')
+                                id_command['ir_actual'] = setup_camera.get('ircut', 'Unknown')
                         
                         # Move to Done directory
                         done_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Done", filename)
                         os.makedirs(os.path.dirname(done_path), exist_ok=True)
-                        
+
+                        update_process_status(command_data, 'done')
+
                         with open(done_path, 'w') as f:
                             json.dump(command_data, f, indent=4)
                         
                         os.remove(current_path)
                         
                         sessions_processed = True
-                        update_process_status(command_data, 'done')
 
                         log.success(f"Session {filename} completed successfully")
                         
@@ -393,7 +405,9 @@ def check_and_execute_commands(stop_event=None, skip_time_checks=False):
                         # Move to Error directory
                         error_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Error", filename)
                         os.makedirs(os.path.dirname(error_path), exist_ok=True)
-                        
+
+                        update_process_status(command_data, 'done')
+
                         with open(error_path, 'w') as f:
                             json.dump(command_data, f, indent=4)
                         
@@ -487,7 +501,7 @@ def start_STA_connection(CheckDwarfId = False):
         if result and CheckDwarfId:
             update_dwarf_data = update_get_config_data(dwarf_ip)
 
-            if update_dwarf_data['id'] != dwarf_id:
+            if update_dwarf_data is not None and update_dwarf_data.get('id') != dwarf_id:
                 log.success(f'Updated Dwarf Type to dwarf {update_dwarf_data["id"]}')
     return result
 

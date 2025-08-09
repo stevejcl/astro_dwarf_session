@@ -207,19 +207,20 @@ class AstroDwarfSchedulerApp(tk.Tk):
             from astro_dwarf_scheduler import LIST_ASTRO_DIR
             session_dir = LIST_ASTRO_DIR["SESSIONS_DIR"]
             result = edit_sessions.edit_sessions_tab(self.tab_edit_sessions, session_dir)
-            if callable(result):
-                self.edit_sessions_refresh = result
+            # result is a tuple: (refresh_list, cleanup)
+            if isinstance(result, tuple) and callable(result[0]):
+                self.edit_sessions_refresh = result[0]
         edit_sessions_tab_wrapper()
 
         # Bind tab change event to refresh file lists
         def on_tab_changed(event):
             tab = event.widget.tab(event.widget.index('current'))['text']
-            # Always refresh both lists when either tab is selected
-            if tab in ('Session Overview', 'Edit Sessions'):
-                if self.overview_refresh:
-                    self.overview_refresh()
+            if tab == 'Edit Sessions':
                 if self.edit_sessions_refresh:
                     self.edit_sessions_refresh()
+            elif tab == 'Session Overview':
+                if self.overview_refresh:
+                    self.overview_refresh()
             # Update Exposure and Gain fields when Create Session tab is selected
             elif tab == 'Create Session':
                 create_session.update_exposure_gain_fields(self.settings_vars)

@@ -39,17 +39,17 @@ def result_session_tab(parent_frame):
 
     # Top frame for combobox and refresh button
     top_frame = ttk.Frame(parent_frame)
-    top_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+    top_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(20, 10))
 
     combobox_label = ttk.Label(top_frame, text="Select Observation File:")
-    combobox_label.pack(side=tk.LEFT, padx=(0, 10))
+    combobox_label.pack(side=tk.LEFT, padx=(0, 5))
 
-    combobox = ttk.Combobox(top_frame, width=50, state="readonly")
+    combobox = ttk.Combobox(top_frame, state="readonly")
     combobox.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
     # Table frame for displaying OK and Error sessions
     table_frame = ttk.Frame(parent_frame)
-    table_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=10, pady=10)
+    table_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=10, pady=0)
 
     # OK Treeview
     ok_frame = ttk.Frame(table_frame)
@@ -103,9 +103,9 @@ def result_session_tab(parent_frame):
         refresh()
 
     update_button = ttk.Button(top_frame, text="Update Results", command=lambda: refresh())
-    update_button.pack(side=tk.LEFT, padx=10)
+    update_button.pack(side=tk.LEFT, padx=(10, 5))
     delete_button = ttk.Button(top_frame, text="Delete File", command=delete_selected_file)
-    delete_button.pack(side=tk.LEFT, padx=10)
+    delete_button.pack(side=tk.LEFT, padx=5)
 
     # Autosize the columns based on the content
     padding = 1

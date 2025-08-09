@@ -240,17 +240,25 @@ def save_to_json(settings_vars, config_vars):
         setup_wide_camera["count"] = count
 
     # convert RA, DEC : Format HH:mm:ss.s and sign DD:mm:ss.s
+    decimal_RA = ""
     if ra_coord not in (None, ""):
         try:
             decimal_RA = float(ra_coord)
         except ValueError:
-            decimal_RA = parse_ra_to_float(ra_coord)
+            try:
+                decimal_RA = parse_ra_to_float(ra_coord)
+            except Exception:
+                decimal_RA = ""
 
+    decimal_Dec = ""
     if dec_coord not in (None, ""):
         try:
             decimal_Dec = float(dec_coord)
         except ValueError:
-            decimal_Dec = parse_dec_to_float(dec_coord)
+            try:
+                decimal_Dec = parse_dec_to_float(dec_coord)
+            except Exception:
+                decimal_Dec = ""
 
     # Prepare the JSON data
     data = {
@@ -294,8 +302,8 @@ def save_to_json(settings_vars, config_vars):
             "goto_manual": {
                 "do_action": goto_manual,
                 "target": target,
-                "ra_coord": float(decimal_RA) if ra_coord not in (None, "")  else "",
-                "dec_coord": float(decimal_Dec) if dec_coord not in (None, "")  else "",
+                "ra_coord": float(decimal_RA) if ra_coord not in (None, "") and decimal_RA != "" else "",
+                "dec_coord": float(decimal_Dec) if dec_coord not in (None, "") and decimal_Dec != "" else "",
                 "wait_after": int(wait_after_target)
             },
             "setup_camera": setup_camera,
@@ -538,6 +546,9 @@ def import_csv_and_generate_json(settings_vars, config_vars):
         with open(file_path, 'r', encoding='utf-8-sig') as csv_file:
             csv_reader = csv.DictReader(csv_file)
             # Strip whitespace from the column names
+            if csv_reader.fieldnames is None:
+                messagebox.showerror("Error", "CSV file is empty or malformed (no header row found).")
+                return
             csv_reader.fieldnames = [field.strip() for field in csv_reader.fieldnames]
             rows = list(csv_reader)
             if not rows:
@@ -783,7 +794,7 @@ def show_preview_dialog(json_preview):
     preview_window.title("Preview JSON Data")
     
     # Default value for confirmed attribute
-    preview_window.confirmed = False
+    setattr(preview_window, "confirmed", False)
     
     # Create a text widget to display the preview
     text_widget = tk.Text(preview_window, wrap='word', height=20, width=50)
@@ -811,17 +822,17 @@ def show_preview_dialog(json_preview):
     preview_window.wait_window()
 
     # If the window was confirmed, return True, otherwise return False
-    return preview_window.confirmed
+    return getattr(preview_window, "confirmed", False)
 
 
 def on_confirm(window):
     # Set an attribute in the window to indicate confirmation
-    window.confirmed = True
+    setattr(window, "confirmed", True)
     window.destroy()  # Close the window
 
 def on_cancel(window):
     # Set an attribute in the window to indicate cancellation
-    window.confirmed = False
+    setattr(window, "confirmed", False)
     window.destroy()  # Close the window
 
 def save_json_to_file(json_data):
@@ -904,24 +915,29 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
             settings_vars["goto_solar"] = var_goto_solar
             settings_vars["goto_manual"] = var_goto_manual
             settings_vars["no_goto"] = var_no_goto
-        elif key != "target_solar":
+        elif key == "target_solar":
+            var = tk.StringVar()
+            entry = ttk.Combobox(scrollable_frame, textvariable=var, values=solar_system_objects)
+            settings_vars[key] = var
+        else:
             var = tk.StringVar()
             entry = tk.Entry(scrollable_frame, textvariable=var)
 
+        # Always define var for assignment to settings_vars[key]
         if key != "date" and key != "target_type" and key != "target_solar":
+            var = tk.StringVar()
             if config_vars.get(key) is not None and config_vars[key].get():
                 var.set(config_vars[key].get())
-        if key == "max_retries":
-            var.set(2)
-        if key == "wait_before":
-            var.set(10)
-        if key == "wait_after":
-            var.set(10)
-        if key == "wait_after_target":
-            var.set(30)
-        if key == "wait_after_camera":
-            var.set(20)
-        if key != "target_type" and key != "target_solar":
+            if key == "max_retries":
+                var.set("2")
+            if key == "wait_before":
+                var.set("10")
+            if key == "wait_after":
+                var.set("10")
+            if key == "wait_after_target":
+                var.set("30")
+            if key == "wait_after_camera":
+                var.set("20")
             settings_vars[key] = var
 
         label.grid(row=grid_row, column=0, sticky='e', padx=(5,2), pady=6)
@@ -933,19 +949,15 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
             settings_vars[key] = var
             entry = tk.Entry(target_frame := tk.Frame(scrollable_frame), textvariable=var)
             target_frame.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
-            target_frame.grid_columnconfigure(0, weight=1)
-            entry.grid(row=0, column=0, sticky='we')
-            refresh_button = tk.Button(target_frame, text="Refresh from Stellarium", command=lambda: refresh_stellarium_data(settings_vars, config_vars))
-            refresh_button.grid(row=0, column=1, sticky='e', padx=(6,0))
         elif key == "target_type":
             entry.grid(row=grid_row, column=1, sticky='w', padx=(2,10), pady=6)
         elif key == "target_solar":
+            entry.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
+        else:
+            # Always define var before using it
             var = tk.StringVar()
-            entry = ttk.Combobox(scrollable_frame, textvariable=var, values=solar_system_objects)
             entry.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
             settings_vars[key] = var
-        else:
-            entry.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
         if key == "max_retries":
             # ACTIONS checkboxes row
             actions_label = tk.Label(scrollable_frame, width=20, text="ACTIONS", anchor='w')

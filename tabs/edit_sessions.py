@@ -3,6 +3,7 @@ import json
 import tkinter as tk
 from tkinter import messagebox
 import re
+from astro_dwarf_scheduler import get_json_files_sorted
 
 def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     frame = tk.Frame(parent_tab)
@@ -53,31 +54,6 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     form_built = {'flag': False}  # Track if form structure is built
     has_unsaved_changes = {'flag': False}  # Track if there are unsaved changes
     
-    def natural_sort_key(text):
-        """Convert a string into a list of mixed strings and integers for natural sorting."""
-        return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', text)]
-
-    def get_json_files_sorted(directory):
-        files_with_datetime = []
-        if os.path.exists(directory):
-            for fname in os.listdir(directory):
-                if fname.endswith('.json'):
-                    fpath = os.path.join(directory, fname)
-                    try:
-                        with open(fpath, 'r') as f:
-                            data = json.load(f)
-                        id_command = data.get('command', {}).get('id_command', {})
-                        date_str = id_command.get('date', '')
-                        time_str = id_command.get('time', '')
-                        # Combine date and time for sorting
-                        datetime_str = f"{date_str} {time_str}"
-                    except Exception:
-                        datetime_str = ''
-                    files_with_datetime.append((datetime_str, fname))
-            # Sort by datetime (empty datetime strings go to end)
-            files_with_datetime.sort(key=lambda x: (x[0] == '', x[0]))
-        return [fname for datetime_str, fname in files_with_datetime]
-
     def refresh_list():
         listbox.delete(0, tk.END)
         for fname in get_json_files_sorted(session_dir):

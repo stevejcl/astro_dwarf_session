@@ -145,14 +145,6 @@ def save_json(filepath, data):
         log.error(f"error saving file: {filepath} - {e}")
         return False
 
-# Move the JSON file
-def move_file(source, destination):
-    try:
-        shutil.move(source, destination)
-    except Exception as e:
-        log.error(f"error moving file: {source} to {destination} - {e}")
-        return False
-
 # Check if the execution time of the command has been reached
 def is_time_to_execute(command):
     # Get current date and time
@@ -163,17 +155,6 @@ def is_time_to_execute(command):
     time_action = command.get('time',current_time)
     command_datetime = datetime.strptime(f"{date_action} {time_action}", "%Y-%m-%d %H:%M:%S")
     return datetime.now() >= command_datetime
-
-# Get the execution time for later processing
-def get_time_to_execute(current_datetime, command):
-    # Safely get 'date' and 'time' from the command, defaulting to now if missing
-    command_date = command.get('date', current_datetime.strftime("%Y-%m-%d"))
-    command_time = command.get('time', current_datetime.strftime("%H:%M:%S"))
-            
-    # Combine 'date' and 'time' into a single datetime object
-    command_datetime = datetime.strptime(f"{command_date} {command_time}", "%Y-%m-%d %H:%M:%S")
-
-    return command_datetime
 
 # Update the process status in the JSON file
 def update_process_status(program, status, result=None, message=None, nb_try=None, dwarf_id=None):
@@ -427,14 +408,6 @@ def check_and_execute_commands(stop_event=None, skip_time_checks=False):
         log.error(f"Error in check_and_execute_commands: {e}")
     
     return sessions_processed
-
-def log_command_status(filename, command_datetime, interval=None, first_time=False):
-    if first_time:
-        log.notice("######################")
-        log.notice(f"Find File  {filename}, not yet ready, will execute not earlier than {command_datetime}")
-    else:
-        log.notice("######################")
-        log.notice(f"{interval} log:  {filename}, not yet ready, will execute not earlier than {command_datetime}")
 
 def start_connection(startSTA = False, use_web_page = False):
 

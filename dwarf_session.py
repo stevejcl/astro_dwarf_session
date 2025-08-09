@@ -478,9 +478,6 @@ def verify_action(result, action_step):
     else:
         raise RuntimeError(f"Action failed at step: {STEP_DESCRIPTIONS.get(action_step, action_step)}")
 
-def stop_action():
-  return
-  
 def print_camera_data():
     camera_exposure = False
     camera_gain = False

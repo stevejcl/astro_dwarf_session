@@ -143,8 +143,10 @@ def load_csv_data(filename):
             
             row["Description"] = row.get("description")
             row["Dwarf"] = row.get("dwarf")
-            row["Starting"] = row.get("starting_date")[11:]
-            row["Ending"] = row.get("processed_date")[11:]
+            starting_date = row.get("starting_date")
+            row["Starting"] = starting_date[11:] if starting_date else ""
+            processed_date = row.get("processed_date")
+            row["Ending"] = processed_date[11:] if processed_date else ""
             row["Calibration"] = "Done" if row.get("calibration") == "True" else ""
             if row.get("goto_solar") == "True" :
                 row["Goto"] = "Solar"
@@ -198,8 +200,6 @@ def on_file_select(event, combobox, ok_treeview, error_treeview):
         update_treeview(error_treeview, error_data, columns_KO)
 
 def refresh_observation_list(combobox, ok_treeview, error_treeview):
-    analyze_files()
-
     # Load initial data
     files = get_observation_files()
     combobox['values'] = files
@@ -213,26 +213,6 @@ def refresh_observation_list(combobox, ok_treeview, error_treeview):
         # Clear the treeviews and display only column headers
         update_treeview(ok_treeview, [], columns_OK)
         update_treeview(error_treeview, [], columns_KO)
-
-# Function to load already processed filenames
-def load_processed_files():
-    from astro_dwarf_scheduler import LIST_ASTRO_DIR
-
-    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
-
-    if os.path.exists(RESULTS_LIST_PATH):
-        with open(RESULTS_LIST_PATH, 'r') as file:
-            return set(line.strip() for line in file.readlines())
-    return set()
-
-# Function to save processed filename
-def save_processed_file(filename):
-    from astro_dwarf_scheduler import LIST_ASTRO_DIR
-
-    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
-
-    with open(RESULTS_LIST_PATH, 'a') as file:
-        file.write(filename + '\n')
 
 def get_observation_night(starting_date):
     """Determine the observation night for a given date and time."""

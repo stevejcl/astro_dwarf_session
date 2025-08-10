@@ -27,7 +27,7 @@ def overview_session_tab(parent_frame, refresh_setter=None):
     autosave_label1 = tk.Label(parent_frame, text="Double click session names to toggle.", fg="#555555", font=("Arial", 11, "italic"))
     autosave_label1.grid(row=3, column=0, pady=(5, 0), padx=(10, 2), sticky='e')
 
-    select_button = tk.Button(parent_frame, text="Select Sessions", command=lambda: select_session(json_listbox, json_text, select_button), state=tk.NORMAL)
+    select_button = tk.Button(parent_frame, text="Toggle Selected", command=lambda: select_session(json_listbox, json_text, select_button), state=tk.NORMAL)
     select_button.grid(row=3, column=1, pady=(5, 0), padx=2, sticky='ew')
 
     autosave_label2 = tk.Label(parent_frame, text="Hold shift to select multiple sessions.", fg="#555555", font=("Arial", 11, "italic"))

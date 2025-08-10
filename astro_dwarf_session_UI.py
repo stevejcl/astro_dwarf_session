@@ -7,6 +7,9 @@ from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect, unset_HostMaster, set_HostMaster, start_polar_align, motor_action
 import signal
+from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
+import json
+from datetime import datetime, timedelta
 
 # import data for config.py
 import dwarf_python_api.get_config_data
@@ -18,6 +21,7 @@ from tabs import settings
 from tabs import create_session
 from tabs import overview_session
 from tabs import result_session
+from tabs.create_session import calculate_end_time
 
 # import directories
 from astro_dwarf_scheduler import CONFIG_DEFAULT, BASE_DIR, DEVICES_DIR, LIST_ASTRO_DIR_DEFAULT
@@ -641,7 +645,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         if self.scheduler_running:
             self.scheduler_running = False
             self.scheduler_stop_event.set()
-            self.after(0, lambda: self.log("Scheduler is stopping..."))
+            self.after(0, lambda: self.log("Scheduler is stopped."))
 
             # Update UI immediately
             self.after(0, lambda: self.start_button.config(state=tk.NORMAL))
@@ -658,7 +662,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.after(0, lambda: self.unlock_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.eq_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.polar_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.log("Scheduler is stopped"))
+            self.after(0, lambda: self.log("Scheduler is stopping..."))
             self.enable_controls()
 
         # Hide session info when scheduler stops
@@ -901,65 +905,68 @@ class AstroDwarfSchedulerApp(tk.Tk):
         Update the session information label with the next session's start time,
         the runtime of the current session, or a countdown to the next session.
         """
-        from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
-        import os
-        import json
-        from datetime import datetime, timedelta
-
         if self.scheduler_running:
             # Show the session info label
             self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))
 
-            # Check if a session is currently running
-            if getattr(self, 'session_running', False):
-                # Calculate runtime
-                if not hasattr(self, 'session_start_time'):
-                    self.session_start_time = datetime.now()
-                runtime = datetime.now() - self.session_start_time
-                runtime_str = str(runtime).split('.')[0]  # Format as HH:MM:SS
-                self.session_info_label.config(text=f"Current session running for: {runtime_str}")
-            else:
-                # Reset start time when no session is running
-                if hasattr(self, 'session_start_time'):
-                    del self.session_start_time
+            # Check for the next session in the ToDo directory
+            todo_dir_var = "CURRENT_DIR" if getattr(self, 'session_running', False) else "TODO_DIR"
+            todo_dir = LIST_ASTRO_DIR[todo_dir_var]
 
-                # Check for the next session in the ToDo directory
-                todo_dir = LIST_ASTRO_DIR["TODO_DIR"]
-                if os.path.exists(todo_dir):
-                    todo_files = get_json_files_sorted(todo_dir)
-                    if todo_files:
-                        next_session_file = todo_files[0]
-                        next_session_path = os.path.join(todo_dir, next_session_file)
-                        try:
-                            with open(next_session_path, 'r') as f:
-                                session_data = json.load(f)
-                            id_command = session_data.get('command', {}).get('id_command', {})
-                            scheduled_date = id_command.get('date', 'Unknown')
-                            scheduled_time = id_command.get('time', 'Unknown')
-                            scheduled_target = id_command.get('target', 'Unknown')
+            if os.path.exists(todo_dir):
+                todo_files = get_json_files_sorted(todo_dir)
+                if todo_files:
+                    next_session_file = todo_files[0]
+                    next_session_path = os.path.join(todo_dir, next_session_file)
+                    #try:
+                    with open(next_session_path, 'r') as f:
+                        session_data = json.loads(f.read())
 
-                            # Calculate countdown
-                            try:
-                                scheduled_datetime = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
-                                now = datetime.now()
-                                if scheduled_datetime > now:
-                                    countdown = scheduled_datetime - now
-                                    countdown_str = str(countdown).split('.')[0]  # Format as HH:MM:SS
-                                    self.session_info_label.config(
-                                        text=f"Next session: {scheduled_target} at {scheduled_date} {scheduled_time} (in {countdown_str})"
-                                    )
-                                else:
-                                    self.session_info_label.config(
-                                        text=f"Next session: {scheduled_target} at {scheduled_date} {scheduled_time} (starting soon)"
-                                    )
-                            except ValueError:
-                                self.session_info_label.config(text="Error parsing next session time.")
-                        except Exception as e:
-                            self.session_info_label.config(text="Error reading next session.")
+                    id_command = session_data.get('command', {}).get('id_command', {})
+                    scheduled_date = id_command.get('date', 'Unknown')
+                    scheduled_time = id_command.get('time', 'Unknown')
+                    scheduled_target = id_command.get('target', 'Unknown')
+
+                    # Check if a session is currently running
+                    if getattr(self, 'session_running', False):
+
+                        #estimated_end_time = calculate_end_time(session_data.get('command', {}))
+
+                        # Calculate runtime
+                        if not hasattr(self, 'session_start_time'):
+                            self.session_start_time = datetime.now()
+                            
+                        runtime = datetime.now() - self.session_start_time
+                        runtime_str = str(runtime).split('.')[0]  # Format as HH:MM:SS
+                        #self.session_info_label.config(text=f"Current session running for: {runtime_str} - Estimated end time: {estimated_end_time}")
+                        self.session_info_label.config(text=f"Current session running for: {runtime_str}")
                     else:
-                        self.session_info_label.config(text="No sessions scheduled - Create sessions in 'Create Session' tab")
+                        # Reset start time when no session is running
+                        if hasattr(self, 'session_start_time'):
+                            del self.session_start_time
+                        # Calculate countdown
+                        try:
+                            scheduled_datetime = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
+                            now = datetime.now()
+                            if scheduled_datetime > now:
+                                countdown = scheduled_datetime - now
+                                countdown_str = str(countdown).split('.')[0]  # Format as HH:MM:SS
+                                self.session_info_label.config(
+                                    text=f"Next session: {scheduled_target} at {scheduled_date} {scheduled_time} (in {countdown_str})"
+                                )
+                            else:
+                                self.session_info_label.config(
+                                    text=f"Next session: {scheduled_target} at {scheduled_date} {scheduled_time} (starting soon)"
+                                )
+                        except ValueError:
+                            self.session_info_label.config(text=f"Error parsing next session time. {e}")
+
+                #except Exception as e:
+                #    self.session_info_label.config(text=f"Error reading next session. {e}")
                 else:
-                    self.session_info_label.config(text="No session directory found - Check configuration")
+                    self.session_info_label.config(text="No sessions scheduled - Create sessions in 'Create Session' tab")
+            else:
+                self.session_info_label.config(text="No session directory found - Check configuration")
         else:
             # Show a helpful placeholder when scheduler is not running
             self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))

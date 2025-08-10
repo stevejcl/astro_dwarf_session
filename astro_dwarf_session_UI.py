@@ -1,3 +1,4 @@
+from fractions import Fraction
 import os
 import time
 import threading
@@ -21,7 +22,6 @@ from tabs import settings
 from tabs import create_session
 from tabs import overview_session
 from tabs import result_session
-from tabs.create_session import calculate_end_time
 
 # import directories
 from astro_dwarf_scheduler import CONFIG_DEFAULT, BASE_DIR, DEVICES_DIR, LIST_ASTRO_DIR_DEFAULT
@@ -113,7 +113,7 @@ def add_new_configuration(config_name):
             os.makedirs(full_path, exist_ok=True)
 
     print(f"Configuration '{config_name}' added successfully with required directory structure.")
-
+    
 # Tooltip class
 class Tooltip:
     """Create a tooltip for a given widget."""
@@ -262,6 +262,93 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 create_session.update_exposure_gain_fields(self.settings_vars)
 
         self.tab_control.bind('<<NotebookTabChanged>>', on_tab_changed)
+
+    # Function to get the exposure time from settings_vars
+    def get_exposure_time(self, settings_vars):
+        exposure_string = str(settings_vars["id_command"]["exposure"])  # Get the exposure string from settings_vars
+        try:
+            if not exposure_string:
+                print("exposure not defined")
+                return 0
+            # Check for fractional input
+            if '/' in exposure_string:
+                exposure_seconds = float(Fraction(exposure_string))  # Convert fraction to float
+            else:
+                exposure_seconds = float(exposure_string)  # Convert to float to handle fractions
+
+            return exposure_seconds  # Return the float value directly
+        except (ValueError, ZeroDivisionError):
+            print(f"Invalid exposure time: {exposure_string}. Defaulting to 0.")
+            return 0.0  # Return a default value if conversion fails
+
+    def calculate_end_time(self, settings_vars):
+        try:
+            # Get exposure and gain from settings_vars  
+            settings_vars["id_command"]["exposure"] = 1
+            settings_vars["id_command"]["gain"] = 1
+            settings_vars["id_command"]["count"] = 1
+
+            camera_sections = ['setup_camera', 'setup_wide_camera']
+            for section in camera_sections:
+                settings = settings_vars.get(section, {})
+                if settings.get('do_action'):
+                    settings_vars["id_command"]["exposure"] = settings['exposure']
+                    settings_vars["id_command"]["gain"] = settings['gain']
+                    settings_vars["id_command"]["count"] = settings['count']
+                    break
+
+            # Get the starting date, time, exposure, and count
+            exposure_seconds = self.get_exposure_time(settings_vars)
+
+            count = int(settings_vars["id_command"]["count"])
+
+            # add wait time init to 
+            wait_time = 0  
+            if settings_vars["eq_solving"]:
+                # wait time actions
+                wait_time += 60
+                wait_time += int(settings_vars.get("wait_before", 0))
+                wait_time += int(settings_vars.get("wait_after", 0))
+            if settings_vars["auto_focus"]:
+                # wait time actions
+                wait_time += 10
+                wait_time += int(settings_vars.get("wait_before", 0))
+                wait_time += int(settings_vars.get("wait_after", 0))
+            if settings_vars["infinite_focus"]:
+                # wait time actions
+                wait_time += 5
+                wait_time += int(settings_vars.get("wait_before", 0))
+                wait_time += int(settings_vars.get("wait_after", 0))
+            if settings_vars["calibration"]:
+                # wait between actions and time actions
+                wait_time += 10 + 60
+                wait_time += int(settings_vars.get("wait_before", 0))
+                wait_time += int(settings_vars.get("wait_after", 0))
+            if settings_vars["goto_solar"] or settings_vars["goto_manual"]:
+                wait_time += 30
+                wait_time += int(settings_vars.get("wait_after_target", 0))
+
+            # wait time setup camera
+            wait_time += 15
+            wait_time += int(settings_vars.get("wait_after_camera", 0))
+
+            # Combine date and time into a single datetime object
+            start_datetime = self.session_start_time
+
+            # Calculate the total exposure time
+            total_exposure_time = wait_time + (exposure_seconds + 1) * count 
+
+            # Calculate end time
+            end_datetime = start_datetime + timedelta(seconds=total_exposure_time)
+
+            # Calculate duration in H:M:S
+            duration = end_datetime - start_datetime
+            duration_str = str(duration).split(", ")[-1]  # Get the last part (H:M:S)
+
+            return duration_str
+        except ValueError as e:
+            messagebox.showerror("Error", f"Invalid input: {e}")
+            return 0
 
 
     def quit_method(self):
@@ -930,16 +1017,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     # Check if a session is currently running
                     if getattr(self, 'session_running', False):
 
-                        #estimated_end_time = calculate_end_time(session_data.get('command', {}))
-
                         # Calculate runtime
                         if not hasattr(self, 'session_start_time'):
                             self.session_start_time = datetime.now()
-                            
+
+                        estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
+
                         runtime = datetime.now() - self.session_start_time
                         runtime_str = str(runtime).split('.')[0]  # Format as HH:MM:SS
-                        #self.session_info_label.config(text=f"Current session running for: {runtime_str} - Estimated end time: {estimated_end_time}")
-                        self.session_info_label.config(text=f"Current session running for: {runtime_str}")
+                        self.session_info_label.config(text=f"Current session running for: {runtime_str} - Estimated runtime: {estimated_runtime}")
                     else:
                         # Reset start time when no session is running
                         if hasattr(self, 'session_start_time'):

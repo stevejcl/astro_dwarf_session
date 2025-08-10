@@ -200,6 +200,7 @@ def on_file_select(event, combobox, ok_treeview, error_treeview):
         update_treeview(error_treeview, error_data, columns_KO)
 
 def refresh_observation_list(combobox, ok_treeview, error_treeview):
+    analyze_files()
     # Load initial data
     files = get_observation_files()
     combobox['values'] = files
@@ -314,3 +315,24 @@ def write_to_csv(csv_path, csv_data):
         if not file_exists:
             writer.writeheader()
         writer.writerow(csv_data)
+
+# Function to load already processed filenames
+def load_processed_files():
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
+
+    if os.path.exists(RESULTS_LIST_PATH):
+        with open(RESULTS_LIST_PATH, 'r') as file:
+            return set(line.strip() for line in file.readlines())
+
+    return set()
+
+# Function to save processed filename
+def save_processed_file(filename):
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
+
+    with open(RESULTS_LIST_PATH, 'a') as file:
+        file.write(filename + '\n')

@@ -471,6 +471,8 @@ def start_dwarf_session(program, stop_event=None):
         log.success("######################")
         log.success(f"  End of Session")
         log.success("######################")
+        from tabs.result_session import analyze_files
+        analyze_files()
 
 def verify_action(result, action_step):
     """Fixed verify_action function with consistent behavior"""

@@ -12,7 +12,8 @@ from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
 from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains, allowed_exposuresD3, allowed_gainsD3
 from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposures, allowed_wide_gains, allowed_wide_exposuresD3, allowed_wide_gainsD3
-
+import uuid
+import threading
 
 def list_available_names(instance):
     return [entry["name"] for entry in instance.values]
@@ -126,6 +127,10 @@ uuid_counter = 1
 
 SAVE_FOLDER = 'Astro_Sessions'
 
+def generate_uuid():
+    file_uuid = uuid.uuid4()
+    return str(file_uuid)
+
 def check_integer(value):
     # Try to convert the value to an integer
     try:
@@ -173,7 +178,6 @@ def save_to_json(settings_vars, config_vars):
     count = check_integer(settings_vars["count"].get())
     binning = config_vars.get("CONFIG", "binning")
     selected_camera = config_vars.get("CONFIG", "camera_type")
-    wait_after_camera = settings_vars["wait_after_camera"].get()
     ircut = config_vars.get("CONFIG", "ircut")
 
     # Ensure all required fields are non-empty (except booleans)
@@ -264,7 +268,7 @@ def save_to_json(settings_vars, config_vars):
     data = {
         "command": {
             "id_command": {
-                "uuid": f"{uuid_counter:05d}",
+                "uuid": f"{generate_uuid()}-{uuid_counter:05d}",
                 "description": description,
                 "date": settings_vars["date"].get(),
                 "time": settings_vars["time"].get(),
@@ -737,7 +741,7 @@ def generate_json_preview(settings_vars, config_vars):
     data = {
         "command": {
             "id_command": {
-                "uuid": f"{uuid_counter:05d}",
+                "uuid": f"{settings_vars['uuid'].get()}-{uuid_counter:05d}",
                 "description": settings_vars["description"].get(),
                 "date": settings_vars["date"].get(),
                 "time": settings_vars["time"].get(),
@@ -946,8 +950,13 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
             target_frame.grid(row=grid_row, column=1, sticky='we', padx=(2,10), pady=6)
             target_frame.grid_columnconfigure(0, weight=1)
             entry.grid(row=0, column=0, sticky='we')
-            refresh_button = tk.Button(target_frame, text="Refresh from Stellarium", command=lambda: refresh_stellarium_data(settings_vars, config_vars))
-            refresh_button.grid(row=0, column=1, sticky='e', padx=(6,0))
+            refresh_button = tk.Button(
+                target_frame,
+                text="Refresh from Stellarium",
+                width=20,  # Set a fixed width to accommodate the longest text
+                command=lambda: refresh_stellarium_data_in_background(settings_vars, config_vars, button=refresh_button)
+            )
+            refresh_button.grid(row=0, column=1, sticky='e', padx=(6, 0))
         elif key == "target_type":
             entry.grid(row=grid_row, column=1, sticky='w', padx=(2,10), pady=6)
         elif key == "target_solar":
@@ -1011,6 +1020,9 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
     import_label.pack(pady=(10, 0), padx=10)
     import_csv_button = ttk.Button(import_frame, text="Import CSV", command=lambda: import_csv_and_generate_json(settings_vars, config_vars))
     import_csv_button.pack(pady=(0, 10), padx=10)
+
+    # Initialize the "uuid" key in settings_vars
+    settings_vars["uuid"] = tk.StringVar()
 
 def load_from_config():
     """Load the camera type from config.ini file"""
@@ -1107,3 +1119,21 @@ def update_options(device_type, exposure_dropdown, gain_dropdown, ircut_dropdown
         exposure_dropdown['values'] = []
         gain_dropdown['values'] = []
         ircut_dropdown['values'] = []
+
+def refresh_stellarium_data_in_background(settings_vars, config_vars, button=None):
+    """Run refresh_stellarium_data in a background thread and update the button state and text during execution."""
+    def task():
+        original_text = button.cget("text") if button else None  # Store the original button text
+        try:
+            if button:
+                button.config(state=tk.DISABLED, text="Stand by..")  # Disable the button and change text
+                
+            refresh_stellarium_data(settings_vars, config_vars)
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred: {e}")
+        finally:
+            if button:
+                button.config(state=tk.NORMAL, text=original_text)  # Re-enable the button and restore text
+
+    # Start the background thread
+    threading.Thread(target=task, daemon=True).start()

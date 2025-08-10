@@ -51,7 +51,7 @@ def overview_session_tab(parent_frame, refresh_setter=None):
     return refresh_json_list
 
 def populate_json_list(json_listbox):
-    """Populates the listbox with JSON files from the Astro_Sessions folder."""
+    """Populates the listbox with JSON files from the Astro_Sessions folder, sorted by UUID."""
     json_listbox.delete(0, tk.END)
     
     # Get files from all session subdirectories
@@ -65,7 +65,9 @@ def populate_json_list(json_listbox):
         'Error': {'path': os.path.join(sessions_dir, 'Error'), 'label': ' [Error]', 'color': 'red', 'font': None},
         'Results': {'path': os.path.join(sessions_dir, 'Results'), 'label': ' [Results]', 'color': 'gray', 'font': None},
     }
-    files_with_origin = []
+    all_files = []
+
+    # Collect all files with their metadata
     for key, info in subdirs.items():
         dirpath = info['path']
         label = info['label']
@@ -77,18 +79,23 @@ def populate_json_list(json_listbox):
                         with open(fpath, 'r') as f:
                             data = json.load(f)
                         id_command = data.get('command', {}).get('id_command', {})
+                        uuid = id_command.get('uuid', '')  # Extract UUID
                         date_str = id_command.get('date', '')
                         time_str = id_command.get('time', '')
                         # Combine date and time for sorting
                         datetime_str = f"{date_str} {time_str}"
                     except Exception:
+                        uuid = ''
                         datetime_str = ''
-                    files_with_origin.append((datetime_str, fname, dirpath, label, info['color'], info['font']))
-    # Sort all by datetime (empty datetime last)
-    files_with_origin.sort(key=lambda x: (x[0] == '', x[0]))
-    # Insert into listbox and build mapping
+                    # Add file metadata to the list
+                    all_files.append((uuid, fname, datetime_str, dirpath, label, info['color'], info['font']))
+
+    # Sort files by UUID first, then by datetime
+    all_files.sort(key=lambda x: (x[0] == '', x[0], x[2] == '', x[2]))
+
+    # Insert sorted files into the listbox
     json_listbox.file_origin_map = {}
-    for datetime_str, fname, dirpath, label, color, font in files_with_origin:
+    for uuid, fname, datetime_str, dirpath, label, color, font in all_files:
         display_name = fname + label
         json_listbox.insert(tk.END, display_name)
         if font:

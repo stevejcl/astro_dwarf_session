@@ -797,10 +797,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.enable_controls()
 
     def toggle_scheduler_buttons_state(self, state):
-        # Toggle the state of the scheduler buttons
+        # Toggle the state of the scheduler buttons only if running from UI
         self.after(0, lambda: self.start_button.config(state=state))
         self.after(0, lambda: self.eq_button.config(state=state))
-        self.after(0, lambda: self.polar_button.config(state=state))    
+        self.after(0, lambda: self.polar_button.config(state=state))
 
     def run_scheduler(self):
         try:

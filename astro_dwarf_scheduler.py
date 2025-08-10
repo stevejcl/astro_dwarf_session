@@ -289,7 +289,9 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         continue
                 
                 if time_ready:
-                    self.toggle_scheduler_buttons_state("disabled")
+                    if __name__ != "__main__":
+                        self.toggle_scheduler_buttons_state("disabled")
+    
                     log.notice(f"Executing session: {filename}")
                     
                     # Move to Current directory
@@ -399,7 +401,9 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                             os.remove(current_path)
                         
                         sessions_processed = True
-                        self.toggle_scheduler_buttons_state("normal")
+    
+                        if __name__ != "__main__":
+                            self.toggle_scheduler_buttons_state("normal")
 
                     # Only process one session at a time                    
                     break

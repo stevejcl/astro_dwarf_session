@@ -156,6 +156,8 @@ def start_dwarf_session(program, stop_event=None):
         wide_gain_val = None
         wide_count_val = None
 
+        print(f"Program: {program}")
+
         # Log what will be done
         if auto_focus:
             log.notice(f" To do => Automatic Autofocus")
@@ -198,11 +200,11 @@ def start_dwarf_session(program, stop_event=None):
                 log.notice(f" To do => Astro Photo with these parameters")
                 log.notice(f"     exposure  => {exp_val}s")
                 log.notice(f"     gain  => {gain_val}")
-                log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
+                log.notice(f"     binning => {'4k' if binning_val == 0 else '2k'}")
                 if dwarf_id == "3":
-                    log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
+                    log.notice(f"     IR => {'VIS_FILTER' if IR_val == 0 else 'ASTRO_FILTER' if IR_val == 1 else 'DUAL_BAND'}")
                 else:
-                    log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
+                    log.notice(f"     IR  => {'IR_CUT' if IR_val== 0 else 'IR_PASS'}")
                 log.notice(f"     number of images  => {count_val}")
             else:
                 log.warning(f" Error in Settings => PHOTO : none settings found, task ignored!")
@@ -471,8 +473,6 @@ def start_dwarf_session(program, stop_event=None):
         log.success("######################")
         log.success(f"  End of Session")
         log.success("######################")
-        from tabs.result_session import analyze_files
-        analyze_files()
 
 def verify_action(result, action_step):
     """Fixed verify_action function with consistent behavior"""

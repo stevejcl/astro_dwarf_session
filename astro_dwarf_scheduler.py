@@ -27,6 +27,7 @@ from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_pwd
 import dwarf_python_api.get_config_data
 
 import dwarf_python_api.lib.my_logger as log
+from tabs.result_session import analyze_files
 
 # Directories
 CONFIG_DEFAULT = "Default"
@@ -371,6 +372,10 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         sessions_processed = True
 
                         log.success(f"Session {filename} completed successfully")
+
+                        from tabs.result_session import analyze_files
+                        analyze_files()
+
                         
                     except Exception as e:
                         # Session failed

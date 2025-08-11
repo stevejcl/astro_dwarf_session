@@ -154,22 +154,20 @@ class TextHandler(logging.Handler):
     def emit(self, record):
         # Format the log message
         msg = self.format(record)
+        print(f"Settings: {logging.getLevelName(record.levelno)} {record.levelno}")
         # Determine color and emoji based on log level
         if record.levelno >= logging.ERROR:
             color = 'red'
-            emoji = '❌ '
+            emoji = '✗ '
         elif record.levelno == logging.WARNING:
             color = 'orange'
-            emoji = '⚠️ '
+            emoji = '⚠ '
         elif record.levelno == logging.INFO:
             color = 'gray'
             emoji = 'ℹ '
-        elif hasattr(logging, 'NOTICE'):
-            color = 'blue'
-            emoji = '⇒ '
-        elif hasattr(logging, 'SUCCESS'):
+        elif record.levelno == 25:
             color = 'green'
-            emoji = '✅ '
+            emoji = '✓ '
         else:
             color = 'black'
             emoji = '⇒ '
@@ -782,7 +780,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         verifyCountdown that checks scheduler status and waits for stop or timeout
         '''
         if self.scheduler_stopped or not self.scheduler_running:
-            self.log("Scheduler stopped.")
+            self.log("Scheduler is stopping...")
             self.enable_controls()
         elif wait > 0:
             # Schedule the verifyCountdown to run again after 1 second
@@ -967,16 +965,16 @@ class AstroDwarfSchedulerApp(tk.Tk):
         # Add color and emoji for direct log calls
         if level == "error":
             color = 'red'
-            emoji = '❌ '
+            emoji = '✗ '
         elif level == "warning":
             color = 'orange'
-            emoji = '⚠️ '
+            emoji = '⚠ '
         elif level == "info":
             color = 'blue'
-            emoji = '⇒ '
+            emoji = '◉ '
         elif level == "success":
             color = 'green'
-            emoji = '✅ '
+            emoji = '✓ '
         else:
             color = 'black'
             emoji = '⇒ '

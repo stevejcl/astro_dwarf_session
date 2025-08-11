@@ -432,7 +432,7 @@ def start_connection(startSTA = False, use_web_page = False):
 
     if not os.path.exists("extern"):
         # python script running
-        log.info("local bluetooth connection")
+        log.notice("local bluetooth connection")
         if use_web_page:
             result = connect_bluetooth() 
 

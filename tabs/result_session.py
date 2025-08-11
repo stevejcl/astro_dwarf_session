@@ -92,12 +92,15 @@ def result_session_tab(parent_frame):
             return
         from astro_dwarf_scheduler import LIST_ASTRO_DIR
         RESULTS_DIR = LIST_ASTRO_DIR["SESSIONS_DIR"] + '/Results'
+        RESULTS_LIST = LIST_ASTRO_DIR["SESSIONS_DIR"]
         file_path = os.path.join(RESULTS_DIR, selected_file)
+        list_path = os.path.join(RESULTS_LIST, "results_list.txt")
         if os.path.exists(file_path):
             import tkinter.messagebox as messagebox
             if messagebox.askyesno("Delete File", f"Are you sure you want to delete '{selected_file}'?"):
                 try:
                     os.remove(file_path)
+                    os.remove(list_path)
                 except Exception as e:
                     messagebox.showerror("Error", f"Could not delete file: {e}")
         refresh()

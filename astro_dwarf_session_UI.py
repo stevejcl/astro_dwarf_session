@@ -154,7 +154,6 @@ class TextHandler(logging.Handler):
     def emit(self, record):
         # Format the log message
         msg = self.format(record)
-        print(f"Settings: {logging.getLevelName(record.levelno)} {record.levelno}")
         # Determine color and emoji based on log level
         if record.levelno >= logging.ERROR:
             color = 'red'

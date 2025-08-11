@@ -156,8 +156,6 @@ def start_dwarf_session(program, stop_event=None):
         wide_gain_val = None
         wide_count_val = None
 
-        print(f"Program: {program}")
-
         # Log what will be done
         if auto_focus:
             log.notice(f" To do => Automatic Autofocus")
@@ -190,11 +188,11 @@ def start_dwarf_session(program, stop_event=None):
 
         # Validate photo parameters
         if take_photo:
-            exp_val = program['setup_camera'].get('exposure', None)
-            gain_val = program['setup_camera'].get('gain', None)
-            binning_val = program['setup_camera'].get('binning', None)
-            IR_val = program['setup_camera'].get('ircut', None)
-            count_val = program['setup_camera'].get('count', None)
+            exp_val = int(program['setup_camera'].get('exposure', None))
+            gain_val = int(program['setup_camera'].get('gain', None))
+            binning_val = int(program['setup_camera'].get('binning', None))
+            IR_val = int(program['setup_camera'].get('ircut', None))
+            count_val = int(program['setup_camera'].get('count', None))
 
             if exp_val or gain_val or binning_val or IR_val or count_val:
                 log.notice(f" To do => Astro Photo with these parameters")
@@ -212,9 +210,9 @@ def start_dwarf_session(program, stop_event=None):
 
         # Validate wide photo parameters
         if take_widephoto:
-            wide_exp_val = program['setup_wide_camera'].get('exposure', None)
-            wide_gain_val = program['setup_wide_camera'].get('gain', None)
-            wide_count_val = program['setup_wide_camera'].get('count', None)  # Fix: use separate variable
+            wide_exp_val = int(program['setup_wide_camera'].get('exposure', None))
+            wide_gain_val = int(program['setup_wide_camera'].get('gain', None))
+            wide_count_val = int(program['setup_wide_camera'].get('count', None))  # Fix: use separate variable
 
             if wide_exp_val or wide_gain_val or wide_count_val:
                 log.notice(f" To do => Astro Wide Photo with these parameters")

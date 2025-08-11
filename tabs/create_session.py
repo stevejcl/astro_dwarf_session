@@ -544,6 +544,7 @@ def import_csv_and_generate_json(settings_vars, config_vars):
 
     json_preview = []
     current_datetime = datetime.datetime.now()
+    settings_vars["uuid"].set(generate_uuid())
 
     try:
         with open(file_path, 'r', encoding='utf-8-sig') as csv_file:

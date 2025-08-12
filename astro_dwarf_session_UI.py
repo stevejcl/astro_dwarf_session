@@ -181,6 +181,8 @@ class TextHandler(logging.Handler):
 class AstroDwarfSchedulerApp(tk.Tk):
     def reset_total_runtime(self):
         self.total_session_runtime = 0
+        self.session_runtime = 0
+        self.session_start_time = 0
 
     def add_to_total_runtime(self, session_seconds):
         if not hasattr(self, 'total_session_runtime'):
@@ -336,6 +338,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
             # wait time setup camera
             wait_time += 15
             wait_time += int(settings_vars.get("wait_after_camera", 0))
+
+            if not isinstance(self.session_start_time, datetime):
+                self.session_start_time = datetime.now()
 
             # Combine date and time into a single datetime object
             start_datetime = self.session_start_time
@@ -737,10 +742,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
         if self.scheduler_running:
             self.scheduler_running = False
             self.scheduler_stop_event.set()
-            self.after(0, lambda: self.log("Scheduler is stopped."))
+            self.after(0, lambda: self.log("Scheduler is waiting for the process to stop."))
 
             # Update UI immediately
-            self.after(0, lambda: self.start_button.config(state=tk.NORMAL))
+            self.after(0, lambda: self.start_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.unlock_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.eq_button.config(state=tk.DISABLED))
@@ -811,7 +816,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
         try:
             self.scheduler_stopped = False
             self.session_running = False  # Track if a session is running
-            self.reset_total_runtime()
             attempt = 0
             result = False
             while not result and attempt < 3 and self.scheduler_running and not self.scheduler_stop_event.is_set():
@@ -840,12 +844,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                         time.sleep(1)
                         continue
 
+                    self.reset_total_runtime()
+
                     # If no sessions were processed and scheduler is still running, continue checking
                     if not sessions_processed and self.scheduler_running and not self.scheduler_stop_event.is_set():
                         self.session_running = False  # No session is running
                         # Instead of sleeping for 10 seconds, check every 0.1s if stopped
                         total_sleep = 0
-                        self.reset_total_runtime()
                         while total_sleep < 10 and self.scheduler_running and not self.scheduler_stop_event.is_set():
                             time.sleep(0.1)
                             total_sleep += 0.1
@@ -1028,10 +1033,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
                     # Check if a session is currently running
                     if getattr(self, 'session_running', False):
-
-                        
-
-                        # Calculate runtime
                         # Track the last session file to reset timer if a new file loads
                         if not hasattr(self, 'last_session_path') or self.last_session_path != next_session_path:
                             self.session_start_time = datetime.now()
@@ -1041,6 +1042,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
                             self.session_start_time = datetime.now()
 
                         estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
+                        # Ensure self.session_start_time is a datetime object
+                        if not isinstance(self.session_start_time, datetime):
+                            self.session_start_time = datetime.now()
                         this_session_runtime = datetime.now() - self.session_start_time
                         this_session_runtime_str = str(this_session_runtime).split('.')[0]  # Format as HH:MM:SS
                         # Format total runtime (add current session's runtime live)
@@ -1049,7 +1053,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                         live_total_seconds = int(self.total_session_runtime + this_session_runtime.total_seconds())
                         total_runtime_td = timedelta(seconds=live_total_seconds)
                         total_runtime_str = str(total_runtime_td).split('.')[0]
-                        self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} - Estimated runtime: {estimated_runtime} - Total Runtime: {total_runtime_str}", fg="blue")
+                        self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} - Estimated runtime: {estimated_runtime} - Total Runtime: {total_runtime_str}", fg="#3F3F63")
 
                 #except Exception as e:
                 #    self.session_info_label.config(text=f"Error reading next session. {e}")

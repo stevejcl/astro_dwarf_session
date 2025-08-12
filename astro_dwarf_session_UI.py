@@ -179,6 +179,14 @@ class TextHandler(logging.Handler):
 
 # GUI Application class
 class AstroDwarfSchedulerApp(tk.Tk):
+    def reset_total_runtime(self):
+        self.total_session_runtime = 0
+
+    def add_to_total_runtime(self, session_seconds):
+        if not hasattr(self, 'total_session_runtime'):
+            self.total_session_runtime = 0
+        self.total_session_runtime += session_seconds
+
     def set_scheduler_buttons_state(self, state):
         """Enable or disable the unlock, polar, and eq buttons on the Scheduler tab."""
         self.unlock_button.config(state=state)
@@ -803,6 +811,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         try:
             self.scheduler_stopped = False
             self.session_running = False  # Track if a session is running
+            self.reset_total_runtime()
             attempt = 0
             result = False
             while not result and attempt < 3 and self.scheduler_running and not self.scheduler_stop_event.is_set():
@@ -814,13 +823,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
             while result and self.scheduler_running and not self.scheduler_stop_event.is_set():
                 try:
+
                     # Execute commands and check if any sessions were processed
                     self.session_running = True  # Mark session as running
 
+                    session_start = datetime.now()
                     sessions_processed = check_and_execute_commands(self, stop_event=self.scheduler_stop_event)
+                    session_end = datetime.now()
 
-                    # If sessions were processed, continue the loop to check for more sessions
                     if sessions_processed:
+                        # Add this session's runtime to the total
+                        session_runtime = (session_end - session_start).total_seconds()
+                        self.add_to_total_runtime(session_runtime)
                         self.log("Session completed, checking for more sessions...")
                         # Brief pause between sessions
                         time.sleep(1)
@@ -831,6 +845,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                         self.session_running = False  # No session is running
                         # Instead of sleeping for 10 seconds, check every 0.1s if stopped
                         total_sleep = 0
+                        self.reset_total_runtime()
                         while total_sleep < 10 and self.scheduler_running and not self.scheduler_stop_event.is_set():
                             time.sleep(0.1)
                             total_sleep += 0.1
@@ -1014,42 +1029,34 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     # Check if a session is currently running
                     if getattr(self, 'session_running', False):
 
+                        
+
                         # Calculate runtime
+                        # Track the last session file to reset timer if a new file loads
+                        if not hasattr(self, 'last_session_path') or self.last_session_path != next_session_path:
+                            self.session_start_time = datetime.now()
+                            self.last_session_path = next_session_path
+
                         if not hasattr(self, 'session_start_time'):
                             self.session_start_time = datetime.now()
 
                         estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
-
-                        runtime = datetime.now() - self.session_start_time
-                        runtime_str = str(runtime).split('.')[0]  # Format as HH:MM:SS
-                        self.session_info_label.config(text=f"Current session running for: {runtime_str} - Estimated runtime: {estimated_runtime}")
-                    else:
-                        # Reset start time when no session is running
-                        if hasattr(self, 'session_start_time'):
-                            del self.session_start_time
-                        # Calculate countdown
-                        try:
-                            scheduled_datetime = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
-                            now = datetime.now()
-                            if scheduled_datetime > now:
-                                countdown = scheduled_datetime - now
-                                countdown_str = str(countdown).split('.')[0]  # Format as HH:MM:SS
-                                self.session_info_label.config(
-                                    text=f"Next session: {scheduled_target} at {scheduled_date} {scheduled_time} (in {countdown_str})"
-                                )
-                            else:
-                                self.session_info_label.config(
-                                    text=f"Next session: {scheduled_target} at {scheduled_date} {scheduled_time} (starting soon)"
-                                )
-                        except ValueError:
-                            self.session_info_label.config(text=f"Error parsing next session time. {e}")
+                        this_session_runtime = datetime.now() - self.session_start_time
+                        this_session_runtime_str = str(this_session_runtime).split('.')[0]  # Format as HH:MM:SS
+                        # Format total runtime (add current session's runtime live)
+                        if not hasattr(self, 'total_session_runtime'):
+                            self.total_session_runtime = 0
+                        live_total_seconds = int(self.total_session_runtime + this_session_runtime.total_seconds())
+                        total_runtime_td = timedelta(seconds=live_total_seconds)
+                        total_runtime_str = str(total_runtime_td).split('.')[0]
+                        self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} - Estimated runtime: {estimated_runtime} - Total Runtime: {total_runtime_str}", fg="blue")
 
                 #except Exception as e:
                 #    self.session_info_label.config(text=f"Error reading next session. {e}")
                 else:
-                    self.session_info_label.config(text="No sessions scheduled - Create sessions in 'Create Session' tab")
+                    self.session_info_label.config(text="No sessions scheduled - Create sessions in 'Create Session' tab", fg="purple")
             else:
-                self.session_info_label.config(text="No session directory found - Check configuration")
+                self.session_info_label.config(text="No session directory found - Check configuration",fg="red")
         else:
             # Show a helpful placeholder when scheduler is not running
             self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))

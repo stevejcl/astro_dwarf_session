@@ -4,16 +4,17 @@ import tkinter as tk
 from tkinter import messagebox
 import re
 from astro_dwarf_scheduler import get_json_files_sorted
+import time
 
 def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     frame = tk.Frame(parent_tab)
-    frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=0)
 
     label = tk.Label(frame, text="Available Sessions (JSON files):", font=("Arial", 12))
     label.pack(anchor="w")
 
     listbox = tk.Listbox(frame, width=40, height=20, selectmode=tk.EXTENDED)
-    listbox.pack(side=tk.LEFT, fill=tk.Y, padx=(0,10))
+    listbox.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
 
     scrollbar = tk.Scrollbar(frame, orient="vertical", command=listbox.yview)
     scrollbar.pack(side=tk.LEFT, fill=tk.Y)
@@ -23,37 +24,54 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     form_canvas = tk.Canvas(frame, borderwidth=0, highlightthickness=0)
     form_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
     form_scrollbar = tk.Scrollbar(frame, orient="vertical", command=form_canvas.yview)
-    form_scrollbar.pack(side=tk.LEFT, fill=tk.Y, padx=(0,0))
+    form_scrollbar.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 0))
     form_canvas.configure(yscrollcommand=form_scrollbar.set)
+
     # Create a frame inside the canvas
-    form_frame = tk.Frame(form_canvas, width=350, height=400)
+    form_frame = tk.Frame(form_canvas)
     form_window = form_canvas.create_window((0, 0), window=form_frame, anchor="nw")
 
-    frame.pack_propagate(False)
-    form_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    form_scrollbar.pack_forget()
-    form_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    # Configure the grid layout for `form_frame`
+    form_frame.grid_columnconfigure(1, weight=1)  # Make the second column stretchable
+
+    # Debounce mechanism
+    last_resize_time = [0.0]  # Use a mutable object to track the last resize time (float)
+
     # Ensure the form_frame always has a minimum width so widgets are visible
     def on_canvas_configure(event):
-        min_width = 350
-        canvas_width = max(event.width, min_width)
-        form_canvas.itemconfig(form_window, width=canvas_width)
+        current_time = time.time()
+        if current_time - last_resize_time[0] > 0.1:  # Update every 100ms
+            form_canvas.itemconfig(form_window, width=event.width)
+            last_resize_time[0] = current_time
+
     form_canvas.bind('<Configure>', on_canvas_configure)
 
+    # Update the scroll region when the form_frame changes
     def update_scrollregion(event=None):
         form_canvas.configure(scrollregion=form_canvas.bbox("all"))
+
     form_frame.bind("<Configure>", update_scrollregion)
-    form_canvas.bind("<Configure>", update_scrollregion)
+
+    # Handle mouse wheel scrolling
     def _on_mousewheel(event):
-        form_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-    form_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        if event.num == 4:  # Scroll up
+            form_canvas.yview_scroll(-1, "units")
+        elif event.num == 5:  # Scroll down
+            form_canvas.yview_scroll(1, "units")
+        else:  # For standard mouse wheel events
+            form_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    # Bind mouse wheel events for both Windows and Linux
+    form_canvas.bind_all("<MouseWheel>", _on_mousewheel)  # Windows
+    form_canvas.bind_all("<Button-4>", _on_mousewheel)    # Linux scroll up
+    form_canvas.bind_all("<Button-5>", _on_mousewheel)    # Linux scroll down
 
     entries = {}
     form_widgets = {}  # Cache for form structure
     selected_file = {'name': None, 'data': None}
     form_built = {'flag': False}  # Track if form structure is built
     has_unsaved_changes = {'flag': False}  # Track if there are unsaved changes
-    
+
     def refresh_list():
         listbox.delete(0, tk.END)
         for fname in get_json_files_sorted(session_dir):
@@ -142,24 +160,22 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
         """Build the form structure once and reuse it"""
         if form_built['flag']:
             return  # Form already built
-        
+
         clear_form()
         row = 0
-        # Make column 1 (fields) stretchable
-        form_frame.grid_columnconfigure(1, weight=1)
 
         # Add Reset button at the top
         header_frame = tk.Frame(form_frame)
-        header_frame.grid(row=row, column=0, columnspan=2, sticky="w", pady=(0,5))
-        tk.Label(header_frame, text="Session Info", font=("Arial", 11, "bold")).grid(row=0, column=0, sticky="w", padx=(10,0))
+        header_frame.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+        tk.Label(header_frame, text="Session Info", font=("Arial", 11, "bold")).grid(row=0, column=0, sticky="w", padx=(10, 0))
         row += 1
 
-        # Build id_command fields with reduced width
+        # Build id_command fields
         for key in ["description", "date", "time", "process", "max_retries", "result", "message", "nb_try"]:
-            label = tk.Label(form_frame, text=key+":")
-            label.grid(row=row, column=0, sticky="e")
-            ent = tk.Entry(form_frame, width=22)
-            ent.grid(row=row, column=1, sticky="ew")
+            label = tk.Label(form_frame, text=key + ":")
+            label.grid(row=row, column=0, sticky="e", padx=(5, 10), pady=(2, 2))
+            ent = tk.Entry(form_frame)
+            ent.grid(row=row, column=1, sticky="ew", padx=(5, 10), pady=(2, 2))  # Make the entry stretchable
             entries[('id_command', key)] = ent
             form_widgets[('id_command', key)] = (label, ent)
             ent.bind('<KeyRelease>', lambda e: mark_changed())
@@ -178,7 +194,7 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
                 if hasattr(widget, 'destroy'):
                     widget.destroy()
                 del entries[key]
-        
+
         # Clear subcmd form widgets
         for key in list(form_widgets.keys()):
             if isinstance(key, tuple) and key[0] != 'id_command':
@@ -188,33 +204,36 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
                         if hasattr(w, 'destroy'):
                             w.destroy()
                 del form_widgets[key]
-        
+
         row = start_row
         for subcmd in ["eq_solving", "auto_focus", "infinite_focus", "calibration", "goto_solar", "goto_manual", "setup_camera", "setup_wide_camera"]:
             sub = data['command'].get(subcmd, {})
             if not sub:  # Skip if subcmd doesn't exist
                 continue
             label = tk.Label(form_frame, text=subcmd, font=("Arial", 10, "bold"))
-            label.grid(row=row, column=0, sticky="w", pady=(10,0), padx=(10,0))
+            label.grid(row=row, column=0, sticky="w", pady=(10, 0), padx=(10, 0))
             form_widgets[f'{subcmd}_header'] = label
             row += 1
             for k, v in sub.items():
-                sub_label = tk.Label(form_frame, text="    "+k+":")
-                sub_label.grid(row=row, column=0, sticky="e")
+                sub_label = tk.Label(form_frame, text="    " + k + ":")
+                sub_label.grid(row=row, column=0, sticky="e", padx=(5, 5), pady=(2, 2))
                 if k == 'do_action':
                     from tkinter import ttk
-                    combo = ttk.Combobox(form_frame, values=["True", "False"], width=21, state="readonly")
-                    combo.grid(row=row, column=1, sticky="ew")
+                    combo = ttk.Combobox(form_frame, values=["True", "False"], state="readonly")
+                    combo.grid(row=row, column=1, sticky="ew", padx=(5, 10), pady=(2, 2))  # Make the combobox stretchable
                     entries[(subcmd, k)] = combo
                     form_widgets[(subcmd, k)] = (sub_label, combo)
                     combo.bind('<<ComboboxSelected>>', lambda e: mark_changed())
                 else:
-                    ent = tk.Entry(form_frame, width=22)
-                    ent.grid(row=row, column=1, sticky="ew")
+                    ent = tk.Entry(form_frame)
+                    ent.grid(row=row, column=1, sticky="ew", padx=(5, 15), pady=(2, 2))  # Make the entry stretchable
                     entries[(subcmd, k)] = ent
                     form_widgets[(subcmd, k)] = (sub_label, ent)
                     ent.bind('<KeyRelease>', lambda e: mark_changed())
                 row += 1
+
+        # Update the scroll region once after all widgets are added
+        update_scrollregion()
 
     def populate_form(data):
         """Populate form with data - optimized version"""
@@ -263,6 +282,9 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
                         if hasattr(widget, 'delete'):
                             widget.delete(0, tk.END)
                             widget.insert(0, str(v))
+    
+    # Update the scroll region after populating the form
+    update_scrollregion()
 
     def on_select(event):
         # Save any pending changes before switching files
@@ -347,6 +369,10 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     delete_btn.pack(side=tk.LEFT, padx=5)
     refresh_btn = tk.Button(button_frame, text="Refresh List", command=refresh_list)
     refresh_btn.pack(side=tk.LEFT, padx=5)
+    
+    # Information label to the right of the refresh button
+    info_label = tk.Label(button_frame, text="Updates are saved automatically", fg="#555555")
+    info_label.pack(side=tk.RIGHT, padx=10)
 
     # Return a cleanup function that saves on tab close
     def cleanup():

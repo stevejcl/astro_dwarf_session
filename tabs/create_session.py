@@ -874,7 +874,7 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
     canvas.configure(yscrollcommand=scrollbar.set)
 
     def _on_canvas_configure(event):
-        canvas.itemconfig("frame", width=event.height)
+        canvas.itemconfig("frame", width=event.width)
 
     canvas.bind('<Configure>', _on_canvas_configure)
 
@@ -1016,8 +1016,8 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
     # Import CSV section
     import_frame = tk.Frame(scrollable_frame, borderwidth=2, relief="groove")
     import_frame.grid(row=grid_row, column=0, columnspan=3, sticky='we', pady=10, padx=5)
-    import_label = tk.Label(import_frame, text="Import Telescopius Mosaic or List CSV, it will take the values from your settings")
-    import_label.pack(pady=(10, 0), padx=10)
+    import_label = tk.Label(import_frame, text="Import Telescopius Mosaic or List CSV, it will take the values from your settings", fg="#555555")
+    import_label.pack(pady=(10, 5), padx=10)
     import_csv_button = ttk.Button(import_frame, text="Import CSV", command=lambda: import_csv_and_generate_json(settings_vars, config_vars))
     import_csv_button.pack(pady=(0, 10), padx=10)
 

@@ -253,8 +253,19 @@ def create_settings_tab(tab_settings, settings_vars):
     if gain_row_index is not None:
         settings_fields.insert(gain_row_index + 1, ("Camera Type", "camera_type"))
 
-    # Add location button at the top
-    location_button = tk.Button(scrollable_frame, text="Find your location data from your address or Enter them manually", command=lambda: find_location(settings_vars))
+    # Add location button at the top, running in background
+    def find_location_in_background():
+        def task():
+            original_text = location_button.cget("text")
+            try:
+                location_button.config(state=tk.DISABLED, text="Finding...")
+                find_location(settings_vars)
+            finally:
+                location_button.config(state=tk.NORMAL, text=original_text)
+        import threading
+        threading.Thread(target=task, daemon=True).start()
+
+    location_button = tk.Button(scrollable_frame, text="Find your location data from your address or Enter them manually", command=find_location_in_background)
     location_button.grid(row=0, column=0, columnspan=2, pady=(15, 15), padx=10, sticky='ew')
 
     grid_row = 1
@@ -269,7 +280,7 @@ def create_settings_tab(tab_settings, settings_vars):
     for field, key in settings_fields:
         index = key.find("http")
         if not "Help" in field:
-            label = tk.Label(scrollable_frame, width=22, text=field, anchor='e')
+            label = tk.Label(scrollable_frame, width=15, text=field, anchor='e')
             extra_pady = 4
             if key == "gain":
                 label.grid(row=grid_row, column=0, sticky='e', padx=(10,6), pady=(4, 9))

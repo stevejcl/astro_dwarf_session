@@ -1022,41 +1022,36 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 if todo_files:
                     next_session_file = todo_files[0]
                     next_session_path = os.path.join(todo_dir, next_session_file)
-                    #try:
-                    with open(next_session_path, 'r') as f:
-                        session_data = json.loads(f.read())
+                    try:
+                        with open(next_session_path, 'r') as f:
+                            session_data = json.loads(f.read())
 
-                    id_command = session_data.get('command', {}).get('id_command', {})
-                    scheduled_date = id_command.get('date', 'Unknown')
-                    scheduled_time = id_command.get('time', 'Unknown')
-                    scheduled_target = id_command.get('target', 'Unknown')
+                        # Check if a session is currently running
+                        if getattr(self, 'session_running', False):
+                            # Track the last session file to reset timer if a new file loads
+                            if not hasattr(self, 'last_session_path') or self.last_session_path != next_session_path:
+                                self.session_start_time = datetime.now()
+                                self.last_session_path = next_session_path
 
-                    # Check if a session is currently running
-                    if getattr(self, 'session_running', False):
-                        # Track the last session file to reset timer if a new file loads
-                        if not hasattr(self, 'last_session_path') or self.last_session_path != next_session_path:
-                            self.session_start_time = datetime.now()
-                            self.last_session_path = next_session_path
+                            if not hasattr(self, 'session_start_time'):
+                                self.session_start_time = datetime.now()
 
-                        if not hasattr(self, 'session_start_time'):
-                            self.session_start_time = datetime.now()
+                            estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
+                            # Ensure self.session_start_time is a datetime object
+                            if not isinstance(self.session_start_time, datetime):
+                                self.session_start_time = datetime.now()
+                            this_session_runtime = datetime.now() - self.session_start_time
+                            this_session_runtime_str = str(this_session_runtime).split('.')[0]  # Format as HH:MM:SS
+                            # Format total runtime (add current session's runtime live)
+                            if not hasattr(self, 'total_session_runtime'):
+                                self.total_session_runtime = 0
+                            live_total_seconds = int(self.total_session_runtime + this_session_runtime.total_seconds())
+                            total_runtime_td = timedelta(seconds=live_total_seconds)
+                            total_runtime_str = str(total_runtime_td).split('.')[0]
+                            self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} - Estimated runtime: {estimated_runtime} - Total runtime: {total_runtime_str}", fg="#3F3F63")
 
-                        estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
-                        # Ensure self.session_start_time is a datetime object
-                        if not isinstance(self.session_start_time, datetime):
-                            self.session_start_time = datetime.now()
-                        this_session_runtime = datetime.now() - self.session_start_time
-                        this_session_runtime_str = str(this_session_runtime).split('.')[0]  # Format as HH:MM:SS
-                        # Format total runtime (add current session's runtime live)
-                        if not hasattr(self, 'total_session_runtime'):
-                            self.total_session_runtime = 0
-                        live_total_seconds = int(self.total_session_runtime + this_session_runtime.total_seconds())
-                        total_runtime_td = timedelta(seconds=live_total_seconds)
-                        total_runtime_str = str(total_runtime_td).split('.')[0]
-                        self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} - Estimated runtime: {estimated_runtime} - Total Runtime: {total_runtime_str}", fg="#3F3F63")
-
-                #except Exception as e:
-                #    self.session_info_label.config(text=f"Error reading next session. {e}")
+                    except Exception as e:
+                       self.session_info_label.config(text=f"Error reading next session. {e}")
                 else:
                     self.session_info_label.config(text="No sessions scheduled - Create sessions in 'Create Session' tab", fg="purple")
             else:

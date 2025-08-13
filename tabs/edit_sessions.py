@@ -224,6 +224,12 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
                     entries[(subcmd, k)] = combo
                     form_widgets[(subcmd, k)] = (sub_label, combo)
                     combo.bind('<<ComboboxSelected>>', lambda e: mark_changed())
+                    # Prevent mouse wheel from changing dropdown selection
+                    def block_mousewheel(event):
+                        return "break"
+                    combo.bind('<MouseWheel>', block_mousewheel)
+                    combo.bind('<Button-4>', block_mousewheel)
+                    combo.bind('<Button-5>', block_mousewheel)
                 else:
                     ent = tk.Entry(form_frame)
                     ent.grid(row=row, column=1, sticky="ew", padx=(5, 15), pady=(2, 2))  # Make the entry stretchable

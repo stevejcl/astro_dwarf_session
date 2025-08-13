@@ -6,7 +6,7 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import perform_disconnect, unset_HostMaster, set_HostMaster, perform_calibration, start_polar_align, motor_action
+from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action
 import signal
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 import json
@@ -18,6 +18,7 @@ import dwarf_python_api.get_config_data
 import logging
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
 
+from dwarf_session import verify_action
 from tabs import settings
 from tabs import create_session
 from tabs import overview_session
@@ -982,14 +983,56 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_calibration(self):
         try:
-            attempt = 0
-            result = False
-            self.after(0, lambda: self.log("Starting Calibration process..."))
-            while not result and attempt < 3:
-                attempt += 1
-                result = perform_calibration()
-                if not result:
-                    time.sleep(10)  # Sleep for 10 seconds between checks
+
+            # Session initialization
+            self.after(0, lambda: self.log("######################"))
+            self.after(0, lambda: self.log(f"Stopping stacking if active"))
+            continue_action = perform_stopAstroPhoto()
+            verify_action(continue_action, "step_0")
+
+            # Go Live
+            continue_action = perform_GoLive()
+            verify_action(continue_action, "step_1a")
+
+            wait_after = 5
+            wait_before = 5
+
+            self.after(0, lambda: self.log("Processing Calibration"))
+            self.after(0, lambda: self.log("    Set Exposure to 1s"))
+            continue_action = perform_update_camera_setting("exposure", "1")
+            verify_action(continue_action, "step_2")
+
+            self.after(0, lambda: self.log("    Set Gain to 80"))
+            continue_action = perform_update_camera_setting("gain", "80")
+            verify_action(continue_action, "step_3")
+            self.after(0, lambda: self.log("    Set IR Filter"))
+            continue_action = perform_update_camera_setting("IR", "1")
+            verify_action(continue_action, "step_4")
+
+            self.after(0, lambda: self.log("    Set Binning to 4k"))    
+            continue_action = perform_update_camera_setting("binning", "0")
+            verify_action(continue_action, "step_5")
+            
+            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds", level="warning"))
+            time.sleep(wait_before)
+
+            continue_action = perform_stop_goto()
+            verify_action(continue_action, "step_6")
+            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds", level="warning"))
+            time.sleep(wait_before)
+
+            self.after(0, lambda: self.log("Starting Calibration"))
+            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds", level="warning"))
+            time.sleep(wait_before)
+            continue_action = perform_calibration()
+            verify_action(continue_action, "step_7")
+            self.after(0, lambda: self.log(f"Waiting for {wait_after} seconds", level="warning"))
+            time.sleep(wait_after)
+            continue_action = perform_stop_goto()
+            self.after(0, lambda: self.log(f"Waiting for {wait_after} seconds", level="warning"))
+            time.sleep(wait_after)
+            continue_action = perform_calibration()
+
         except Exception as e:
             self.after(0, lambda e=e: self.log(f"Error in Calibration: {e}", level="error"))
 

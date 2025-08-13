@@ -6,7 +6,7 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import perform_disconnect, unset_HostMaster, set_HostMaster, start_polar_align, motor_action
+from dwarf_python_api.lib.dwarf_utils import perform_disconnect, unset_HostMaster, set_HostMaster, perform_calibration, start_polar_align, motor_action
 import signal
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 import json
@@ -193,6 +193,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         """Enable or disable the unlock, polar, and eq buttons on the Scheduler tab."""
         self.unlock_button.config(state=state)
         self.polar_button.config(state=state)
+        self.calibrate_button.config(state=state)
         self.eq_button.config(state=state)
 
     def __init__(self):
@@ -309,8 +310,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
             count = int(settings_vars["id_command"]["count"])
 
-            # add wait time init to 
-            wait_time = 0  
+            # Initialise wait time - manual adjustment
+            wait_time = 30 if count < 1 else 70
+
             if settings_vars["eq_solving"]:
                 # wait time actions
                 wait_time += 60
@@ -598,14 +600,17 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.stop_button = tk.Button(scheduler_frame, text="Stop Scheduler", command=self.stop_scheduler, state=tk.DISABLED, width=16)
         self.stop_button.grid(row=0, column=1, padx=2, sticky="sew")
 
-        self.unlock_button = tk.Button(scheduler_frame, text="Unset Device as Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
+        self.unlock_button = tk.Button(scheduler_frame, text="Unset Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
         self.unlock_button.grid(row=0, column=2, padx=2, sticky="sew")
 
+        self.calibrate_button = tk.Button(scheduler_frame, text="Calibrate", command=self.start_calibration, state=tk.DISABLED, width=16)
+        self.calibrate_button.grid(row=0, column=3, padx=2, sticky="sew")
+
         self.polar_button = tk.Button(scheduler_frame, text="Polar Position", command=self.start_polar_position, state=tk.DISABLED, width=16)
-        self.polar_button.grid(row=0, column=3, padx=2, sticky="sew")
+        self.polar_button.grid(row=0, column=4, padx=2, sticky="sew")
 
         self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=16)
-        self.eq_button.grid(row=0, column=4, padx=2, sticky="sew")
+        self.eq_button.grid(row=0, column=5, padx=2, sticky="sew")
 
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)
@@ -726,6 +731,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.after(0, lambda: self.unlock_button.config(state=tk.NORMAL))
             self.after(0, lambda: self.eq_button.config(state=tk.NORMAL))
             self.after(0, lambda: self.polar_button.config(state=tk.NORMAL))
+            self.after(0, lambda: self.calibrate_button.config(state=tk.NORMAL))
             self.after(0, lambda: self.log("Astro_Dwarf_Scheduler is starting..."))
             self.scheduler_start_time = datetime.now()  # Track when the scheduler starts
             # Only start if not already running
@@ -750,6 +756,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.after(0, lambda: self.unlock_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.eq_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.polar_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.calibrate_button.config(state=tk.DISABLED))
 
             # Wait for thread to finish with timeout
             self.verifyCountdown(10)  # Reduced timeout
@@ -759,6 +766,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.after(0, lambda: self.unlock_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.eq_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.polar_button.config(state=tk.DISABLED))
+            self.after(0, lambda: self.calibrate_button.config(state=tk.DISABLED))
             self.after(0, lambda: self.log("Scheduler is stopping..."))
             self.enable_controls()
 
@@ -787,6 +795,12 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.polar_thread = threading.Thread(target=self.run_start_polar_position, daemon=True)
             self.polar_thread.start()
 
+    def start_calibration(self):
+        # Only start if not already running
+        if not hasattr(self, 'cal_thread') or not self.cal_thread.is_alive():
+            self.cal_thread = threading.Thread(target=self.run_start_calibration, daemon=True)
+            self.cal_thread.start()
+
     def verifyCountdown(self, wait):
         '''
         verifyCountdown that checks scheduler status and waits for stop or timeout
@@ -811,6 +825,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.after(0, lambda: self.start_button.config(state=state))
         self.after(0, lambda: self.eq_button.config(state=state))
         self.after(0, lambda: self.polar_button.config(state=state))
+        self.after(0, lambda: self.calibrate_button.config(state=state))
 
     def run_scheduler(self):
         try:
@@ -881,6 +896,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.unlock_button.config(state=tk.DISABLED)
                 self.eq_button.config(state=tk.DISABLED)
                 self.polar_button.config(state=tk.DISABLED)
+                self.calibrate_button.config(state=tk.DISABLED)
                 self.enable_controls()
                 if hasattr(self, 'update_session_counts'):
                     self.update_session_counts()
@@ -963,6 +979,19 @@ class AstroDwarfSchedulerApp(tk.Tk):
         except Exception as e:
             self.after(0, lambda e=e: self.log(f"Error in Polar Align positionning: {e}", level="error"))
 
+    def run_start_calibration(self):
+        try:
+            attempt = 0
+            result = False
+            self.after(0, lambda: self.log("Starting Calibration process..."))
+            while not result and attempt < 3:
+                attempt += 1
+                result = perform_calibration()
+                if not result:
+                    time.sleep(10)  # Sleep for 10 seconds between checks
+        except Exception as e:
+            self.after(0, lambda e=e: self.log(f"Error in Calibration: {e}", level="error"))
+
     def start_logHandler(self):
 
         # Create an instance of the TextHandler and attach it to the logger
@@ -1037,6 +1066,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                                 self.session_start_time = datetime.now()
 
                             estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
+                            
                             # Ensure self.session_start_time is a datetime object
                             if not isinstance(self.session_start_time, datetime):
                                 self.session_start_time = datetime.now()

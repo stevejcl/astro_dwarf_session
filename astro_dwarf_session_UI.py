@@ -986,8 +986,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
             # Session initialization
             self.after(0, lambda: self.log("######################"))
-            self.after(0, lambda: self.log(f"Stopping stacking if active"))
-            continue_action = perform_stopAstroPhoto()
+            continue_action = perform_time()
             verify_action(continue_action, "step_0")
 
             # Go Live

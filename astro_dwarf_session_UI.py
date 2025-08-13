@@ -331,6 +331,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             if settings_vars["calibration"]:
                 # wait between actions and time actions
                 wait_time += 10 + 60
+                wait_time += 90 if settings_vars["id_command"]["dwarf"] == "D3" else 0
                 wait_time += int(settings_vars.get("wait_before", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
             if settings_vars["goto_solar"] or settings_vars["goto_manual"]:

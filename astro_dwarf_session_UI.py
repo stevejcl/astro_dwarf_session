@@ -200,30 +200,39 @@ class AstroDwarfSchedulerApp(tk.Tk):
             return
 
         def video_stream_worker():
-            try:
-                stream = requests.get(self.video_stream_url, stream=True, timeout=2)
-                bytes_data = b""
-                last_update = 0
-                for chunk in stream.iter_content(chunk_size=1024):
-                    bytes_data += chunk
-                    a = bytes_data.find(b'\xff\xd8')
-                    b = bytes_data.find(b'\xff\xd9')
-                    if a != -1 and b != -1:
-                        jpg = bytes_data[a:b+2]
-                        bytes_data = bytes_data[b+2:]
-                        try:
-                            image = Image.open(io.BytesIO(jpg)).resize((220, 140))
-                            photo = ImageTk.PhotoImage(image)
-                            now = time.time()
-                            if now - last_update > 0.3:
-                                self.after(0, self.update_video_canvas, photo)
-                                last_update = now
-                        except Exception:
-                            pass
-                    if getattr(self, '_stop_video_stream', False):
-                        break
-            except Exception:
-                self.after(0, lambda: self.video_canvas.config(text="No video stream."))
+            last_frame_time = 0
+            while not getattr(self, '_stop_video_stream', False):
+                try:
+                    stream = requests.get(self.video_stream_url, stream=True, timeout=2)
+                    bytes_data = b""
+                    last_update = 0
+                    for chunk in stream.iter_content(chunk_size=1024):
+                        bytes_data += chunk
+                        a = bytes_data.find(b'\xff\xd8')
+                        b = bytes_data.find(b'\xff\xd9')
+                        if a != -1 and b != -1:
+                            jpg = bytes_data[a:b+2]
+                            bytes_data = bytes_data[b+2:]
+                            try:
+                                image = Image.open(io.BytesIO(jpg)).resize((220, 140))
+                                photo = ImageTk.PhotoImage(image)
+                                now = time.time()
+                                if now - last_update > 0.3:
+                                    self.after(0, self.update_video_canvas, photo)
+                                    last_update = now
+                                    last_frame_time = now
+                            except Exception:
+                                pass
+                        # If no frame received for 3 seconds, clear preview
+                        if last_frame_time and time.time() - last_frame_time > 3:
+                            self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
+                            last_frame_time = 0
+                        if getattr(self, '_stop_video_stream', False):
+                            break
+                    # If we got here, stream ended or stopped, retry after short delay
+                except Exception:
+                    self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
+                time.sleep(3)  # Wait 3 seconds before retrying
 
         threading.Thread(target=video_stream_worker, daemon=True).start()
 

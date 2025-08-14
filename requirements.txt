@@ -21,3 +21,5 @@ timezonefinder
 inputimeout
 
 pytz
+
+pillow

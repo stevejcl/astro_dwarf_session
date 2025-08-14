@@ -5,6 +5,7 @@ import threading
 from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
+from config import DWARF_IP
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action
 import signal
@@ -115,6 +116,13 @@ def add_new_configuration(config_name):
 
     print(f"Configuration '{config_name}' added successfully with required directory structure.")
     
+def toggle_scheduler_buttons_state(self, state):
+    # Toggle the state of the scheduler buttons only if running from UI
+    self.after(0, lambda: self.start_button.config(state=state))
+    self.after(0, lambda: self.eq_button.config(state=state))
+    self.after(0, lambda: self.polar_button.config(state=state))
+    self.after(0, lambda: self.calibrate_button.config(state=state))
+
 # Tooltip class
 class Tooltip:
     """Create a tooltip for a given widget."""
@@ -180,23 +188,48 @@ class TextHandler(logging.Handler):
 
 # GUI Application class
 class AstroDwarfSchedulerApp(tk.Tk):
-    def reset_total_runtime(self):
-        self.total_session_runtime = 0
-        self.session_runtime = 0
-        self.session_start_time = 0
+    def start_video_preview(self):
+        import io
+        import threading
+        import time
+        try:
+            from PIL import Image, ImageTk
+            import requests
+        except ImportError:
+            self.video_canvas.config(text="Install Pillow and requests for video preview.")
+            return
 
-    def add_to_total_runtime(self, session_seconds):
-        if not hasattr(self, 'total_session_runtime'):
-            self.total_session_runtime = 0
-        self.total_session_runtime += session_seconds
+        def video_stream_worker():
+            try:
+                stream = requests.get(self.video_stream_url, stream=True, timeout=2)
+                bytes_data = b""
+                last_update = 0
+                for chunk in stream.iter_content(chunk_size=1024):
+                    bytes_data += chunk
+                    a = bytes_data.find(b'\xff\xd8')
+                    b = bytes_data.find(b'\xff\xd9')
+                    if a != -1 and b != -1:
+                        jpg = bytes_data[a:b+2]
+                        bytes_data = bytes_data[b+2:]
+                        try:
+                            image = Image.open(io.BytesIO(jpg)).resize((220, 140))
+                            photo = ImageTk.PhotoImage(image)
+                            now = time.time()
+                            if now - last_update > 0.3:
+                                self.after(0, self.update_video_canvas, photo)
+                                last_update = now
+                        except Exception:
+                            pass
+                    if getattr(self, '_stop_video_stream', False):
+                        break
+            except Exception:
+                self.after(0, lambda: self.video_canvas.config(text="No video stream."))
 
-    def set_scheduler_buttons_state(self, state):
-        """Enable or disable the unlock, polar, and eq buttons on the Scheduler tab."""
-        self.unlock_button.config(state=state)
-        self.polar_button.config(state=state)
-        self.calibrate_button.config(state=state)
-        self.eq_button.config(state=state)
+        threading.Thread(target=video_stream_worker, daemon=True).start()
 
+    def update_video_canvas(self, photo):
+        self.video_canvas.config(image=photo)
+        self.video_canvas.image = photo
     def __init__(self):
         super().__init__()
         self.title("Astro Dwarf Scheduler")
@@ -210,6 +243,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.bluetooth_connected = False
         self.result = False
         self.stellarium_connection = None
+        self.skip_time_checks = False
 
         # Create tabs
         self.tab_control = ttk.Notebook(self)
@@ -247,6 +281,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.refresh_results = result_session.result_session_tab(self.tab_result_session)
         create_session.create_session_tab(self.tab_create_session, self.settings_vars, self.config_vars)
         # Patch create_load_session_tab to capture refresh
+
         from tabs import edit_sessions
         def edit_sessions_tab_wrapper():
             from astro_dwarf_scheduler import LIST_ASTRO_DIR
@@ -255,15 +290,16 @@ class AstroDwarfSchedulerApp(tk.Tk):
             # result is a tuple: (refresh_list, cleanup)
             if isinstance(result, tuple) and callable(result[0]):
                 self.edit_sessions_refresh = result[0]
+
         edit_sessions_tab_wrapper()
 
         # Bind tab change event to refresh file lists
         def on_tab_changed(event):
             tab = event.widget.tab(event.widget.index('current'))['text']
-            if tab == 'Edit Sessions':
-                if self.edit_sessions_refresh:
-                    self.edit_sessions_refresh()
-            elif tab == 'Session Overview':
+            #if tab == 'Edit Sessions':
+            #    if self.edit_sessions_refresh:
+            #        self.edit_sessions_refresh()
+            if tab == 'Session Overview':
                 if self.overview_refresh:
                     self.overview_refresh()
             # Update Exposure and Gain fields when Create Session tab is selected
@@ -271,6 +307,23 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 create_session.update_exposure_gain_fields(self.settings_vars)
 
         self.tab_control.bind('<<NotebookTabChanged>>', on_tab_changed)
+
+    def reset_total_runtime(self):
+        self.total_session_runtime = 0
+        self.session_runtime = 0
+        self.session_start_time = 0
+
+    def add_to_total_runtime(self, session_seconds):
+        if not hasattr(self, 'total_session_runtime'):
+            self.total_session_runtime = 0
+        self.total_session_runtime += session_seconds
+
+    def set_scheduler_buttons_state(self, state):
+        """Enable or disable the unlock, polar, and eq buttons on the Scheduler tab."""
+        self.unlock_button.config(state=state)
+        self.polar_button.config(state=state)
+        self.calibrate_button.config(state=state)
+        self.eq_button.config(state=state)
 
     # Function to get the exposure time from settings_vars
     def get_exposure_time(self, settings_vars):
@@ -511,6 +564,16 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.labelConfig = tk.Label(self.tab_main, text="Configuration", font=("Arial", 12))
         self.labelConfig.pack(anchor="w", padx=10, pady=10)
 
+        # --- Video Preview Frame (top right) ---
+        preview_frame = tk.Frame(self.tab_main, bd=1, relief="solid")
+        preview_frame.place(relx=1.0, x=-20, y=80, anchor="ne", width=220, height=123, bordermode="outside")  # Top right, moved down by 50px
+        preview_frame.pack_propagate(False)
+        self.video_canvas = tk.Label(preview_frame, text="No video stream.")
+        self.video_canvas.pack(fill="both", expand=True)
+        self.video_stream_url = f"http://{DWARF_IP}:8092/mainstream"
+        self._stop_video_stream = False
+        self.start_video_preview()
+
         # Checkbox for "Multiple" and related widgets in a grid for alignment
         multiple_frame = tk.Frame(self.tab_main)
         multiple_frame.pack(anchor="w", padx=10, pady=5, fill="x")
@@ -655,9 +718,17 @@ class AstroDwarfSchedulerApp(tk.Tk):
             lbl = tk.Label(summary_frame, text=f" {folder}: {count}", fg=color, font=("Arial", 10))
             lbl.pack(side="left")
             self.session_count_labels[folder] = lbl
+
         # Clear Log button (right)
         clear_log_btn = tk.Button(bottom_frame, text="Clear Log", command=self.clear_log_output)
         clear_log_btn.pack(side="right", padx=0)
+
+        # Skip Time Checks checkbox (right, next to clear log)
+        self.skip_time_checks_var = tk.BooleanVar(value=self.skip_time_checks)
+        def on_skip_time_checks_changed():
+            self.skip_time_checks = self.skip_time_checks_var.get()
+        skip_time_checks_cb = tk.Checkbutton(bottom_frame, text="Skip Time Checks", variable=self.skip_time_checks_var, command=on_skip_time_checks_changed)
+        skip_time_checks_cb.pack(side="right", padx=10)
 
         # Add a method to update the counts (can be called after file changes)
         def update_session_counts():
@@ -724,16 +795,16 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def start_scheduler(self):
         self.disable_controls()
         if not self.scheduler_running:
+            self.log("Astro_Dwarf_Scheduler is starting...")
             self.scheduler_running = True
             self.scheduler_stop_event.clear()
             self.start_logHandler()
-            self.after(0, lambda: self.start_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.stop_button.config(state=tk.NORMAL))
-            self.after(0, lambda: self.unlock_button.config(state=tk.NORMAL))
-            self.after(0, lambda: self.eq_button.config(state=tk.NORMAL))
-            self.after(0, lambda: self.polar_button.config(state=tk.NORMAL))
-            self.after(0, lambda: self.calibrate_button.config(state=tk.NORMAL))
-            self.after(0, lambda: self.log("Astro_Dwarf_Scheduler is starting..."))
+            self.start_button.config(state=tk.DISABLED)
+            self.stop_button.config(state=tk.NORMAL)
+            self.unlock_button.config(state=tk.NORMAL)
+            self.eq_button.config(state=tk.NORMAL)
+            self.polar_button.config(state=tk.NORMAL)
+            self.calibrate_button.config(state=tk.NORMAL)
             self.scheduler_start_time = datetime.now()  # Track when the scheduler starts
             # Only start if not already running
             if not hasattr(self, 'scheduler_thread') or not self.scheduler_thread.is_alive():
@@ -749,26 +820,26 @@ class AstroDwarfSchedulerApp(tk.Tk):
         if self.scheduler_running:
             self.scheduler_running = False
             self.scheduler_stop_event.set()
-            self.after(0, lambda: self.log("Scheduler is waiting for the process to stop."))
+            self.log("Scheduler is waiting for the process to stop.")
 
             # Update UI immediately
-            self.after(0, lambda: self.start_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.unlock_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.eq_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.polar_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.calibrate_button.config(state=tk.DISABLED))
+            self.start_button.config(state=tk.DISABLED)
+            self.stop_button.config(state=tk.DISABLED)
+            self.unlock_button.config(state=tk.DISABLED)
+            self.eq_button.config(state=tk.DISABLED)
+            self.polar_button.config(state=tk.DISABLED)
+            self.calibrate_button.config(state=tk.DISABLED)
 
             # Wait for thread to finish with timeout
             self.verifyCountdown(10)  # Reduced timeout
         else:
-            self.after(0, lambda: self.start_button.config(state=tk.NORMAL))
-            self.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.unlock_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.eq_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.polar_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.calibrate_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.log("Scheduler is stopping..."))
+            self.start_button.config(state=tk.NORMAL)
+            self.stop_button.config(state=tk.DISABLED)
+            self.unlock_button.config(state=tk.DISABLED)
+            self.eq_button.config(state=tk.DISABLED)
+            self.polar_button.config(state=tk.DISABLED)
+            self.calibrate_button.config(state=tk.DISABLED) 
+            self.log("Scheduler is stopping...")
             self.enable_controls()
 
         # Hide session info when scheduler stops
@@ -821,13 +892,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_stopped = True
             self.enable_controls()
 
-    def toggle_scheduler_buttons_state(self, state):
-        # Toggle the state of the scheduler buttons only if running from UI
-        self.after(0, lambda: self.start_button.config(state=state))
-        self.after(0, lambda: self.eq_button.config(state=state))
-        self.after(0, lambda: self.polar_button.config(state=state))
-        self.after(0, lambda: self.calibrate_button.config(state=state))
-
     def run_scheduler(self):
         try:
             self.scheduler_stopped = False
@@ -848,7 +912,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     self.session_running = True  # Mark session as running
 
                     session_start = datetime.now()
-                    sessions_processed = check_and_execute_commands(self, stop_event=self.scheduler_stop_event)
+                    sessions_processed = check_and_execute_commands(self, stop_event=self.scheduler_stop_event, skip_time_checks=self.skip_time_checks)
                     session_end = datetime.now()
 
                     if sessions_processed:
@@ -984,7 +1048,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         try:
 
             # Session initialization
-            self.after(0, lambda: self.log("######################"))
+            self.after(0, lambda: self.log("Starting Calibration process..."))
             continue_action = perform_time()
             verify_action(continue_action, "step_0")
 
@@ -995,39 +1059,20 @@ class AstroDwarfSchedulerApp(tk.Tk):
             wait_after = 5
             wait_before = 5
 
-            self.after(0, lambda: self.log("Processing Calibration"))
-            self.after(0, lambda: self.log("    Set Exposure to 1s"))
-            continue_action = perform_update_camera_setting("exposure", "1")
-            verify_action(continue_action, "step_2")
-
-            self.after(0, lambda: self.log("    Set Gain to 80"))
-            continue_action = perform_update_camera_setting("gain", "80")
-            verify_action(continue_action, "step_3")
-            self.after(0, lambda: self.log("    Set IR Filter"))
-            continue_action = perform_update_camera_setting("IR", "1")
-            verify_action(continue_action, "step_4")
-
-            self.after(0, lambda: self.log("    Set Binning to 4k"))    
-            continue_action = perform_update_camera_setting("binning", "0")
-            verify_action(continue_action, "step_5")
-            
-            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds", level="warning"))
-            time.sleep(wait_before)
-
             continue_action = perform_stop_goto()
             verify_action(continue_action, "step_6")
-            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds", level="warning"))
+            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds"))
             time.sleep(wait_before)
 
             self.after(0, lambda: self.log("Starting Calibration"))
-            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds", level="warning"))
+            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds"))
             time.sleep(wait_before)
             continue_action = perform_calibration()
             verify_action(continue_action, "step_7")
-            self.after(0, lambda: self.log(f"Waiting for {wait_after} seconds", level="warning"))
+            self.after(0, lambda: self.log(f"Waiting for {wait_after} seconds"))
             time.sleep(wait_after)
             continue_action = perform_stop_goto()
-            self.after(0, lambda: self.log(f"Waiting for {wait_after} seconds", level="warning"))
+            self.after(0, lambda: self.log(f"Waiting for {wait_after} seconds"))
             time.sleep(wait_after)
             continue_action = perform_calibration()
 
@@ -1097,18 +1142,41 @@ class AstroDwarfSchedulerApp(tk.Tk):
                         with open(next_session_path, 'r') as f:
                             session_data = json.loads(f.read())
 
-                        # Check if a session is currently running
-                        if getattr(self, 'session_running', False):
-                            # Track the last session file to reset timer if a new file loads
-                            if not hasattr(self, 'last_session_path') or self.last_session_path != next_session_path:
-                                self.session_start_time = datetime.now()
-                                self.last_session_path = next_session_path
+                        # Always check for up next countdown if scheduler is running
+                        # Track the last session file to reset timer if a new file loads
+                        if not hasattr(self, 'last_session_path') or self.last_session_path != next_session_path:
+                            self.session_start_time = datetime.now()
+                            self.last_session_path = next_session_path
 
-                            if not hasattr(self, 'session_start_time'):
-                                self.session_start_time = datetime.now()
+                        if not hasattr(self, 'session_start_time'):
+                            self.session_start_time = datetime.now()
 
+                        # Get scheduled date/time from session file
+                        id_command = session_data.get('command', {}).get('id_command', {})
+                        goto_manual = session_data.get('command', {}).get('goto_manual', {})
+                        scheduled_date = id_command.get('date', None)
+                        scheduled_time = id_command.get('time', None)
+                        scheduled_target = goto_manual.get('target', 'Unknown')
+                        show_countdown = False
+                        countdown_str = ''
+                        if scheduled_date and scheduled_time:
+                            try:
+                                scheduled_dt = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
+                                now = datetime.now()
+                                if scheduled_dt > now:
+                                    show_countdown = True
+                                    countdown = scheduled_dt - now
+                                    countdown_str = str(countdown).split('.')[0]
+                            except Exception:
+                                pass
+
+                        if show_countdown:
+                            self.session_info_label.config(
+                                text=f"Up next: {scheduled_target} at {scheduled_date} {scheduled_time} (starts in {countdown_str})",
+                                fg="#0078d7"
+                            )
+                        else:
                             estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
-                            
                             # Ensure self.session_start_time is a datetime object
                             if not isinstance(self.session_start_time, datetime):
                                 self.session_start_time = datetime.now()

@@ -27,7 +27,6 @@ from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_pwd
 import dwarf_python_api.get_config_data
 
 import dwarf_python_api.lib.my_logger as log
-from tabs.result_session import analyze_files
 
 # Directories
 CONFIG_DEFAULT = "Default"
@@ -267,10 +266,13 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                 id_command = command_data.get('command', {}).get('id_command', {})
                 scheduled_date = id_command.get('date', '')
                 scheduled_time = id_command.get('time', '')
-                
+
+                # Get target name or use filename
+                target = command_data.get('goto_manual', {}).get('target', filename)
+
                 # Check if we should skip time checks
                 if skip_time_checks:
-                    log.notice(f"Skipping time check for {filename} - executing immediately")
+                    log.notice(f"Skipping time check for {target} - executing immediately")
                     time_ready = True
                 else:
                     # Check if it's time to execute
@@ -282,19 +284,19 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                             
                             if not time_ready:
                                 time_diff = scheduled_datetime - current_time
-                                log.debug(f"Session {filename} scheduled for {scheduled_datetime}, waiting {time_diff}")
+                                log.debug(f"Session {target} scheduled for {scheduled_datetime}, waiting {time_diff}")
                         except ValueError as e:
-                            log.warning(f"Invalid date/time format in {filename}: {e}")
+                            log.warning(f"Invalid date/time format in {target}: {e}")
                             continue
                     else:
-                        log.warning(f"Missing date/time in {filename}")
+                        log.warning(f"Missing date/time in {target}")
                         continue
                 
                 if time_ready:
-                    if __name__ != "__main__":
-                        self.toggle_scheduler_buttons_state("disabled")
+                    #if __name__ != "__main__":
+                        #self.toggle_scheduler_buttons_state(state="disabled")
     
-                    log.notice(f"Executing session: {filename}")
+                    log.notice(f"Executing session: {target}")
                     
                     # Move to Current directory
                     current_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Current", filename)
@@ -382,7 +384,7 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         
                     except Exception as e:
                         # Session failed
-                        log.error(f"Session {filename} failed: {e}")
+                        log.error(f"Session {target} failed: {e}")
                         
                         id_command['process'] = 'error'
                         id_command['result'] = False
@@ -410,8 +412,8 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         
                         sessions_processed = True
     
-                        if __name__ != "__main__":
-                            self.toggle_scheduler_buttons_state("normal")
+                        #if __name__ != "__main__":
+                            #self.toggle_scheduler_buttons_state(state="normal")
 
                     # Only process one session at a time                    
                     break

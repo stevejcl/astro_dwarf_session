@@ -172,7 +172,8 @@ def update_process_status(program, status, result=None, message=None, nb_try=Non
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if status == "pending":
         command['starting_date'] = current_datetime
-    command['processed_date'] = current_datetime
+    if status == "done":
+        command['processed_date'] = current_datetime
     return program  # Return the updated entire program object
 
 def retry_procedure(program, max_retries=3, stop_event=None):
@@ -299,13 +300,15 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                     current_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Current", filename)
                     os.makedirs(os.path.dirname(current_path), exist_ok=True)
                     shutil.move(filepath, current_path)
-                    
+
                     # Execute the session
                     try:
                         # Update session status
                         id_command['process'] = 'running'
                         id_command['result'] = False
                         id_command['message'] = 'Session started'
+
+                        update_process_status(command_data, 'pending')
 
                         # Save updated status
                         with open(current_path, 'w') as f:

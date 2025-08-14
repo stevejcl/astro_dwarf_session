@@ -312,7 +312,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             count = int(settings_vars["id_command"]["count"])
 
             # Initialise wait time - manual adjustment
-            wait_time = 30 if count < 1 else 70
+            wait_time = 0
 
             if settings_vars["eq_solving"]:
                 # wait time actions
@@ -340,7 +340,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 wait_time += int(settings_vars.get("wait_after_target", 0))
 
             # wait time setup camera
-            wait_time += 15
             wait_time += int(settings_vars.get("wait_after_camera", 0))
 
             if not isinstance(self.session_start_time, datetime):
@@ -1121,7 +1120,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                             live_total_seconds = int(self.total_session_runtime + this_session_runtime.total_seconds())
                             total_runtime_td = timedelta(seconds=live_total_seconds)
                             total_runtime_str = str(total_runtime_td).split('.')[0]
-                            self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} - Estimated runtime: {estimated_runtime} - Total runtime: {total_runtime_str}", fg="#3F3F63")
+                            self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} / {estimated_runtime} - Total runtime: {total_runtime_str}", fg="#26447A")
 
                     except Exception as e:
                        self.session_info_label.config(text=f"Error reading next session. {e}")

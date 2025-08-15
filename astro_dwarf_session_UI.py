@@ -200,39 +200,34 @@ class AstroDwarfSchedulerApp(tk.Tk):
             return
 
         def video_stream_worker():
-            last_frame_time = 0
             while not getattr(self, '_stop_video_stream', False):
                 try:
-                    stream = requests.get(self.video_stream_url, stream=True, timeout=10)
+                    # Grab a single frame from MJPEG stream
+                    response = requests.get(self.video_stream_url, stream=True, timeout=10)
                     bytes_data = b""
-                    last_update = 0
-                    for chunk in stream.iter_content(chunk_size=1024):
+                    frame_found = False
+                    for chunk in response.iter_content(chunk_size=1024):
                         bytes_data += chunk
                         a = bytes_data.find(b'\xff\xd8')
                         b = bytes_data.find(b'\xff\xd9')
                         if a != -1 and b != -1:
                             jpg = bytes_data[a:b+2]
-                            bytes_data = bytes_data[b+2:]
                             try:
+                                from PIL import Image, ImageTk
+                                import io
                                 image = Image.open(io.BytesIO(jpg)).resize((220, 140))
                                 photo = ImageTk.PhotoImage(image)
-                                now = time.time()
-                                if now - last_update > 0.3:
-                                    self.after(0, self.update_video_canvas, photo)
-                                    last_update = now
-                                    last_frame_time = now
+                                self.after(0, self.update_video_canvas, photo)
+                                frame_found = True
                             except Exception:
-                                pass
-                        # If no frame received for 20 seconds, clear preview
-                        if last_frame_time and time.time() - last_frame_time > 20:
-                            self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
-                            last_frame_time = 0
-                        if getattr(self, '_stop_video_stream', False):
+                                self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
                             break
-                    # If we got here, stream ended or stopped, retry after short delay
+                    if not frame_found:
+                        self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
                 except Exception:
+                    self.log("Video stream stopped.")
                     self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
-                time.sleep(5)  # Wait 5 seconds before retrying
+                time.sleep(5)  # Wait 5 seconds before grabbing next frame
 
         threading.Thread(target=video_stream_worker, daemon=True).start()
 

@@ -12,6 +12,7 @@ import signal
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 import json
 from datetime import datetime, timedelta
+import traceback
 
 # import data for config.py
 import dwarf_python_api.get_config_data
@@ -200,40 +201,41 @@ class AstroDwarfSchedulerApp(tk.Tk):
             return
 
         def video_stream_worker():
+            last_frame_time = 0
             while not getattr(self, '_stop_video_stream', False):
                 try:
-                    # Grab a single frame from MJPEG stream
-                    response = requests.get(self.video_stream_url, stream=True, timeout=10)
+                    stream = requests.get(self.video_stream_url, stream=True, timeout=60)
                     bytes_data = b""
-                    frame_found = False
-                    for chunk in response.iter_content(chunk_size=1024):
+                    last_update = 0
+                    for chunk in stream.iter_content(chunk_size=1024):
                         bytes_data += chunk
                         a = bytes_data.find(b'\xff\xd8')
                         b = bytes_data.find(b'\xff\xd9')
                         if a != -1 and b != -1:
                             jpg = bytes_data[a:b+2]
+                            bytes_data = bytes_data[b+2:]
                             try:
-                                from PIL import Image, ImageTk
-                                import io
                                 image = Image.open(io.BytesIO(jpg)).resize((220, 140))
                                 photo = ImageTk.PhotoImage(image)
-                                self.after(0, self.update_video_canvas, photo)
-                                frame_found = True
+                                now = time.time()
+                                if now - last_update > 0.3:
+                                    self.after(0, self.update_video_canvas, photo)
+                                    last_update = now
                             except Exception:
-                                self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
+                                pass
+                        if getattr(self, '_stop_video_stream', False):
                             break
-                    if not frame_found:
-                        self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
+                    # If we got here, stream ended or stopped, retry after short delay
                 except Exception:
-                    self.log("Video stream stopped.")
                     self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
-                time.sleep(5)  # Wait 5 seconds before grabbing next frame
+                time.sleep(3)  # Wait 3 seconds before retrying
 
         threading.Thread(target=video_stream_worker, daemon=True).start()
 
     def update_video_canvas(self, photo):
         self.video_canvas.config(image=photo)
-        self.video_canvas.image = photo
+        self._video_photo = photo  # Keep a reference to avoid garbage collection
+        
     def __init__(self):
         super().__init__()
         self.title("Astro Dwarf Scheduler")
@@ -387,9 +389,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 wait_time += int(settings_vars.get("wait_before", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
             if settings_vars["calibration"]:
+                dwarf_id = 2  # Ensure dwarf_id is always defined
+                data_config = dwarf_python_api.get_config_data.get_config_data()
+                if data_config.get("dwarf_id"):
+                    dwarf_id = data_config['dwarf_id']
                 # wait between actions and time actions
                 wait_time += 10 + 60
-                wait_time += 90 if settings_vars["id_command"]["dwarf"] == "D3" else 0
+                wait_time += 90 if dwarf_id == "3" else 0
                 wait_time += int(settings_vars.get("wait_before", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
             if settings_vars["goto_solar"] or settings_vars["goto_manual"]:
@@ -1163,6 +1169,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                         scheduled_target = goto_manual.get('target', 'Unknown')
                         show_countdown = False
                         countdown_str = ''
+
                         if scheduled_date and scheduled_time:
                             try:
                                 scheduled_dt = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
@@ -1195,7 +1202,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                             self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} / {estimated_runtime} - Total runtime: {total_runtime_str}", fg="#26447A")
 
                     except Exception as e:
-                       self.session_info_label.config(text=f"Error reading next session. {e}")
+                       self.session_info_label.config(text=f"Error reading next session. {e}\n{traceback.format_exc()}")
                 else:
                     self.session_info_label.config(text="No sessions scheduled - Create sessions in 'Create Session' tab", fg="purple")
             else:

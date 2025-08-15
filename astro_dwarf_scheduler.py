@@ -22,6 +22,7 @@ from dwarf_ble_connect.lib.connect_direct_bluetooth import connect_ble_dwarf_win
 from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_psd
 from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_ssid
 from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_pwd
+from tabs.result_session import analyze_files
 
 # import data for config.py
 import dwarf_python_api.get_config_data
@@ -362,9 +363,14 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                             setup_camera = command_data.get('command', {}).get('setup_camera', {})
                             if setup_camera.get('do_action', False):
                                 id_command['ir_actual'] = setup_camera.get('ircut', 'Unknown')
-                        
+
+                        # Rename the session filename date-time with the session date-time
+                        dt_str = id_command['starting_date'].replace(':', '-').replace(' ', '-')
+                        new_filename_base = re.sub(r'^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-', '', filename)
+                        new_filename = f"{dt_str}_{new_filename_base}"
+
                         # Move to Done directory
-                        done_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Done", filename)
+                        done_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Done", new_filename)
                         os.makedirs(os.path.dirname(done_path), exist_ok=True)
 
                         update_process_status(command_data, 'done')
@@ -376,9 +382,8 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         
                         sessions_processed = True
 
-                        log.success(f"Session {filename} completed successfully")
+                        log.success(f"Session {new_filename} completed successfully")
 
-                        from tabs.result_session import analyze_files
                         analyze_files()
 
                         

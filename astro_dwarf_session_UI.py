@@ -203,7 +203,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             last_frame_time = 0
             while not getattr(self, '_stop_video_stream', False):
                 try:
-                    stream = requests.get(self.video_stream_url, stream=True, timeout=2)
+                    stream = requests.get(self.video_stream_url, stream=True, timeout=4)
                     bytes_data = b""
                     last_update = 0
                     for chunk in stream.iter_content(chunk_size=1024):
@@ -223,8 +223,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
                                     last_frame_time = now
                             except Exception:
                                 pass
-                        # If no frame received for 3 seconds, clear preview
-                        if last_frame_time and time.time() - last_frame_time > 3:
+                        # If no frame received for 4 seconds, clear preview
+                        if last_frame_time and time.time() - last_frame_time > 4:
                             self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
                             last_frame_time = 0
                         if getattr(self, '_stop_video_stream', False):
@@ -232,7 +232,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     # If we got here, stream ended or stopped, retry after short delay
                 except Exception:
                     self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
-                time.sleep(3)  # Wait 3 seconds before retrying
+                time.sleep(5)  # Wait 5 seconds before retrying
 
         threading.Thread(target=video_stream_worker, daemon=True).start()
 

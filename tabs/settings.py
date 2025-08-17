@@ -8,6 +8,9 @@ from geopy.geocoders import Nominatim
 from geopy.geocoders import Photon
 from timezonefinder import TimezoneFinder
 from geopy.exc import GeocoderInsufficientPrivileges
+from astro_dwarf_scheduler import BASE_DIR
+
+import sys
 
 # Import DWARF_IP from config.py
 try:
@@ -15,7 +18,18 @@ try:
 except ImportError:
     DWARF_IP = "192.168.88.1"  # Default fallback value
 
-CONFIG_INI_FILE = 'config.ini'
+import os, sys
+def get_config_ini_path():
+    ini_name = 'config.ini'
+    if sys.platform == 'win32':
+        appdata = os.environ.get('APPDATA')
+        if appdata:
+            ini_name = os.path.join(appdata, 'AstroDwarfScheduler', 'config.ini')
+            os.makedirs(os.path.dirname(ini_name), exist_ok=True)
+            return ini_name
+    return os.path.join(BASE_DIR, ini_name)
+
+CONFIG_INI_FILE = get_config_ini_path()
 
 def get_lat_long_and_timezone(address, agent = 1):
     try:
@@ -27,37 +41,32 @@ def get_lat_long_and_timezone(address, agent = 1):
 
         #Get location based on the address
         location = geolocator.geocode(address)
-
         if not location:
             return None, None, None
-
-        latitude = location.latitude
-        longitude = location.longitude
-
-        #Get the timezone using TimezoneFinder
+        latitude = getattr(location, 'latitude', None)
+        longitude = getattr(location, 'longitude', None)
+        if latitude is None or longitude is None:
+            return None, None, None
+        # Get the timezone using TimezoneFinder
         tf = TimezoneFinder()
         timezone_str = tf.timezone_at(lat=latitude, lng=longitude)
-
         return latitude, longitude, timezone_str
 
     except GeocoderInsufficientPrivileges as e:
         print(f"Error: {e} - You do not have permission to access this resource.")
-
         # Attempt to switch agent and retry
         if agent == 1:
             print("Switching to Photon geocoder for the next attempt.")
-            return get_location_data(address, agent=2)  # Retry with the second agent
+            return get_lat_long_and_timezone(address, agent=2)  # Retry with the second agent
         else:
             messagebox.showinfo("Error", "Can't found your location data!")
             return None, None, None
-
     except Exception as e:
         print(f"Error: {e}")
-
         # Attempt to switch agent and retry
         if agent == 1:
             print("Switching to Photon geocoder for the next attempt.")
-            return get_location_data(address, agent=2)  # Retry with the second agent
+            return get_lat_long_and_timezone(address, agent=2)  # Retry with the second agent
         else:
             messagebox.showinfo("Error", "Can't found your location data!")
             return None, None, None
@@ -83,31 +92,27 @@ def open_link(url):
 # Load and save configuration settings from config.ini
 def load_config():
     config = configparser.ConfigParser()
-    config.read(CONFIG_INI_FILE)
+    config_ini_path = CONFIG_INI_FILE
+    config.read(config_ini_path)
     config_data = config['CONFIG'] if 'CONFIG' in config else {}
-    
     # If DWARF_IP is not in config.ini, use the value from config.py
     if 'dwarf_ip' not in config_data:
         config_data['dwarf_ip'] = DWARF_IP
-    
     return config_data
 
 def save_config(config_data):
     # Read the existing config file to preserve all sections
     config = configparser.ConfigParser()
-    config.read(CONFIG_INI_FILE)
-    
+    config_ini_path = CONFIG_INI_FILE
+    config.read(config_ini_path)
     # Update only the CONFIG section with new values
     if 'CONFIG' not in config:
         config.add_section('CONFIG')
-    
     for key, value in config_data.items():
         config.set('CONFIG', key, value)
-    
     # Write back to file, preserving all sections
-    with open(CONFIG_INI_FILE, 'w') as configfile:
+    with open(config_ini_path, 'w') as configfile:
         config.write(configfile)
-    
     # Update config.py with the new DWARF_IP value if it changed
     if 'dwarf_ip' in config_data:   
         update_config_py_dwarf_ip(config_data['dwarf_ip'])

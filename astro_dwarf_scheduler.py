@@ -31,7 +31,19 @@ import dwarf_python_api.lib.my_logger as log
 
 # Directories
 CONFIG_DEFAULT = "Default"
-BASE_DIR = os.path.abspath(".")
+
+def get_writable_base_dir():
+    import sys, os
+    base_dir = os.path.abspath(".")
+    if sys.platform == "win32":
+        # If running from Program Files or other protected location, use AppData
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            base_dir = os.path.join(appdata, "AstroDwarfScheduler")
+            os.makedirs(base_dir, exist_ok=True)
+    return base_dir, sys.platform
+
+BASE_DIR, PLATFORM = get_writable_base_dir()
 DEVICES_DIR = os.path.join(BASE_DIR, "Devices_Sessions")
 SESSIONS_DIR =  os.path.join(BASE_DIR, 'Astro_Sessions')
 
@@ -52,6 +64,57 @@ LIST_ASTRO_DIR = {
     "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
     "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
 }
+
+def ensure_directory_structure():
+    """Ensure all required directories exist"""
+    # Copy default directories to BASE_DIR on Windows if they don't exist
+    if PLATFORM == "win32":
+        # Define source directories (current working directory)
+        source_devices = "Devices_Sessions"
+        source_sessions = "Astro_Sessions"
+        
+        # Copy Devices_Sessions if it exists in current dir but not in BASE_DIR
+        if os.path.exists(source_devices) and not os.path.exists(DEVICES_DIR):
+            try:
+                shutil.copytree(source_devices, DEVICES_DIR)
+                print(f"Copied {source_devices} to {DEVICES_DIR}")
+            except Exception as e:
+                print(f"Error copying {source_devices}: {e}")
+        
+        # Copy Astro_Sessions if it exists in current dir but not in BASE_DIR
+        if os.path.exists(source_sessions) and not os.path.exists(SESSIONS_DIR):
+            try:
+                shutil.copytree(source_sessions, SESSIONS_DIR)
+                print(f"Copied {source_sessions} to {SESSIONS_DIR}")
+            except Exception as e:
+                print(f"Error copying {source_sessions}: {e}")
+
+        if os.path.exists('config.py') and not os.path.exists(os.path.join(BASE_DIR, 'config.py')):
+            # Copy config.py to BASE_DIR if it exists in current dir
+            try:
+                shutil.copy('config.py', os.path.join(BASE_DIR, 'config.py'))
+                print(f"'config.py' successfully copied to '{BASE_DIR}'.")
+            except Exception as e:
+                print(f"Error copying 'config.py': {e}")
+
+        if os.path.exists('config.ini') and not os.path.exists(os.path.join(BASE_DIR, 'config.ini')):
+            # Copy config.ini to BASE_DIR if it exists in current dir
+            try:
+                shutil.copy('config.ini', os.path.join(BASE_DIR, 'config.ini'))
+                print(f"'config.ini' successfully copied to '{BASE_DIR}'.")
+            except Exception as e:
+                print(f"Error copying 'config.ini': {e}")
+    else:
+        # Create main directories
+        os.makedirs(DEVICES_DIR, exist_ok=True)
+        os.makedirs(SESSIONS_DIR, exist_ok=True)
+
+        # Create all session subdirectories
+        for dir_path in LIST_ASTRO_DIR.values():
+            os.makedirs(dir_path, exist_ok=True)
+
+# Ensure all directories exist
+ensure_directory_structure()
 
 import requests
 
@@ -75,6 +138,8 @@ def setup_new_config(config_name):
             "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
             "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
         }
+        # Ensure directories exist after updating configuration
+        ensure_directory_structure()
 
     else:
         new_config_file = f"config_{config_name}.py"
@@ -101,17 +166,21 @@ def setup_new_config(config_name):
             except Exception as e:
                 print(f"An error occurred: {e}")
 
-            # get Original log_file
+            # get Original LOG_FILE
             data_config = dwarf_python_api.get_config_data.get_config_data("config.py")
-            if data_config['log_file'] == "False":
+            if data_config['LOG_FILE'] == "False":
                 log_file = None
             else: 
-                log_file = "app.log" if data_config['log_file'] == "" else data_config['log_file']
+                log_file = "astro_session.log" if data_config['LOG_FILE'] == "" else data_config['LOG_FILE']
 
             if log_file is not None:
-                name, ext = log_file.rsplit(".", 1)
-                new_log_file = f"{name}_{config_name}.{ext}"
-                dwarf_python_api.get_config_data.update_config_data( "log_file", new_log_file, True)
+                # Extract just the filename without path for processing
+                log_filename = os.path.basename(log_file)
+                name, ext = log_filename.rsplit(".", 1)
+                new_log_filename = f"{name}_{config_name}.{ext}"
+                # Add BASE_DIR to the log file path
+                new_log_file = os.path.join(BASE_DIR, new_log_filename)
+                dwarf_python_api.get_config_data.update_config_data( "LOG_FILE", new_log_file, True)
 
         config_dir = os.path.join(DEVICES_DIR, config_name)
         SESSIONS_DIR = os.path.join(config_dir, 'Astro_Sessions')
@@ -124,6 +193,8 @@ def setup_new_config(config_name):
             "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
             "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
         }
+        # Ensure directories exist after updating configuration
+        ensure_directory_structure()
 
     # update log
     log.update_log_file()

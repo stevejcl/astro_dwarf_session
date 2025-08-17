@@ -23,3 +23,5 @@ inputimeout
 pytz
 
 pillow
+
+cx_Freeze

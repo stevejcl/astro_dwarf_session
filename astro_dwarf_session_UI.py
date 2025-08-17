@@ -27,7 +27,12 @@ from tabs import overview_session
 from tabs import result_session
 
 # import directories
-from astro_dwarf_scheduler import CONFIG_DEFAULT, BASE_DIR, DEVICES_DIR, LIST_ASTRO_DIR_DEFAULT
+from astro_dwarf_scheduler import CONFIG_DEFAULT, BASE_DIR, LIST_ASTRO_DIR_DEFAULT
+import os
+
+# Devices and sessions directories now use BASE_DIR from scheduler (AppData-aware)
+DEVICES_DIR = os.path.join(BASE_DIR, "Devices_Sessions")
+DEVICES_FILE = os.path.join(DEVICES_DIR, 'list_devices.txt')
 
 # Devices list file
 DEVICES_FILE = os.path.join(DEVICES_DIR, 'list_devices.txt')

@@ -11,9 +11,12 @@ from stellarium_connection import StellariumConnection
 from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
 from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains, allowed_exposuresD3, allowed_gainsD3
-from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposures, allowed_wide_gains, allowed_wide_exposuresD3, allowed_wide_gainsD3
+from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposuresD3, allowed_wide_gainsD3
 import uuid
 import threading
+from astro_dwarf_scheduler import BASE_DIR
+import configparser
+import sys
 
 def list_available_names(instance):
     return [entry["name"] for entry in instance.values]
@@ -125,7 +128,7 @@ def create_mutually_exclusive_checkboxes(parent, var1, var2, var3, label1, label
 # Function to generate increasing UUID
 uuid_counter = 1
 
-SAVE_FOLDER = 'Astro_Sessions'
+SAVE_FOLDER = os.path.join(BASE_DIR, 'Astro_Sessions')
 
 def generate_uuid():
     file_uuid = uuid.uuid4()
@@ -1026,11 +1029,18 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
 
 def load_from_config():
     """Load the camera type from config.ini file"""
-    import configparser
-    import os
+    # Get the config file path using AppData logic for Windows compatibility
+    def get_config_ini_path():
+        ini_name = 'config.ini'
+        if sys.platform == 'win32':
+            appdata = os.environ.get('APPDATA')
+            if appdata:
+                ini_name = os.path.join(appdata, 'AstroDwarfScheduler', 'config.ini')
+                os.makedirs(os.path.dirname(ini_name), exist_ok=True)
+                return ini_name
+        return os.path.join(BASE_DIR, ini_name)
     
-    # Get the config file path (adjust path as needed for your project structure)
-    config_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.ini')
+    config_file = get_config_ini_path()
     
     config = configparser.ConfigParser()
     if os.path.exists(config_file):

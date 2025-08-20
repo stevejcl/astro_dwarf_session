@@ -2,7 +2,7 @@
 
 Astro Dwarf Scheduler is a tool designed to automate imaging sessions for Dwarf II and Dwarf III devices. It processes session files and executes them based on their scheduled time.
 
-<img width="640" height="676" alt="image" src="https://github.com/user-attachments/assets/244615ba-f901-4fab-8f4a-157cc71c05d4" />
+<img width="886" height="897" alt="image" src="https://github.com/user-attachments/assets/dc4cc700-e3f2-47b4-b328-fb54ca8f8b9c" />
 
 ## Features
 - Automates imaging sessions using JSON configuration files.

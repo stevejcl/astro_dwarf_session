@@ -197,11 +197,11 @@ def start_dwarf_session(program, type_dwarf = 2):
                 log.notice(f" To do => Astro Photo with these parameters")
                 log.notice(f"     exposure  => {exp_val}s")
                 log.notice(f"     gain  => {gain_val}")
-                log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
+                log.notice(f"     binning => {'4k' if binning_val == 0 else '2k'}")
                 if get_dwarf_id_str_val(dwarf_id) == "3":
-                    log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
+                    log.notice(f"     IR => {'VIS_FILTER' if IR_val == 0 else 'ASTRO_FILTER' if IR_val == 1 else 'DUAL_BAND'}")
                 else:
-                    log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
+                    log.notice(f"     IR  => {'IR_CUT' if IR_val== 0 else 'IR_PASS'}")
                 log.notice(f"     number of images  => {count_val}")
             else:
                 log.warning(f" Error in Settings => PHOTO : none settings found, task ignored!")

@@ -4,6 +4,7 @@ import json
 import shutil
 import time
 import subprocess
+import re
 
 from datetime import datetime, timedelta
 
@@ -21,6 +22,7 @@ from dwarf_ble_connect.lib.connect_direct_bluetooth import connect_ble_dwarf_win
 from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_psd
 from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_ssid
 from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_pwd
+from tabs.result_session import analyze_files
 
 # import data for config.py
 import dwarf_python_api.get_config_data
@@ -29,7 +31,19 @@ import dwarf_python_api.lib.my_logger as log
 
 # Directories
 CONFIG_DEFAULT = "Default"
-BASE_DIR = os.path.abspath(".")
+
+def get_writable_base_dir():
+    import sys, os
+    base_dir = os.path.abspath(".")
+    if sys.platform == "win32":
+        # If running from Program Files or other protected location, use AppData
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            base_dir = os.path.join(appdata, "AstroDwarfScheduler")
+            os.makedirs(base_dir, exist_ok=True)
+    return base_dir, sys.platform
+
+BASE_DIR, PLATFORM = get_writable_base_dir()
 DEVICES_DIR = os.path.join(BASE_DIR, "Devices_Sessions")
 SESSIONS_DIR =  os.path.join(BASE_DIR, 'Astro_Sessions')
 
@@ -50,6 +64,57 @@ LIST_ASTRO_DIR = {
     "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
     "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
 }
+
+def ensure_directory_structure():
+    """Ensure all required directories exist"""
+    # Copy default directories to BASE_DIR on Windows if they don't exist
+    if PLATFORM == "win32":
+        # Define source directories (current working directory)
+        source_devices = "Devices_Sessions"
+        source_sessions = "Astro_Sessions"
+        
+        # Copy Devices_Sessions if it exists in current dir but not in BASE_DIR
+        if os.path.exists(source_devices) and not os.path.exists(DEVICES_DIR):
+            try:
+                shutil.copytree(source_devices, DEVICES_DIR)
+                print(f"Copied {source_devices} to {DEVICES_DIR}")
+            except Exception as e:
+                print(f"Error copying {source_devices}: {e}")
+        
+        # Copy Astro_Sessions if it exists in current dir but not in BASE_DIR
+        if os.path.exists(source_sessions) and not os.path.exists(SESSIONS_DIR):
+            try:
+                shutil.copytree(source_sessions, SESSIONS_DIR)
+                print(f"Copied {source_sessions} to {SESSIONS_DIR}")
+            except Exception as e:
+                print(f"Error copying {source_sessions}: {e}")
+
+        if os.path.exists('config.py') and not os.path.exists(os.path.join(BASE_DIR, 'config.py')):
+            # Copy config.py to BASE_DIR if it exists in current dir
+            try:
+                shutil.copy('config.py', os.path.join(BASE_DIR, 'config.py'))
+                print(f"'config.py' successfully copied to '{BASE_DIR}'.")
+            except Exception as e:
+                print(f"Error copying 'config.py': {e}")
+
+        if os.path.exists('config.ini') and not os.path.exists(os.path.join(BASE_DIR, 'config.ini')):
+            # Copy config.ini to BASE_DIR if it exists in current dir
+            try:
+                shutil.copy('config.ini', os.path.join(BASE_DIR, 'config.ini'))
+                print(f"'config.ini' successfully copied to '{BASE_DIR}'.")
+            except Exception as e:
+                print(f"Error copying 'config.ini': {e}")
+    else:
+        # Create main directories
+        os.makedirs(DEVICES_DIR, exist_ok=True)
+        os.makedirs(SESSIONS_DIR, exist_ok=True)
+
+        # Create all session subdirectories
+        for dir_path in LIST_ASTRO_DIR.values():
+            os.makedirs(dir_path, exist_ok=True)
+
+# Ensure all directories exist
+ensure_directory_structure()
 
 import requests
 
@@ -73,6 +138,8 @@ def setup_new_config(config_name):
             "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
             "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
         }
+        # Ensure directories exist after updating configuration
+        ensure_directory_structure()
 
     else:
         new_config_file = f"config_{config_name}.py"
@@ -99,17 +166,21 @@ def setup_new_config(config_name):
             except Exception as e:
                 print(f"An error occurred: {e}")
 
-            # get Original log_file
+            # get Original LOG_FILE
             data_config = dwarf_python_api.get_config_data.get_config_data("config.py")
-            if data_config['log_file'] == "False":
+            if data_config['LOG_FILE'] == "False":
                 log_file = None
             else: 
-                log_file = "app.log" if data_config['log_file'] == "" else data_config['log_file']
+                log_file = "astro_session.log" if data_config['LOG_FILE'] == "" else data_config['LOG_FILE']
 
             if log_file is not None:
-                name, ext = log_file.rsplit(".", 1)
-                new_log_file = f"{name}_{config_name}.{ext}"
-                dwarf_python_api.get_config_data.update_config_data( "log_file", new_log_file, True)
+                # Extract just the filename without path for processing
+                log_filename = os.path.basename(log_file)
+                name, ext = log_filename.rsplit(".", 1)
+                new_log_filename = f"{name}_{config_name}.{ext}"
+                # Add BASE_DIR to the log file path
+                new_log_file = os.path.join(BASE_DIR, new_log_filename)
+                dwarf_python_api.get_config_data.update_config_data( "LOG_FILE", new_log_file, True)
 
         config_dir = os.path.join(DEVICES_DIR, config_name)
         SESSIONS_DIR = os.path.join(config_dir, 'Astro_Sessions')
@@ -122,6 +193,8 @@ def setup_new_config(config_name):
             "DONE_DIR": os.path.join(SESSIONS_DIR, 'Done'),
             "ERROR_DIR": os.path.join(SESSIONS_DIR, 'Error'),
         }
+        # Ensure directories exist after updating configuration
+        ensure_directory_structure()
 
     # update log
     log.update_log_file()
@@ -144,14 +217,6 @@ def save_json(filepath, data):
         log.error(f"error saving file: {filepath} - {e}")
         return False
 
-# Move the JSON file
-def move_file(source, destination):
-    try:
-        shutil.move(source, destination)
-    except Exception as e:
-        log.error(f"error moving file: {source} to {destination} - {e}")
-        return False
-
 # Check if the execution time of the command has been reached
 def is_time_to_execute(command):
     # Get current date and time
@@ -162,17 +227,6 @@ def is_time_to_execute(command):
     time_action = command.get('time',current_time)
     command_datetime = datetime.strptime(f"{date_action} {time_action}", "%Y-%m-%d %H:%M:%S")
     return datetime.now() >= command_datetime
-
-# Get the execution time for later processing
-def get_time_to_execute(current_datetime, command):
-    # Safely get 'date' and 'time' from the command, defaulting to now if missing
-    command_date = command.get('date', current_datetime.strftime("%Y-%m-%d"))
-    command_time = command.get('time', current_datetime.strftime("%H:%M:%S"))
-            
-    # Combine 'date' and 'time' into a single datetime object
-    command_datetime = datetime.strptime(f"{command_date} {command_time}", "%Y-%m-%d %H:%M:%S")
-
-    return command_datetime
 
 # Update the process status in the JSON file
 def update_process_status(program, status, result=None, message=None, nb_try=None, dwarf_id=None):
@@ -189,15 +243,18 @@ def update_process_status(program, status, result=None, message=None, nb_try=Non
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if status == "pending":
         command['starting_date'] = current_datetime
-    command['processed_date'] = current_datetime
+    if status == "done":
+        command['processed_date'] = current_datetime
     return program  # Return the updated entire program object
 
-def retry_procedure(program, max_retries =3):
+def retry_procedure(program, max_retries=3, stop_event=None):
     attempt = 0
     while attempt < max_retries:
+        if stop_event is not None and stop_event.is_set():
+            raise Exception("Session interrupted by user.")
         try:
             # Execute the session
-            start_dwarf_session(program['command'])
+            start_dwarf_session(program['command'], stop_event=stop_event)
             return attempt + 1
         except Exception as e:
             attempt += 1
@@ -213,133 +270,238 @@ def retry_procedure(program, max_retries =3):
 last_logged = {}  # Dictionary to track when each file was last logged
 last_hourly_log = {}  # Dictionary to track the last hourly log time for each filename
 
+
+# Helper to get JSON files sorted by date and time
+def get_json_files_sorted(directory):
+    files_with_datetime = []
+    for fname in os.listdir(directory):
+        if fname.endswith('.json'):
+            fpath = os.path.join(directory, fname)
+            try:
+                with open(fpath, 'r') as f:
+                    data = json.load(f)
+                id_command = data.get('command', {}).get('id_command', {})
+                date_str = id_command.get('date', '')
+                time_str = id_command.get('time', '')
+                # Combine date and time for sorting
+                datetime_str = f"{date_str} {time_str}"
+            except Exception:
+                datetime_str = ''
+            files_with_datetime.append((datetime_str, fname))
+    files_with_datetime.sort(key=lambda x: (x[0] == '', x[0]))
+    return [fname for datetime_str, fname in files_with_datetime]
+
 # Main function to check and execute the commands
-def check_and_execute_commands(askBluetooth = False):
-    global LIST_ASTRO_DIR
-    for filename in os.listdir(LIST_ASTRO_DIR["TODO_DIR"]):
-        filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
-        if filepath.endswith('.json'):
-            program = load_json(filepath)
-            if program is False:
-                return
+def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
+    """
+    Check for JSON command files and execute them based on their scheduled time.
+    
+    Args:
+        stop_event: Optional event to signal stopping
+        skip_time_checks: If True, ignore scheduled time and execute immediately
+    
+    Returns:
+        bool: True if any sessions were processed, False otherwise
+    """
+    sessions_processed = False
+    
+    try:
+        # Get all JSON files from ToDo directory
+        todo_files = []
+        if os.path.exists(LIST_ASTRO_DIR["TODO_DIR"]):
+            for filename in os.listdir(LIST_ASTRO_DIR["TODO_DIR"]):
+                if filename.endswith('.json'):
+                    todo_files.append(filename)
+        
+        if not todo_files:
+            return sessions_processed
+        
+        # Sort files naturally
+        def natural_sort_key(text):
+            return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', text)]
+        
+        todo_files.sort(key=lambda x: natural_sort_key(x))
+        
+        current_time = datetime.now()
+        
+        for filename in todo_files:
+            if stop_event and stop_event.is_set():
+                break
+                
+            filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
+            
+            try:
+                with open(filepath, 'r') as f:
+                    command_data = json.load(f)
+                
+                # Extract scheduled time
+                id_command = command_data.get('command', {}).get('id_command', {})
+                scheduled_date = id_command.get('date', '')
+                scheduled_time = id_command.get('time', '')
 
-            # Extract command info
-            command = program.get('command', {}).get('id_command')
+                # Get target name or use filename
+                target = command_data.get('goto_manual', {}).get('target', filename)
 
-            # ignore file if command or id_command doesn't exist
-            if not command:
-                log.error(f"Mandatory commands not found in file, the file {filename} is ignored")
-                # Move file to "Error" folder
-                current_filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
-                move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
-                log.notice("----------------------")
-                log.notice("----------------------")
-
-            # Ignore file if process exists and is different from 'wait' 
-            elif command.get('process') is not None and command.get('process') != 'wait':
-                log.warning(f"Process value is not 'wait', the file {filename} is ignored")
-                # Move file to "Error" folder
-                current_filepath = os.path.join(LIST_ASTRO_DIR["TODO_DIR"], filename)
-                move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
-                log.notice("----------------------")
-                log.notice("----------------------")
-            # Check if the execution time has been reached
-            elif is_time_to_execute(command) and command.get('process', 'wait') == 'wait':
-                log.notice("######################")
-                log.notice(f"Find File  {filename}, that is ready to execute")
-                log.debug(f"Executing command {command.get('uuid')}")
-
-                # Move to "Current" folder and update status
-                current_filepath = os.path.join(LIST_ASTRO_DIR["CURRENT_DIR"], filename)
-                program = update_process_status(program, 'pending')
-                save_json(filepath, program)
-                move_file(filepath, current_filepath)
-
-                # Remove from the logging dictionary as it's been executed
-                if filename in last_logged:
-                    del last_logged[filename]
-                if filename in last_hourly_log:
-                    del last_hourly_log[filename]
-
-                try:
-                    # Get The Dwarf Type
-                    data_config = dwarf_python_api.get_config_data.get_config_data()
-                    dwarf_id = "2"
-                    if data_config["dwarf_id"]:
-                        dwarf_id = data_config['dwarf_id']
-                    # Execute the session
-                    max_retries = int(program['command']['id_command'].get('max_retries', 3))
-                    nb_try = retry_procedure(program)
-
-                    # If successful, update process and result
-                    program = update_process_status(program, 'ended', True, "Action completed successfully.", nb_try, dwarf_id)
-                    save_json(current_filepath, program)
-
-                    # Move file to "Done" folder
-                    move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["DONE_DIR"], filename))
-
-                except Exception as e:
-                    # Handle errors and update process and result
-                    error_message = f"Error during execution: {e}"
-                    log.error(error_message)
-
-                    program = update_process_status(program, 'ended', False, error_message, max_retries, dwarf_id)
-                    save_json(current_filepath, program)
-
-                    # Move file to "Error" folder
-                    move_file(current_filepath, os.path.join(LIST_ASTRO_DIR["ERROR_DIR"], filename))
-                    log.notice("----------------------")
-                    log.notice("----------------------")
-                    if (askBluetooth and fn_wait_for_user_input(60, "An error occuring during last Action, do you want to reconnect to bluetooth or continue ?\nThe program will contine if you don't press CTRL-C within 60 seconds:" ))  == 1:
-                        log.notice('continuing ....')
-                    elif askBluetooth:
-                        start_connection(True)
-                    else:
-                        log.notice('continuing ....')
-                    pass
-
-            # Log Ignore time
-            elif command.get('process', 'wait') == 'wait':
-                # Get current date and time
-                current_datetime = datetime.now()
-                command_datetime = get_time_to_execute(current_datetime, command)
-
-                # If the file isn't ready, log it based on the time since the last log
-                if filename not in last_logged:
-                    # Log the first time
-                    log_command_status(filename, command_datetime, first_time=True)
-                    last_logged[filename] = current_datetime
-                    last_hourly_log[filename] = current_datetime  # Initialize hourly log
+                # Check if we should skip time checks
+                if skip_time_checks:
+                    log.notice(f"Skipping time check for {target} - executing immediately")
+                    time_ready = True
                 else:
-                    # Check for hourly log
-                    if current_datetime - last_hourly_log[filename] >= timedelta(hours=1):
-                        log_command_status(filename, command_datetime, interval="Hourly")
-                        last_hourly_log[filename] = current_datetime  # Update last hourly log
-
-                    # Check for 30 minutes, 15 minutes, and 5 minutes before execution
-                    time_intervals = {
-                        '5 minutes': timedelta(minutes=5),
-                        '15 minutes': timedelta(minutes=15),
-                        '30 minutes': timedelta(minutes=30)
-                    }
+                    # Check if it's time to execute
+                    time_ready = False
+                    if scheduled_date and scheduled_time:
+                        try:
+                            scheduled_datetime = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
+                            time_ready = current_time >= scheduled_datetime
+                            
+                            if not time_ready:
+                                time_diff = scheduled_datetime - current_time
+                                log.debug(f"Session {target} scheduled for {scheduled_datetime}, waiting {time_diff}")
+                        except ValueError as e:
+                            log.warning(f"Invalid date/time format in {target}: {e}")
+                            continue
+                    else:
+                        log.warning(f"Missing date/time in {target}")
+                        continue
+                
+                if time_ready:
+                    #if __name__ != "__main__":
+                        #self.toggle_scheduler_buttons_state(state="disabled")
+    
+                    log.notice(f"Executing session: {target}")
                     
-                    for interval, delta in time_intervals.items():
-                        # Check if the time until the command execution exceeds the interval
-                        if command_datetime - current_datetime <= delta:
-                            # Only log if we haven't logged this interval yet
-                            if filename not in last_logged or last_logged[filename] != interval:
-                                log_command_status(filename, command_datetime, interval)
-                                last_logged[filename] = interval  # Update last logged interval
-                            break  # Break to avoid logging multiple times for the same interval
+                    # Move to Current directory
+                    current_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Current", filename)
+                    os.makedirs(os.path.dirname(current_path), exist_ok=True)
+                    shutil.move(filepath, current_path)
 
+                    # Execute the session
+                    try:
+                        # Update session status
+                        id_command['process'] = 'running'
+                        id_command['result'] = False
+                        id_command['message'] = 'Session started'
 
-def log_command_status(filename, command_datetime, interval=None, first_time=False):
-    if first_time:
-        log.notice("######################")
-        log.notice(f"Find File  {filename}, not yet ready, will execute not earlier than {command_datetime}")
-    else:
-        log.notice("######################")
-        log.notice(f"{interval} log:  {filename}, not yet ready, will execute not earlier than {command_datetime}")
+                        update_process_status(command_data, 'pending')
+
+                        # Save updated status
+                        with open(current_path, 'w') as f:
+                            json.dump(command_data, f, indent=4)
+                        
+                        # Start the session
+                        id_command['time'] = datetime.now().strftime("%H:%M:%S")
+
+                        start_dwarf_session(command_data['command'], stop_event=stop_event)
+
+                        # Session completed successfully
+                        id_command['process'] = 'done'
+                        id_command['result'] = True
+                        id_command['message'] = 'Session completed successfully'
+                        
+                        # Capture Dwarf device ID from config
+                        data_config = dwarf_python_api.get_config_data.get_config_data()
+                        dwarf_id = data_config.get("dwarf_id")
+                        if dwarf_id:
+                            id_command['dwarf'] = f"D{dwarf_id}"
+                        else:
+                            id_command['dwarf'] = "Unknown"
+
+                        # Capture actual camera settings used during the session
+                        try:
+                            from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_setting
+                            camera_settings = perform_get_all_camera_setting()
+                            if camera_settings:
+                                # Get the actual IR setting used
+                                if isinstance(camera_settings, dict):
+                                    ir_cut_value = camera_settings.get('ircut')
+                                else:
+                                    ir_cut_value = None
+                                if ir_cut_value is not None:
+                                    # Convert numeric IR value to readable format
+                                    ir_mapping = {0: 'Vis', 1: 'Astro Filter', 2: 'DUAL Band'}
+                                    id_command['ir_actual'] = ir_mapping.get(ir_cut_value, f'Unknown({ir_cut_value})')
+                                
+                                # Store other actual settings used
+                                if isinstance(camera_settings, dict):
+                                    id_command['exposure_actual'] = camera_settings.get('exposure')
+                                    id_command['gain_actual'] = camera_settings.get('gain')
+                                else:
+                                    id_command['exposure_actual'] = camera_settings if isinstance(camera_settings, (int, float, str)) else None
+                                    id_command['gain_actual'] = camera_settings if isinstance(camera_settings, (int, float, str)) else None
+                        except Exception as e:
+                            log.warning(f"Could not capture actual camera settings: {e}")
+                            # Fallback to planned settings from session data
+                            setup_camera = command_data.get('command', {}).get('setup_camera', {})
+                            if setup_camera.get('do_action', False):
+                                id_command['ir_actual'] = setup_camera.get('ircut', 'Unknown')
+
+                        # Rename the session filename date-time with the session date-time
+                        dt_str = id_command['starting_date'].replace(':', '-').replace(' ', '-')
+                        new_filename_base = re.sub(r'^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-', '', filename)
+                        new_filename = f"{dt_str}_{new_filename_base}"
+
+                        # Move to Done directory
+                        done_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Done", new_filename)
+                        os.makedirs(os.path.dirname(done_path), exist_ok=True)
+
+                        update_process_status(command_data, 'done')
+
+                        with open(done_path, 'w') as f:
+                            json.dump(command_data, f, indent=4)
+                        
+                        os.remove(current_path)
+                        
+                        sessions_processed = True
+
+                        log.success(f"Session {new_filename} completed successfully")
+
+                        analyze_files()
+
+                        
+                    except Exception as e:
+                        # Session failed
+                        log.error(f"Session {target} failed: {e}")
+                        
+                        id_command['process'] = 'error'
+                        id_command['result'] = False
+                        id_command['message'] = f'Session failed: {str(e)}'
+                        
+                        # ADD: Still capture Dwarf device ID even on failure
+                        data_config = dwarf_python_api.get_config_data.get_config_data()
+                        dwarf_id = data_config.get("dwarf_id")
+                        if dwarf_id:
+                            id_command['dwarf'] = f"D{dwarf_id}"
+                        else:
+                            id_command['dwarf'] = "Unknown"
+                        
+                        # Move to Error directory
+                        error_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Error", filename)
+                        os.makedirs(os.path.dirname(error_path), exist_ok=True)
+
+                        update_process_status(command_data, 'done')
+
+                        with open(error_path, 'w') as f:
+                            json.dump(command_data, f, indent=4)
+                        
+                        if os.path.exists(current_path):
+                            os.remove(current_path)
+                        
+                        sessions_processed = True
+    
+                        #if __name__ != "__main__":
+                            #self.toggle_scheduler_buttons_state(state="normal")
+
+                    # Only process one session at a time                    
+                    break
+                        
+            except Exception as e:
+                log.error(f"Error processing {filename}: {e}")
+                continue
+    
+    except Exception as e:
+        log.error(f"Error in check_and_execute_commands: {e}")
+    
+    return sessions_processed
 
 def start_connection(startSTA = False, use_web_page = False):
 
@@ -351,9 +513,9 @@ def start_connection(startSTA = False, use_web_page = False):
 
     if not os.path.exists("extern"):
         # python script running
-        log.info("local bluetooth connection")
+        log.notice("local bluetooth connection")
         if use_web_page:
-            result = connect_bluetooth()
+            result = connect_bluetooth() 
 
         else:
             ble_psd = read_bluetooth_ble_psd() or "DWARF_12345678"
@@ -406,7 +568,7 @@ def start_STA_connection(CheckDwarfId = False):
         if result and CheckDwarfId:
             update_dwarf_data = update_get_config_data(dwarf_ip)
 
-            if update_dwarf_data['id'] != dwarf_id:
+            if update_dwarf_data is not None and update_dwarf_data.get('id') != dwarf_id:
                 log.success(f'Updated Dwarf Type to dwarf {update_dwarf_data["id"]}')
     return result
 

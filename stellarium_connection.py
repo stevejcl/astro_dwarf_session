@@ -9,7 +9,7 @@ class StellariumConnection:
     def get_data(self):
         url = f"http://{self.ip}:{self.port}/api/objects/info?format=json"
         try:
-            with request.urlopen(url) as response:
+            with request.urlopen(url, timeout=5) as response:
                 if response.status == 200:
                     return json.loads(response.read().decode())
                 else:

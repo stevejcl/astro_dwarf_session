@@ -21,7 +21,7 @@ columns_KO = ["Description", "Dwarf", "Starting", "Ending",
 
 def autosize_columns(treeview, padding, max_width_col = 0):
     for col in treeview["columns"]:
-        max_width = tk.font.Font().measure(col)  # Start with the width of the header
+        max_width = tkFont.Font().measure(col)  # Start with the width of the header
 
         # Check each row to find the maximum width in the column
         for item in treeview.get_children():
@@ -39,17 +39,17 @@ def result_session_tab(parent_frame):
 
     # Top frame for combobox and refresh button
     top_frame = ttk.Frame(parent_frame)
-    top_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+    top_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(20, 10))
 
     combobox_label = ttk.Label(top_frame, text="Select Observation File:")
-    combobox_label.pack(side=tk.LEFT, padx=(0, 10))
+    combobox_label.pack(side=tk.LEFT, padx=(0, 5))
 
-    combobox = ttk.Combobox(top_frame, width=50, state="readonly")
+    combobox = ttk.Combobox(top_frame, state="readonly")
     combobox.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
     # Table frame for displaying OK and Error sessions
     table_frame = ttk.Frame(parent_frame)
-    table_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=10, pady=10)
+    table_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=10, pady=0)
 
     # OK Treeview
     ok_frame = ttk.Frame(table_frame)
@@ -85,8 +85,30 @@ def result_session_tab(parent_frame):
     def refresh():
         refresh_observation_list(combobox, ok_treeview, error_treeview)
 
+
+    def delete_selected_file():
+        selected_file = combobox.get()
+        if not selected_file:
+            return
+        from astro_dwarf_scheduler import LIST_ASTRO_DIR
+        RESULTS_DIR = LIST_ASTRO_DIR["SESSIONS_DIR"] + '/Results'
+        RESULTS_LIST = LIST_ASTRO_DIR["SESSIONS_DIR"]
+        file_path = os.path.join(RESULTS_DIR, selected_file)
+        list_path = os.path.join(RESULTS_LIST, "results_list.txt")
+        if os.path.exists(file_path):
+            import tkinter.messagebox as messagebox
+            if messagebox.askyesno("Delete File", f"Are you sure you want to delete '{selected_file}'?"):
+                try:
+                    os.remove(file_path)
+                    os.remove(list_path)
+                except Exception as e:
+                    messagebox.showerror("Error", f"Could not delete file: {e}")
+        refresh()
+
     update_button = ttk.Button(top_frame, text="Update Results", command=lambda: refresh())
-    update_button.pack(side=tk.LEFT, padx=10)
+    update_button.pack(side=tk.LEFT, padx=(10, 5))
+    delete_button = ttk.Button(top_frame, text="Delete File", command=delete_selected_file)
+    delete_button.pack(side=tk.LEFT, padx=5)
 
     # Autosize the columns based on the content
     padding = 1
@@ -121,10 +143,13 @@ def load_csv_data(filename):
     with open(os.path.join(RESULTS_DIR, filename), newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
+            
             row["Description"] = row.get("description")
             row["Dwarf"] = row.get("dwarf")
-            row["Starting"] = row.get("starting_date")[11:]
-            row["Ending"] = row.get("processed_date")[11:]
+            starting_date = row.get("starting_date")
+            row["Starting"] = starting_date[11:] if starting_date else ""
+            processed_date = row.get("processed_date")
+            row["Ending"] = processed_date[11:] if processed_date else ""
             row["Calibration"] = "Done" if row.get("calibration") == "True" else ""
             if row.get("goto_solar") == "True" :
                 row["Goto"] = "Solar"
@@ -146,7 +171,7 @@ def load_csv_data(filename):
             else:
                 if row.get("IR") == "0":
                     row["IR"] = "VIS"
-                elif row.get("IRCut") == "1":
+                elif row.get("IR") == "1":
                     row["IR"] = "ASTRO"
                 else:
                     row["IR"] = "DUO B."
@@ -179,7 +204,6 @@ def on_file_select(event, combobox, ok_treeview, error_treeview):
 
 def refresh_observation_list(combobox, ok_treeview, error_treeview):
     analyze_files()
-
     # Load initial data
     files = get_observation_files()
     combobox['values'] = files
@@ -193,26 +217,6 @@ def refresh_observation_list(combobox, ok_treeview, error_treeview):
         # Clear the treeviews and display only column headers
         update_treeview(ok_treeview, [], columns_OK)
         update_treeview(error_treeview, [], columns_KO)
-
-# Function to load already processed filenames
-def load_processed_files():
-    from astro_dwarf_scheduler import LIST_ASTRO_DIR
-
-    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
-
-    if os.path.exists(RESULTS_LIST_PATH):
-        with open(RESULTS_LIST_PATH, 'r') as file:
-            return set(line.strip() for line in file.readlines())
-    return set()
-
-# Function to save processed filename
-def save_processed_file(filename):
-    from astro_dwarf_scheduler import LIST_ASTRO_DIR
-
-    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
-
-    with open(RESULTS_LIST_PATH, 'a') as file:
-        file.write(filename + '\n')
 
 def get_observation_night(starting_date):
     """Determine the observation night for a given date and time."""
@@ -280,7 +284,7 @@ def analyze_files():
                 'description': data["command"]["id_command"]["description"],
                 'dwarf': typeDwarf,
                 'starting_date': starting_date,
-                'processed_date': data["command"]["id_command"]["processed_date"],
+                'processed_date': data["command"]["id_command"].get("processed_date", ""),
                 'result': data["command"]["id_command"]["result"],
                 'message': data["command"]["id_command"]["message"],
                 'calibration': data["command"].get("calibration", {}).get("do_action", False),
@@ -293,7 +297,7 @@ def analyze_files():
                 'Wide Angle': data["command"].get("setup_wide_camera", {}).get("do_action", False),
                 'exposure': data["command"].get("setup_camera", {}).get("exposure", ""),
                 'gain': data["command"].get("setup_camera", {}).get("gain", ""),
-                'IR': data["command"].get("setup_camera", {}).get("IRCut", ""),
+                'IR': data["command"].get("setup_camera", {}).get("ircut", ""),
                 'count': data["command"].get("setup_camera", {}).get("count", ""),
             }
 
@@ -314,3 +318,24 @@ def write_to_csv(csv_path, csv_data):
         if not file_exists:
             writer.writeheader()
         writer.writerow(csv_data)
+
+# Function to load already processed filenames
+def load_processed_files():
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
+
+    if os.path.exists(RESULTS_LIST_PATH):
+        with open(RESULTS_LIST_PATH, 'r') as file:
+            return set(line.strip() for line in file.readlines())
+
+    return set()
+
+# Function to save processed filename
+def save_processed_file(filename):
+    from astro_dwarf_scheduler import LIST_ASTRO_DIR
+
+    RESULTS_LIST_PATH = os.path.join(LIST_ASTRO_DIR["SESSIONS_DIR"], 'results_list.txt')
+
+    with open(RESULTS_LIST_PATH, 'a') as file:
+        file.write(filename + '\n')

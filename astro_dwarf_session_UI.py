@@ -1024,10 +1024,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_polar_position(self):
         try:
-            dwarf_id = "3" # Default value
+            dwarf_id = "2"
             data_config = dwarf_python_api.get_config_data.get_config_data()
             if data_config["dwarf_id"]:
                 dwarf_id = data_config['dwarf_id']
+            dwarf_id_int = int(dwarf_id) + 1 if dwarf_id is not None else 0
 
             attempt = 0
             result = False
@@ -1039,13 +1040,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 if result:
                      # Pitch Motor Resetting
                      result = motor_action(6)
-                if result and dwarf_id == "3":
+                if result and dwarf_id_int == 3:
                      # Rotation Motor positioning D3
                      result = motor_action(9)
                 elif result:
                      # Rotation Motor positioning
                      result = motor_action(2)
-                if result and dwarf_id == "3":
+                if result and dwarf_id_int == 3:
                      # Pitch Motor positioning D3
                      result = motor_action(7)
                 elif result:

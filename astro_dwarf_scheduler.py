@@ -8,7 +8,7 @@ import re
 
 from datetime import datetime, timedelta
 
-from dwarf_session import start_dwarf_session
+from dwarf_session import start_dwarf_session, get_dwarf_id_str_val, get_dwarf_id_int_val
 
 from dwarf_python_api.lib.dwarf_utils import perform_time
 from dwarf_python_api.lib.dwarf_utils import perform_timezone
@@ -239,7 +239,7 @@ def update_process_status(program, status, result=None, message=None, nb_try=Non
     if nb_try is not None:
         command['nb_try'] = nb_try
     if dwarf_id is not None:
-        command['dwarf'] = "D" + str(dwarf_id)
+        command['dwarf'] = "D" + get_dwarf_id_str_val(dwarf_id)
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if status == "pending":
         command['starting_date'] = current_datetime
@@ -559,7 +559,7 @@ def start_STA_connection(CheckDwarfId = False):
         log.error("The dwarf Ip has not been set , need Bluetooth First, can't connect to wifi")
     else:
         #init Frame : TIME and TIMEZONE
-        log.notice(f'Connecting to the dwarf {dwarf_id} on {dwarf_ip}')
+        log.notice(f'Connecting to the dwarf {get_dwarf_id_int_val(dwarf_id)} on {dwarf_ip}')
         result = perform_time()
        
         if result:
@@ -659,7 +659,7 @@ def main():
         attempt = 0
         while not result and attempt < max_retries:
             log.notice ("##--------------------------------------##")
-            log.notice(f'Try to connect to the dwarf {dwarf_id} on {dwarf_ip}')
+            log.notice(f'Try to connect to the dwarf {get_dwarf_id_int_val(dwarf_id)} on {dwarf_ip}')
             result = start_STA_connection()
             attempt += 1
 

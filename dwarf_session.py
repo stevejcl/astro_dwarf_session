@@ -29,6 +29,13 @@ from dwarf_python_api.lib.data_wide_utils import get_wide_gain_name_by_index
 import dwarf_python_api.get_config_data
 import dwarf_python_api.lib.my_logger as log
 
+# The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
+def get_dwarf_id_str_val(dwarf_id):
+   return str(int(dwarf_id) + 1) if dwarf_id is not None else None
+
+def get_dwarf_id_int_val(dwarf_id):
+   return int(dwarf_id) + 1 if dwarf_id is not None else 0
+
 def select_solar_target (target):
    
     target_id = None
@@ -124,6 +131,7 @@ def start_dwarf_session(program, stop_event=None):
         dwarf_id = "3"  # Default Dwarf ID
         if data_config["dwarf_id"]:
             dwarf_id = data_config['dwarf_id']
+
         dwarf_ip = ""
         if data_config["ip"]:
             dwarf_ip = data_config['ip']
@@ -131,7 +139,7 @@ def start_dwarf_session(program, stop_event=None):
         dump_json = json.dumps(program, indent=4)
 
         log.notice("######################")
-        log.notice(f"Starting new Session for Dwarf {dwarf_id} on {dwarf_ip}")
+        log.notice(f"Starting new Session for Dwarf {get_dwarf_id_int_val(dwarf_id)} on {dwarf_ip}")
         log.notice("######################")
         log.debug(f"program: {dump_json}")
         log.debug("######################")
@@ -199,7 +207,7 @@ def start_dwarf_session(program, stop_event=None):
                 log.notice(f"     exposure  => {exp_val}s")
                 log.notice(f"     gain  => {gain_val}")
                 log.notice(f"     binning => {'4k' if binning_val == 0 else '2k'}")
-                if dwarf_id == "3":
+                if get_dwarf_id_str_val(dwarf_id) == "3":
                     log.notice(f"     IR => {'VIS_FILTER' if IR_val == 0 else 'ASTRO_FILTER' if IR_val == 1 else 'DUAL_BAND'}")
                 else:
                     log.notice(f"     IR  => {'IR_CUT' if IR_val== 0 else 'IR_PASS'}")
@@ -301,8 +309,7 @@ def start_dwarf_session(program, stop_event=None):
             continue_action = perform_update_camera_setting("gain", "80")
             if interrupted(): return
             verify_action(continue_action, "step_3")
-            
-            if dwarf_id == "3":
+            if get_dwarf_id_str_val(dwarf_id) == "3":
                 log.notice("    Set IR to Astro Filter")
             else:
                 log.notice("    Set IR to IR_PASS")
@@ -499,7 +506,7 @@ def print_camera_data():
     data_config = dwarf_python_api.get_config_data.get_config_data()
     dwarf_id = str(data_config['dwarf_id']) if data_config.get('dwarf_id') is not None else "3"
     log.notice("----------------------")
-    log.notice(f"Connected to Dwarf {dwarf_id}")
+    log.notice(f"Connected to Dwarf {get_dwarf_id_int_val(dwarf_id)}")
 
     # ALL PARAMS
     if isinstance(result, dict) and "all_params" in result:
@@ -544,15 +551,15 @@ def print_camera_data():
             # Extract specific fields for the matching entry
             camera_IR = str(matching_entry["index"])
 
-            if camera_IR == "0" and dwarf_id == "2":
+            if camera_IR == "0" and get_dwarf_id_str_val(dwarf_id) == "2":
                 log.notice("the IR value is: IRCut")
-            if camera_IR == "1" and dwarf_id == "2":
+            if camera_IR == "1" and get_dwarf_id_str_val(dwarf_id) == "2":
                 log.notice("the IR value is: IRPass")
-            if camera_IR == "0" and dwarf_id == "3":
+            if camera_IR == "0" and get_dwarf_id_str_val(dwarf_id) == "3":
                 log.notice("the IR value is: VIS FILTER")
-            if camera_IR == "1" and dwarf_id == "3":
+            if camera_IR == "1" and get_dwarf_id_str_val(dwarf_id) == "3":
                 log.notice("the IR value is: ASTRO FILTER")
-            if camera_IR == "2" and dwarf_id == "3":
+            if camera_IR == "2" and get_dwarf_id_str_val(dwarf_id) == "3":
                 log.notice("the IR value is: DUAL BAND")
         else:
            log.notice("the IRfilter has not been found")
@@ -627,7 +634,7 @@ def print_wide_camera_data():
     data_config = dwarf_python_api.get_config_data.get_config_data()
     dwarf_id = str(data_config['dwarf_id']) if data_config.get('dwarf_id') is not None else "3"
     log.notice("----------------------")
-    log.notice(f"Connected to Dwarf {dwarf_id}")
+    log.notice(f"Connected to Dwarf {get_dwarf_id_int_val(dwarf_id)}")
 
     # ALL PARAMS
     if isinstance(result, dict) and "all_params" in result:

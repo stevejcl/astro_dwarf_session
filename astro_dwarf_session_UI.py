@@ -2,17 +2,18 @@ from fractions import Fraction
 import os
 import time
 import threading
-from datetime import datetime
+import io
+import json
+import signal
+import logging
+import traceback
 import tkinter as tk
+from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from config import DWARF_IP
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action
-import signal
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
-import json
-from datetime import datetime, timedelta
-import traceback
 
 # import data for config.py
 import dwarf_python_api.get_config_data
@@ -195,9 +196,6 @@ class TextHandler(logging.Handler):
 # GUI Application class
 class AstroDwarfSchedulerApp(tk.Tk):
     def start_video_preview(self):
-        import io
-        import threading
-        import time
         try:
             from PIL import Image, ImageTk
             import requests
@@ -206,7 +204,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
             return
 
         def video_stream_worker():
-            last_frame_time = 0
             while not getattr(self, '_stop_video_stream', False):
                 try:
                     stream = requests.get(self.video_stream_url, stream=True, timeout=60)
@@ -214,26 +211,35 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     last_update = 0
                     for chunk in stream.iter_content(chunk_size=1024):
                         bytes_data += chunk
+                        # Look for JPEG start and end markers
                         a = bytes_data.find(b'\xff\xd8')
                         b = bytes_data.find(b'\xff\xd9')
                         if a != -1 and b != -1:
                             jpg = bytes_data[a:b+2]
                             bytes_data = bytes_data[b+2:]
                             try:
-                                image = Image.open(io.BytesIO(jpg)).resize((220, 140))
+                                image = Image.open(io.BytesIO(jpg)).resize((220, 124))
                                 photo = ImageTk.PhotoImage(image)
                                 now = time.time()
+                                # Limit update rate to avoid overwhelming the UI
                                 if now - last_update > 0.3:
                                     self.after(0, self.update_video_canvas, photo)
                                     last_update = now
-                            except Exception:
+                            except Exception as e:
+                                # Log image processing errors but continue
                                 pass
                         if getattr(self, '_stop_video_stream', False):
                             break
                     # If we got here, stream ended or stopped, retry after short delay
-                except Exception:
+                except requests.exceptions.RequestException as e:
+                    # Handle network-related errors
                     self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
-                time.sleep(3)  # Wait 3 seconds before retrying
+                except Exception as e:
+                    # Handle any other unexpected errors
+                    self.after(0, lambda: self.video_canvas.config(image='', text="Video stream error."))
+                
+                # Wait before retrying connection
+                time.sleep(3)
 
         threading.Thread(target=video_stream_worker, daemon=True).start()
 
@@ -245,6 +251,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
         super().__init__()
         self.title("Astro Dwarf Scheduler")
         self.geometry("810x800")
+
+        # Set up window close protocol to properly clean up video stream
+        self.protocol("WM_DELETE_WINDOW", self.quit_method)
 
         # --- Initialize all attributes used by methods before any method that uses them ---
         self.scheduler_running = False
@@ -433,6 +442,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
         print("Wait during closing...")
         self.log("Wait during closing...")
 
+        # Stop video stream
+        self._stop_video_stream = True
+
         # Force stop the scheduler immediately
         if self.scheduler_running:
             self.scheduler_running = False
@@ -583,11 +595,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.log_text = None
         # Multipla configuration prompt label
         self.labelConfig = tk.Label(self.tab_main, text="Configuration", font=("Arial", 12))
-        self.labelConfig.pack(anchor="w", padx=10, pady=10)
+        self.labelConfig.pack(anchor="w", padx=10, pady=(10,0))
 
         # --- Video Preview Frame (top right) ---
         preview_frame = tk.Frame(self.tab_main, bd=1, relief="solid")
-        preview_frame.place(relx=1.0, x=-20, y=80, anchor="ne", width=220, height=123, bordermode="outside")  # Top right, moved down by 50px
+        preview_frame.place(relx=1.0, x=-20, y=85, anchor="ne", width=220, height=124, bordermode="outside")  # Top right, moved down by 50px
         preview_frame.pack_propagate(False)
         self.video_canvas = tk.Label(preview_frame, text="No video stream.")
         self.video_canvas.pack(fill="both", expand=True)
@@ -601,7 +613,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         self.multiple_var = tk.BooleanVar(value=False)
         self.multiple_checkbox = tk.Checkbutton(multiple_frame, text="Multiple", variable=self.multiple_var, command=self.toggle_multiple)
-        self.multiple_checkbox.grid(row=0, column=0, sticky="w", padx=(0, 8), pady=2)
+        self.multiple_checkbox.grid(row=0, column=0, sticky="w", padx=(0, 8), pady=8)
 
         self.combobox_label = tk.Label(multiple_frame, text="Current Config:")
         self.combobox_label.grid(row=0, column=1, sticky="e", padx=(0, 4), pady=2)

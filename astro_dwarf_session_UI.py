@@ -332,13 +332,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.total_session_runtime = 0
         self.total_session_runtime += session_seconds
 
-    def set_scheduler_buttons_state(self, state):
-        """Enable or disable the unlock, polar, and eq buttons on the Scheduler tab."""
-        self.unlock_button.config(state=state)
-        self.polar_button.config(state=state)
-        self.calibrate_button.config(state=state)
-        self.eq_button.config(state=state)
-
     # Function to get the exposure time from settings_vars
     def get_exposure_time(self, settings_vars):
         exposure_string = str(settings_vars["id_command"]["exposure"])  # Get the exposure string from settings_vars

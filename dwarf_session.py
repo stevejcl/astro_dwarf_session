@@ -196,11 +196,11 @@ def start_dwarf_session(program, stop_event=None):
 
         # Validate photo parameters
         if take_photo:
-            exp_val = int(program['setup_camera'].get('exposure', None))
-            gain_val = int(program['setup_camera'].get('gain', None))
-            binning_val = int(program['setup_camera'].get('binning', None))
-            IR_val = int(program['setup_camera'].get('ircut', None))
-            count_val = int(program['setup_camera'].get('count', None))
+            exp_val = str(program['setup_camera'].get('exposure', "0"))
+            gain_val = str(program['setup_camera'].get('gain', "0"))
+            binning_val = str(program['setup_camera'].get('binning', "0"))
+            IR_val = str(program['setup_camera'].get('ircut', "0"))
+            count_val = str(program['setup_camera'].get('count', "0"))
 
             if exp_val or gain_val or binning_val or IR_val or count_val:
                 log.notice(f" To do => Astro Photo with these parameters")
@@ -218,9 +218,9 @@ def start_dwarf_session(program, stop_event=None):
 
         # Validate wide photo parameters
         if take_widephoto:
-            wide_exp_val = int(program['setup_wide_camera'].get('exposure', None))
-            wide_gain_val = int(program['setup_wide_camera'].get('gain', None))
-            wide_count_val = int(program['setup_wide_camera'].get('count', None))  # Fix: use separate variable
+            wide_exp_val = str(program['setup_wide_camera'].get('exposure', "0"))
+            wide_gain_val = str(program['setup_wide_camera'].get('gain', "0"))
+            wide_count_val = str(program['setup_wide_camera'].get('count', "0"))  # Fix: use separate variable
 
             if wide_exp_val or wide_gain_val or wide_count_val:
                 log.notice(f" To do => Astro Wide Photo with these parameters")
@@ -471,7 +471,8 @@ def start_dwarf_session(program, stop_event=None):
             verify_action(continue_action, "step_15")
 
     except Exception as e:
-        log.error(f"Error during session : {e}")
+        line_number = e.__traceback__.tb_lineno if e.__traceback__ else "unknown"
+        log.error(f"Error during session : {e} Line: {line_number}")
         raise
 
     finally:

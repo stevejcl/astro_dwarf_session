@@ -1045,10 +1045,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_polar_position(self):
         try:
-            dwarf_id = "3" # Default value
+            dwarf_id = "2"
             data_config = dwarf_python_api.get_config_data.get_config_data()
             if data_config["dwarf_id"]:
                 dwarf_id = data_config['dwarf_id']
+            dwarf_id_int = int(dwarf_id) + 1 if dwarf_id is not None else 0
 
             attempt = 0
             result = False

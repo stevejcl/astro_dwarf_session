@@ -176,6 +176,7 @@ def save_to_json(settings_vars, config_vars):
     ra_coord = settings_vars["ra_coord"].get()
     dec_coord = settings_vars["dec_coord"].get()
     wait_after_target = settings_vars["wait_after_target"].get()
+    wait_after_camera = settings_vars["wait_after_camera"].get()
     exposure = str(settings_vars["exposure"].get())
     gain = settings_vars["gain"].get()
     count = check_integer(settings_vars["count"].get())
@@ -227,7 +228,7 @@ def save_to_json(settings_vars, config_vars):
         "binning": binning,
         "ircut": ircut,
         "count": count,
-        "wait_after": 30
+        "wait_after": int(wait_after_camera) if wait_after_camera and wait_after_camera.strip() else 30
     }
 
     setup_wide_camera = {
@@ -235,7 +236,7 @@ def save_to_json(settings_vars, config_vars):
         "exposure": "10",
         "gain": "90",
         "count": "10",
-        "wait_after": 30
+        "wait_after": int(wait_after_camera) if wait_after_camera and wait_after_camera.strip() else 30
     }
 
     # Modify the behavior for "Wide-Angle Camera"
@@ -304,14 +305,14 @@ def save_to_json(settings_vars, config_vars):
             "goto_solar": {
                 "do_action": goto_solar,
                 "target": target_solar,
-                "wait_after": int(wait_after_target)
+                "wait_after": int(wait_after_target) if wait_after_target and wait_after_target.strip() else 0
             },
             "goto_manual": {
                 "do_action": goto_manual,
                 "target": target,
                 "ra_coord": float(decimal_RA) if ra_coord not in (None, "") and decimal_RA != "" else "",
                 "dec_coord": float(decimal_Dec) if dec_coord not in (None, "") and decimal_Dec != "" else "",
-                "wait_after": int(wait_after_target)
+                "wait_after": int(wait_after_target) if wait_after_target and wait_after_target.strip() else 0
             },
             "setup_camera": setup_camera,
             "setup_wide_camera": setup_wide_camera
@@ -777,14 +778,14 @@ def generate_json_preview(settings_vars, config_vars):
             "goto_solar": {
                 "do_action": False,
                 "target": "",
-                "wait_after": int(settings_vars["wait_after_target"].get())
+                "wait_after": int(settings_vars["wait_after_target"].get()) if settings_vars["wait_after_target"].get() and settings_vars["wait_after_target"].get().strip() else 0
             },
             "goto_manual": {
                 "do_action": True,
                 "target": settings_vars["target"].get(),
                 "ra_coord": float(settings_vars["ra_coord"].get()),
                 "dec_coord": float(settings_vars["dec_coord"].get()),
-                "wait_after": int(settings_vars["wait_after_target"].get())
+                "wait_after": int(settings_vars["wait_after_target"].get()) if settings_vars["wait_after_target"].get() and settings_vars["wait_after_target"].get().strip() else 0
             },
             "setup_camera": setup_camera,
             "setup_wide_camera": setup_wide_camera

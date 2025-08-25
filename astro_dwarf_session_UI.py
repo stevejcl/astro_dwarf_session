@@ -307,15 +307,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
         # Bind tab change event to refresh file lists
         def on_tab_changed(event):
             tab = event.widget.tab(event.widget.index('current'))['text']
-            #if tab == 'Edit Sessions':
-            #    if self.edit_sessions_refresh:
-            #        self.edit_sessions_refresh()
             if tab == 'Session Overview':
                 if self.overview_refresh:
                     self.overview_refresh()
-            # Update Exposure and Gain fields when Create Session tab is selected
-            elif tab == 'Create Session':
-                create_session.update_exposure_gain_fields(self.settings_vars)
 
         self.tab_control.bind('<<NotebookTabChanged>>', on_tab_changed)
 

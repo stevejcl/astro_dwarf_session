@@ -47,6 +47,54 @@ BASE_DIR, PLATFORM = get_writable_base_dir()
 DEVICES_DIR = os.path.join(BASE_DIR, "Devices_Sessions")
 SESSIONS_DIR =  os.path.join(BASE_DIR, 'Astro_Sessions')
 
+def create_config_ini_symlink():
+    """Create a symlink from main folder config.ini to AppData config.ini"""
+    main_config_path = os.path.join(os.path.abspath("."), 'config.ini')
+    
+    # Get AppData config path (similar to settings.py logic)
+    if sys.platform == 'win32':
+        appdata = os.environ.get('APPDATA')
+        if appdata:
+            appdata_config_path = os.path.join(appdata, 'AstroDwarfScheduler', 'config.ini')
+            os.makedirs(os.path.dirname(appdata_config_path), exist_ok=True)
+            
+            # Only create symlink if paths are different
+            if appdata_config_path != main_config_path:
+                try:
+                    # If main config.ini exists and it's not a symlink, back it up
+                    if os.path.exists(main_config_path) and not os.path.islink(main_config_path):
+                        backup_path = main_config_path + '.backup'
+                        if not os.path.exists(backup_path):
+                            shutil.move(main_config_path, backup_path)
+                            print(f"Backed up existing config.ini to {backup_path}")
+                        else:
+                            os.remove(main_config_path)
+                    
+                    # Remove existing symlink if it exists
+                    if os.path.islink(main_config_path):
+                        os.unlink(main_config_path)
+                    elif os.path.exists(main_config_path):
+                        os.remove(main_config_path)
+                    
+                    # Create the link/copy
+                    try:
+                        # Try hard link first (works without admin privileges)
+                        os.link(appdata_config_path, main_config_path)
+                        print(f"Created hard link: config.ini -> {appdata_config_path}")
+                    except (OSError, NotImplementedError):
+                        # Fallback to copying the file
+                        shutil.copy2(appdata_config_path, main_config_path)
+                        print(f"Created copy: config.ini (synced with {appdata_config_path})")
+                        
+                except Exception as e:
+                    print(f"Could not create config.ini link: {e}")
+                    # Fallback: just copy the file
+                    try:
+                        shutil.copy2(appdata_config_path, main_config_path)
+                        print(f"Created copy as fallback: config.ini")
+                    except Exception as e2:
+                        print(f"Could not even create copy: {e2}")
+
 LIST_ASTRO_DIR_DEFAULT = {
     "SESSIONS_DIR": SESSIONS_DIR,
     "RESULTS_DIR": os.path.join('.', 'Results'),
@@ -120,6 +168,9 @@ import requests
 
 def setup_new_config(config_name):
     global LIST_ASTRO_DIR
+
+    # Ensure config.ini symlink exists for AppData compatibility
+    create_config_ini_symlink()
 
     if config_name == CONFIG_DEFAULT:
         dwarf_python_api.get_config_data.set_config_data(
@@ -609,6 +660,9 @@ def update_get_config_data(IPDwarf=None):
 # Main loop to check files in ToDo folder
 def main():
     try:
+        # Create config.ini symlink to ensure it's accessible in main folder
+        create_config_ini_symlink()
+        
         start_bluetooth = False
         dwarf_ip = None
         dwarf_id = None

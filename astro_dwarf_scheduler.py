@@ -416,9 +416,7 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         continue
                 
                 if time_ready:
-                    #if __name__ != "__main__":
-                        #self.toggle_scheduler_buttons_state(state="disabled")
-    
+
                     log.notice(f"Executing session: {target}")
                     
                     # Move to Current directory

@@ -11,6 +11,7 @@ from geopy.exc import GeocoderInsufficientPrivileges
 from astro_dwarf_scheduler import BASE_DIR
 
 import sys
+import os
 
 # Import DWARF_IP from config.py
 try:
@@ -18,7 +19,6 @@ try:
 except ImportError:
     DWARF_IP = "192.168.88.1"  # Default fallback value
 
-import os, sys
 def get_config_ini_path():
     ini_name = 'config.ini'
     if sys.platform == 'win32':
@@ -30,6 +30,67 @@ def get_config_ini_path():
     return os.path.join(BASE_DIR, ini_name)
 
 CONFIG_INI_FILE = get_config_ini_path()
+
+def create_config_symlink():
+    """Create a symlink from main folder config.ini to AppData config.ini"""
+    main_config_path = os.path.join(BASE_DIR, 'config.ini')
+    appdata_config_path = CONFIG_INI_FILE
+    
+    # Only create symlink if we're using AppData (Windows)
+    if appdata_config_path != main_config_path:
+        try:
+            # If main config.ini exists and it's not a symlink, back it up
+            if os.path.exists(main_config_path) and not os.path.islink(main_config_path):
+                backup_path = main_config_path + '.backup'
+                if not os.path.exists(backup_path):
+                    os.rename(main_config_path, backup_path)
+                    print(f"Backed up existing config.ini to {backup_path}")
+                else:
+                    os.remove(main_config_path)
+            
+            # Remove existing symlink if it exists
+            if os.path.islink(main_config_path):
+                os.unlink(main_config_path)
+            elif os.path.exists(main_config_path):
+                os.remove(main_config_path)
+            
+            # Create the symlink (Windows requires admin privileges for symlinks, so we'll use a copy approach)
+            if sys.platform == 'win32':
+                # On Windows, we'll create a hard link or copy the file
+                try:
+                    os.link(appdata_config_path, main_config_path)
+                    print(f"Created hard link: {main_config_path} -> {appdata_config_path}")
+                except (OSError, NotImplementedError):
+                    # Fallback to copying the file and setting up sync
+                    import shutil
+                    shutil.copy2(appdata_config_path, main_config_path)
+                    print(f"Created copy: {main_config_path} (synced with {appdata_config_path})")
+            else:
+                # On Unix-like systems, create a symbolic link
+                os.symlink(appdata_config_path, main_config_path)
+                print(f"Created symlink: {main_config_path} -> {appdata_config_path}")
+                
+        except Exception as e:
+            print(f"Could not create symlink: {e}")
+            # Fallback: just copy the file
+            try:
+                import shutil
+                shutil.copy2(appdata_config_path, main_config_path)
+                print(f"Created copy as fallback: {main_config_path}")
+            except Exception as e2:
+                print(f"Could not even create copy: {e2}")
+
+def sync_config_to_main_folder():
+    """Sync AppData config.ini to main folder config.ini (for Windows copy fallback)"""
+    main_config_path = os.path.join(BASE_DIR, 'config.ini')
+    appdata_config_path = CONFIG_INI_FILE
+    
+    if appdata_config_path != main_config_path and os.path.exists(appdata_config_path):
+        try:
+            import shutil
+            shutil.copy2(appdata_config_path, main_config_path)
+        except Exception as e:
+            print(f"Could not sync config to main folder: {e}")
 
 def get_lat_long_and_timezone(address, agent = 1):
     try:
@@ -93,6 +154,10 @@ def open_link(url):
 def load_config():
     config = configparser.ConfigParser()
     config_ini_path = CONFIG_INI_FILE
+    
+    # Ensure symlink exists when loading config
+    create_config_symlink()
+    
     config.read(config_ini_path)
     config_data = config['CONFIG'] if 'CONFIG' in config else {}
     # If DWARF_IP is not in config.ini, use the value from config.py
@@ -113,6 +178,13 @@ def save_config(config_data):
     # Write back to file, preserving all sections
     with open(config_ini_path, 'w') as configfile:
         config.write(configfile)
+    
+    # Create symlink from main folder to AppData version (if needed)
+    create_config_symlink()
+    
+    # Sync to main folder (for Windows copy fallback)
+    sync_config_to_main_folder()
+    
     # Update config.py with the new DWARF_IP value if it changed
     if 'dwarf_ip' in config_data:   
         update_config_py_dwarf_ip(config_data['dwarf_ip'])

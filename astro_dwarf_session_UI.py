@@ -573,6 +573,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.config_combobox.config(state=tk.NORMAL)
         self.add_button.config(state=tk.NORMAL)
 
+    def toggle_buttons(self, state):
+        # Invert the state for the start button
+        state_alt = tk.DISABLED if state == tk.NORMAL else tk.NORMAL
+        state = tk.DISABLED if state == tk.NONE else state
+        """Enable or disable buttons based on the state."""
+        self.start_button.config(state=state_alt)
+        self.stop_button.config(state=state)
+        self.unlock_button.config(state=state)
+        self.eq_button.config(state=state)
+        self.polar_button.config(state=state)
+        self.calibrate_button.config(state=state)
+
     def create_main_tab(self):
         self.log_text = None
         # Multipla configuration prompt label
@@ -811,15 +823,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.disable_controls()
         if not self.scheduler_running:
             self.log("Astro_Dwarf_Scheduler is starting...")
+            self.toggle_buttons(tk.NORMAL)
             self.scheduler_running = True
             self.scheduler_stop_event.clear()
             self.start_logHandler()
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.NORMAL)
-            self.unlock_button.config(state=tk.NORMAL)
-            self.eq_button.config(state=tk.NORMAL)
-            self.polar_button.config(state=tk.NORMAL)
-            self.calibrate_button.config(state=tk.NORMAL)
             self.scheduler_start_time = datetime.now()  # Track when the scheduler starts
             self.reset_total_runtime()
             # Only start if not already running
@@ -836,26 +843,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_running = False
             self.scheduler_stop_event.set()
             self.log("Scheduler is waiting for the process to stop.")
-
-            # Update UI immediately
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.DISABLED)
-            self.unlock_button.config(state=tk.DISABLED)
-            self.eq_button.config(state=tk.DISABLED)
-            self.polar_button.config(state=tk.DISABLED)
-            self.calibrate_button.config(state=tk.DISABLED)
-
+            self.toggle_buttons(tk.NONE)    
             # Wait for thread to finish with timeout
             self.verifyCountdown(10)  # Reduced timeout
         else:
-            self.start_button.config(state=tk.NORMAL)
-            self.stop_button.config(state=tk.DISABLED)
-            self.unlock_button.config(state=tk.DISABLED)
-            self.eq_button.config(state=tk.DISABLED)
-            self.polar_button.config(state=tk.DISABLED)
-            self.calibrate_button.config(state=tk.DISABLED) 
+            self.toggle_buttons(tk.DISABLED)    
             self.log("Scheduler is stopping...")
-            self.enable_controls()
+            #self.enable_controls()
 
         # Hide session info when scheduler stops
         self.session_info_label.pack_forget()
@@ -971,12 +965,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             def update_ui_after_scheduler():
                 self.scheduler_running = False
                 self.scheduler_stopped = True
-                self.start_button.config(state=tk.NORMAL)
-                self.stop_button.config(state=tk.DISABLED)
-                self.unlock_button.config(state=tk.DISABLED)
-                self.eq_button.config(state=tk.DISABLED)
-                self.polar_button.config(state=tk.DISABLED)
-                self.calibrate_button.config(state=tk.DISABLED)
+                self.toggle_buttons(tk.DISABLED)
                 self.enable_controls()
                 if hasattr(self, 'update_session_counts'):
                     self.update_session_counts()
@@ -1140,7 +1129,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         Update the session information label with the next session's start time,
         the runtime of the current session, or a countdown to the next session.
         """
-        if self.scheduler_running:
+        if self.scheduler_running and self.session_running:
             # Show the session info label
             self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))
 

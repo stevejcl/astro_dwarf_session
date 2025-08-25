@@ -2,17 +2,18 @@ from fractions import Fraction
 import os
 import time
 import threading
-from datetime import datetime
+import io
+import json
+import signal
+import logging
+import traceback
 import tkinter as tk
+from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from config import DWARF_IP
-from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
+from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config, create_config_ini_symlink
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action
-import signal
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
-import json
-from datetime import datetime, timedelta
-import traceback
 
 # import data for config.py
 import dwarf_python_api.get_config_data
@@ -195,9 +196,6 @@ class TextHandler(logging.Handler):
 # GUI Application class
 class AstroDwarfSchedulerApp(tk.Tk):
     def start_video_preview(self):
-        import io
-        import threading
-        import time
         try:
             from PIL import Image, ImageTk
             import requests
@@ -206,34 +204,47 @@ class AstroDwarfSchedulerApp(tk.Tk):
             return
 
         def video_stream_worker():
-            last_frame_time = 0
+            print("Starting video stream worker")
             while not getattr(self, '_stop_video_stream', False):
                 try:
+                    print("Connecting to video stream...")
                     stream = requests.get(self.video_stream_url, stream=True, timeout=60)
                     bytes_data = b""
                     last_update = 0
                     for chunk in stream.iter_content(chunk_size=1024):
                         bytes_data += chunk
+                        # Look for JPEG start and end markers
                         a = bytes_data.find(b'\xff\xd8')
                         b = bytes_data.find(b'\xff\xd9')
                         if a != -1 and b != -1:
                             jpg = bytes_data[a:b+2]
                             bytes_data = bytes_data[b+2:]
                             try:
-                                image = Image.open(io.BytesIO(jpg)).resize((220, 140))
+                                image = Image.open(io.BytesIO(jpg)).resize((220, 124))
                                 photo = ImageTk.PhotoImage(image)
                                 now = time.time()
+                                # Limit update rate to avoid overwhelming the UI
                                 if now - last_update > 0.3:
                                     self.after(0, self.update_video_canvas, photo)
                                     last_update = now
-                            except Exception:
+                            except Exception as e:
+                                print(f"Error processing video stream chunk: {e}")
+                                # Log image processing errors but continue
                                 pass
                         if getattr(self, '_stop_video_stream', False):
+                            print("Stopping video stream worker")
+                            self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
                             break
                     # If we got here, stream ended or stopped, retry after short delay
-                except Exception:
+                except requests.exceptions.RequestException as e:
+                    # Handle network-related errors
                     self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
-                time.sleep(3)  # Wait 3 seconds before retrying
+                except Exception as e:
+                    # Handle any other unexpected errors
+                    self.after(0, lambda: self.video_canvas.config(image='', text="Video stream error."))
+                
+                # Wait before retrying connection
+                time.sleep(3)
 
         threading.Thread(target=video_stream_worker, daemon=True).start()
 
@@ -242,9 +253,17 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self._video_photo = photo  # Keep a reference to avoid garbage collection
         
     def __init__(self):
+        self.last_text = ""
         super().__init__()
+        
+        # Create config.ini symlink to ensure it's accessible in main folder
+        create_config_ini_symlink()
+        
         self.title("Astro Dwarf Scheduler")
         self.geometry("810x800")
+
+        # Set up window close protocol to properly clean up video stream
+        self.protocol("WM_DELETE_WINDOW", self.quit_method)
 
         # --- Initialize all attributes used by methods before any method that uses them ---
         self.scheduler_running = False
@@ -276,6 +295,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         self.refresh_results = None
         self.create_main_tab()
+
         # Ensure file counts are updated on startup
         self.update_session_counts()
         self.settings_vars = {}
@@ -307,15 +327,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
         # Bind tab change event to refresh file lists
         def on_tab_changed(event):
             tab = event.widget.tab(event.widget.index('current'))['text']
-            #if tab == 'Edit Sessions':
-            #    if self.edit_sessions_refresh:
-            #        self.edit_sessions_refresh()
             if tab == 'Session Overview':
                 if self.overview_refresh:
                     self.overview_refresh()
-            # Update Exposure and Gain fields when Create Session tab is selected
-            elif tab == 'Create Session':
-                create_session.update_exposure_gain_fields(self.settings_vars)
 
         self.tab_control.bind('<<NotebookTabChanged>>', on_tab_changed)
 
@@ -328,13 +342,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
         if not hasattr(self, 'total_session_runtime'):
             self.total_session_runtime = 0
         self.total_session_runtime += session_seconds
-
-    def set_scheduler_buttons_state(self, state):
-        """Enable or disable the unlock, polar, and eq buttons on the Scheduler tab."""
-        self.unlock_button.config(state=state)
-        self.polar_button.config(state=state)
-        self.calibrate_button.config(state=state)
-        self.eq_button.config(state=state)
 
     # Function to get the exposure time from settings_vars
     def get_exposure_time(self, settings_vars):
@@ -438,6 +445,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
         '''
         print("Wait during closing...")
         self.log("Wait during closing...")
+
+        # Stop video stream
+        self._stop_video_stream = True
 
         # Force stop the scheduler immediately
         if self.scheduler_running:
@@ -573,20 +583,43 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.config_combobox.config(state=tk.NORMAL)
         self.add_button.config(state=tk.NORMAL)
 
+    def toggle_buttons(self, state):
+        # Invert the state for the start button
+        state_start = tk.DISABLED if state == tk.NORMAL else tk.NORMAL
+        state_stop = tk.DISABLED if state_start == tk.NORMAL else tk.NORMAL
+
+        if state == "waiting":
+            state_start = tk.DISABLED
+            state_stop = tk.NORMAL
+            state = tk.DISABLED
+
+        if state == tk.NONE:
+            state = tk.DISABLED
+            state_start = tk.DISABLED
+            state_stop = tk.DISABLED
+
+        """Enable or disable buttons based on the state."""
+        self.start_button.config(state=state_start)
+        self.stop_button.config(state=state_stop)
+        self.unlock_button.config(state=state)
+        self.eq_button.config(state=state)
+        self.polar_button.config(state=state)
+        self.calibrate_button.config(state=state)
+
     def create_main_tab(self):
         self.log_text = None
         # Multipla configuration prompt label
         self.labelConfig = tk.Label(self.tab_main, text="Configuration", font=("Arial", 12))
-        self.labelConfig.pack(anchor="w", padx=10, pady=10)
+        self.labelConfig.pack(anchor="w", padx=10, pady=(10,0))
 
         # --- Video Preview Frame (top right) ---
         preview_frame = tk.Frame(self.tab_main, bd=1, relief="solid")
-        preview_frame.place(relx=1.0, x=-20, y=80, anchor="ne", width=220, height=123, bordermode="outside")  # Top right, moved down by 50px
+        preview_frame.place(relx=1.0, x=-20, y=85, anchor="ne", width=220, height=124, bordermode="outside")  # Top right, moved down by 50px
         preview_frame.pack_propagate(False)
         self.video_canvas = tk.Label(preview_frame, text="No video stream.")
         self.video_canvas.pack(fill="both", expand=True)
         self.video_stream_url = f"http://{DWARF_IP}:8092/mainstream"
-        self._stop_video_stream = False
+        self._stop_video_stream = True
         self.start_video_preview()
 
         # Checkbox for "Multiple" and related widgets in a grid for alignment
@@ -595,7 +628,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         self.multiple_var = tk.BooleanVar(value=False)
         self.multiple_checkbox = tk.Checkbutton(multiple_frame, text="Multiple", variable=self.multiple_var, command=self.toggle_multiple)
-        self.multiple_checkbox.grid(row=0, column=0, sticky="w", padx=(0, 8), pady=2)
+        self.multiple_checkbox.grid(row=0, column=0, sticky="w", padx=(0, 8), pady=8)
 
         self.combobox_label = tk.Label(multiple_frame, text="Current Config:")
         self.combobox_label.grid(row=0, column=1, sticky="e", padx=(0, 4), pady=2)
@@ -679,7 +712,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.stop_button = tk.Button(scheduler_frame, text="Stop Scheduler", command=self.stop_scheduler, state=tk.DISABLED, width=16)
         self.stop_button.grid(row=0, column=1, padx=2, sticky="sew")
 
-        self.unlock_button = tk.Button(scheduler_frame, text="Unset Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
+        self.unlock_button = tk.Button(scheduler_frame, text="Unset as Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
         self.unlock_button.grid(row=0, column=2, padx=2, sticky="sew")
 
         self.calibrate_button = tk.Button(scheduler_frame, text="Calibrate", command=self.start_calibration, state=tk.DISABLED, width=16)
@@ -811,21 +844,16 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.disable_controls()
         if not self.scheduler_running:
             self.log("Astro_Dwarf_Scheduler is starting...")
+            self.toggle_buttons("waiting")
             self.scheduler_running = True
             self.scheduler_stop_event.clear()
             self.start_logHandler()
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.NORMAL)
-            self.unlock_button.config(state=tk.NORMAL)
-            self.eq_button.config(state=tk.NORMAL)
-            self.polar_button.config(state=tk.NORMAL)
-            self.calibrate_button.config(state=tk.NORMAL)
             self.scheduler_start_time = datetime.now()  # Track when the scheduler starts
+            self.reset_total_runtime()
             # Only start if not already running
             if not hasattr(self, 'scheduler_thread') or not self.scheduler_thread.is_alive():
                 self.scheduler_thread = threading.Thread(target=self.run_scheduler, daemon=True)
                 self.scheduler_thread.start()
-            self.update_session_info()  # Start updating session info
         # Update file counts when scheduler starts
         if hasattr(self, 'update_session_counts'):
             self.update_session_counts()
@@ -836,26 +864,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_running = False
             self.scheduler_stop_event.set()
             self.log("Scheduler is waiting for the process to stop.")
-
-            # Update UI immediately
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.DISABLED)
-            self.unlock_button.config(state=tk.DISABLED)
-            self.eq_button.config(state=tk.DISABLED)
-            self.polar_button.config(state=tk.DISABLED)
-            self.calibrate_button.config(state=tk.DISABLED)
-
+            self.toggle_buttons(tk.NONE)    
             # Wait for thread to finish with timeout
             self.verifyCountdown(10)  # Reduced timeout
         else:
-            self.start_button.config(state=tk.NORMAL)
-            self.stop_button.config(state=tk.DISABLED)
-            self.unlock_button.config(state=tk.DISABLED)
-            self.eq_button.config(state=tk.DISABLED)
-            self.polar_button.config(state=tk.DISABLED)
-            self.calibrate_button.config(state=tk.DISABLED) 
+            self.toggle_buttons(tk.DISABLED)    
             self.log("Scheduler is stopping...")
-            self.enable_controls()
+            #self.enable_controls()
 
         # Hide session info when scheduler stops
         self.session_info_label.pack_forget()
@@ -918,6 +933,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 result = start_STA_connection(not self.bluetooth_connected)
 
             if result:
+                # Enable controls  
+                self.toggle_buttons(tk.NORMAL)
                 self.log("Connected to the Dwarf")
 
             while result and self.scheduler_running and not self.scheduler_stop_event.is_set():
@@ -925,6 +942,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
                     # Execute commands and check if any sessions were processed
                     self.session_running = True  # Mark session as running
+                    self._stop_video_stream = False
+                    #self.start_video_preview()
 
                     session_start = datetime.now()
                     sessions_processed = check_and_execute_commands(self, stop_event=self.scheduler_stop_event, skip_time_checks=self.skip_time_checks)
@@ -944,6 +963,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     # If no sessions were processed and scheduler is still running, continue checking
                     if not sessions_processed and self.scheduler_running and not self.scheduler_stop_event.is_set():
                         self.session_running = False  # No session is running
+
                         # Instead of sleeping for 10 seconds, check every 0.1s if stopped
                         total_sleep = 0
                         while total_sleep < 10 and self.scheduler_running and not self.scheduler_stop_event.is_set():
@@ -952,6 +972,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
                 except Exception as e:
                     self.after(0, lambda e=e: self.log(f"Error in scheduler loop: {e}", level="error"))
+                    self._stop_video_stream = True
+                    self.session_running = False
                     break
 
         except KeyboardInterrupt:
@@ -971,12 +993,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             def update_ui_after_scheduler():
                 self.scheduler_running = False
                 self.scheduler_stopped = True
-                self.start_button.config(state=tk.NORMAL)
-                self.stop_button.config(state=tk.DISABLED)
-                self.unlock_button.config(state=tk.DISABLED)
-                self.eq_button.config(state=tk.DISABLED)
-                self.polar_button.config(state=tk.DISABLED)
-                self.calibrate_button.config(state=tk.DISABLED)
+                self.toggle_buttons(tk.DISABLED)
                 self.enable_controls()
                 if hasattr(self, 'update_session_counts'):
                     self.update_session_counts()
@@ -1000,9 +1017,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
             if result:
                 def update_unlock_button():
                     if self.unset_lock_device_mode:
-                        self.unlock_button.config(text="Set Device as Host")
+                        self.unlock_button.config(text="Set as Host")
                     else:
-                        self.unlock_button.config(text="Unset Device as Host")
+                        self.unlock_button.config(text="Unset as Host")
                     self.unset_lock_device_mode = not self.unset_lock_device_mode
                     self.unlock_button.update()
                 self.after(0, update_unlock_button)
@@ -1016,11 +1033,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.after(0, lambda: self.log("Starting EQ Solving process..."))
             while not result and attempt < 3:
                 attempt += 1
+                self.after(0, lambda: setattr(self, '_stop_video_stream', False))
+                self.after(0, lambda: self.start_video_preview())            
                 result = start_polar_align()
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
+            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
         except Exception as e:
             self.after(0, lambda e=e: self.log(f"Error in EQ Solving: {e}", level="error"))
+            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
 
     def run_start_polar_position(self):
         try:
@@ -1033,38 +1054,48 @@ class AstroDwarfSchedulerApp(tk.Tk):
             attempt = 0
             result = False
             self.after(0, lambda: self.log("Starting Polar Align positionning..."))
+
             while not result and attempt < 1:
+                self.after(0, lambda: setattr(self, '_stop_video_stream', False))
+                self.after(0, lambda: self.start_video_preview())
                 attempt += 1
                 # Rotation Motor Resetting
                 result = motor_action(5)
                 if result:
-                     # Pitch Motor Resetting
-                     result = motor_action(6)
-                if result and dwarf_id_int == 3:
-                     # Rotation Motor positioning D3
-                     result = motor_action(9)
+                    # Pitch Motor Resetting
+                    result = motor_action(6)
+                if result and dwarf_id == "3":
+                    # Rotation Motor positioning D3
+                    result = motor_action(9)
                 elif result:
-                     # Rotation Motor positioning
-                     result = motor_action(2)
-                if result and dwarf_id_int == 3:
-                     # Pitch Motor positioning D3
-                     result = motor_action(7)
+                    # Rotation Motor positioning
+                    result = motor_action(2)
+                if result and dwarf_id == "3":
+                    # Pitch Motor positioning D3
+                    result = motor_action(7)
                 elif result:
-                     # Pitch Motor positioning
-                     result = motor_action(3)
+                    # Pitch Motor positioning
+                    result = motor_action(3)
 
                 if result:
-                     self.after(0, lambda: self.log("Success Polar Align positionning"))
+                    self.after(0, lambda: self.log("Success Polar Align positionning"))
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
+
+            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
+
         except Exception as e:
             self.after(0, lambda e=e: self.log(f"Error in Polar Align positionning: {e}", level="error"))
-
+            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
+            
     def run_start_calibration(self):
         try:
 
             # Session initialization
             self.after(0, lambda: self.log("Starting Calibration process..."))
+            self.after(0, lambda: setattr(self, '_stop_video_stream', False))
+            self.after(0, lambda: self.start_video_preview())
+
             continue_action = perform_time()
             verify_action(continue_action, "step_0")
 
@@ -1092,8 +1123,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
             time.sleep(wait_after)
             continue_action = perform_calibration()
 
+            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
+            
         except Exception as e:
             self.after(0, lambda e=e: self.log(f"Error in Calibration: {e}", level="error"))
+            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
 
     def start_logHandler(self):
 
@@ -1141,9 +1175,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
         Update the session information label with the next session's start time,
         the runtime of the current session, or a countdown to the next session.
         """
-        if self.scheduler_running:
+        # Only update session_info_label if we're running in a GUI context
+        has_gui = hasattr(self, 'session_info_label') and self.session_info_label is not None
+        
+        if self.scheduler_running and self.session_running:
             # Show the session info label
-            self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))
+            if has_gui:
+                self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))
 
             # Check for the next session in the ToDo directory
             todo_dir_var = "CURRENT_DIR" if getattr(self, 'session_running', False) else "TODO_DIR"
@@ -1167,75 +1205,91 @@ class AstroDwarfSchedulerApp(tk.Tk):
                         if not hasattr(self, 'session_start_time'):
                             self.session_start_time = datetime.now()
 
-                        # Get scheduled date/time from session file
-                        id_command = session_data.get('command', {}).get('id_command', {})
-                        goto_manual = session_data.get('command', {}).get('goto_manual', {})
-                        scheduled_date = id_command.get('date', None)
-                        scheduled_time = id_command.get('time', None)
-                        scheduled_target = goto_manual.get('target', 'Unknown')
-                        show_countdown = False
-                        countdown_str = ''
-
-                        if scheduled_date and scheduled_time:
-                            try:
-                                scheduled_dt = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
-                                now = datetime.now()
-                                if scheduled_dt > now:
-                                    show_countdown = True
-                                    countdown = scheduled_dt - now
-                                    countdown_str = str(countdown).split('.')[0]
-                            except Exception:
-                                pass
-
-                        if show_countdown:
-                            self.session_info_label.config(
-                                text=f"Up next: {scheduled_target} at {scheduled_date} {scheduled_time} (starts in {countdown_str})",
-                                fg="#0078d7"
-                            )
-                        else:
-                            estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
-                            # Ensure self.session_start_time is a datetime object
-                            if not isinstance(self.session_start_time, datetime):
-                                self.session_start_time = datetime.now()
-                            this_session_runtime = datetime.now() - self.session_start_time
-                            this_session_runtime_str = str(this_session_runtime).split('.')[0]  # Format as HH:MM:SS
-                            # Format total runtime (add current session's runtime live)
-                            if not hasattr(self, 'total_session_runtime'):
-                                self.total_session_runtime = 0
-                            live_total_seconds = int(self.total_session_runtime + this_session_runtime.total_seconds())
-                            total_runtime_td = timedelta(seconds=live_total_seconds)
-                            total_runtime_str = str(total_runtime_td).split('.')[0]
-                            self.session_info_label.config(text=f"Session runtime: {this_session_runtime_str} / {estimated_runtime} - Total runtime: {total_runtime_str}", fg="#26447A")
+                        estimated_runtime = self.calculate_end_time(session_data.get('command', {}))
+                        # Ensure self.session_start_time is a datetime object
+                        if not isinstance(self.session_start_time, datetime):
+                            self.session_start_time = datetime.now()
+                        this_session_runtime = datetime.now() - self.session_start_time
+                        this_session_runtime_str = str(this_session_runtime).split('.')[0]  # Format as HH:MM:SS
+                        # Format total runtime (add current session's runtime live)
+                        if not hasattr(self, 'total_session_runtime'):
+                            self.total_session_runtime = 0
+                        live_total_seconds = int(self.total_session_runtime + this_session_runtime.total_seconds())
+                        total_runtime_td = timedelta(seconds=live_total_seconds)
+                        total_runtime_str = str(total_runtime_td).split('.')[0]
+                        self.last_text=f"Session runtime: {this_session_runtime_str} / {estimated_runtime} - Total runtime: {total_runtime_str}"
+                        if has_gui:
+                            self.session_info_label.config(text=self.last_text, fg="#26447A")
 
                     except Exception as e:
-                       self.session_info_label.config(text=f"Error reading next session. {e}\n{traceback.format_exc()}")
-                else:
-                    self.session_info_label.config(text="No sessions scheduled - Create sessions in 'Create Session' tab", fg="purple")
+                        if has_gui:
+                            self.session_info_label.config(text=f"Error reading next session. {e}\n{traceback.format_exc()}")
             else:
-                self.session_info_label.config(text="No session directory found - Check configuration",fg="red")
+                if has_gui:
+                    self.session_info_label.config(text="No session directory found - Check configuration",fg="red")
         else:
             # Show a helpful placeholder when scheduler is not running
-            self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))
+            if has_gui:
+                self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))
             
             # Check if there are any sessions in ToDo to provide useful information
             todo_dir = LIST_ASTRO_DIR["TODO_DIR"]
             if os.path.exists(todo_dir):
                 todo_files = get_json_files_sorted(todo_dir)
+                    
                 if todo_files:
-                    self.session_info_label.config(
-                        text=f"Ready to start - {len(todo_files)} session(s) waiting. Click 'Start Scheduler' to begin.",
-                        fg="green"
-                    )
+                    next_session_file = todo_files[0]
+                    next_session_path = os.path.join(todo_dir, next_session_file)
+                    with open(next_session_path, 'r') as f:
+                        session_data = json.loads(f.read())
+                    # Get scheduled date/time from session file
+                    id_command = session_data.get('command', {}).get('id_command', {})
+                    goto_manual = session_data.get('command', {}).get('goto_manual', {})
+                    scheduled_date = id_command.get('date', None)
+                    scheduled_time = id_command.get('time', None)
+                    scheduled_target = goto_manual.get('target', 'Unknown')
+                    show_countdown = False
+                    countdown_str = ''
+
+                    if scheduled_date and scheduled_time:
+                        try:
+                            scheduled_dt = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M:%S")
+                            now = datetime.now()
+                            if scheduled_dt > now:
+                                show_countdown = True
+                                countdown = scheduled_dt - now
+                                countdown_str = str(countdown).split('.')[0]
+                        except Exception:
+                            pass
+
+                    if show_countdown and self.scheduler_running:
+                        if has_gui:
+                            self.session_info_label.config(
+                                text=f"Up next: {scheduled_target} - {countdown_str} at {scheduled_date} {scheduled_time}",
+                                fg="#0078d7"
+                            )
+                    else:
+                        if has_gui:
+                            self.session_info_label.config(
+                                text=f"Ready to start - {len(todo_files)} session(s) waiting. Click 'Start Scheduler' to begin.",
+                                fg="green"
+                            )                    
                 else:
-                    self.session_info_label.config(
-                        text="No sessions scheduled - Create sessions in 'Create Session' tab to get started.",
-                        fg="purple"
-                    )
+                    if has_gui:
+                        self.session_info_label.config(
+                            text="No sessions scheduled - Create sessions in 'Create Session' tab to get started.",
+                            fg="purple"
+                        )
             else:
-                self.session_info_label.config(
-                    text="Session directory not found - Check your configuration settings.",
-                    fg="red"
-                )
+                if has_gui:
+                    self.session_info_label.config(
+                        text="Session directory not found - Check your configuration settings.",
+                        fg="red"
+                    )
+
+            if self.last_text != "":
+                self.log(self.last_text)
+                self.last_text = ""
 
         # Schedule the next update
         self.after(1000, self.update_session_info)

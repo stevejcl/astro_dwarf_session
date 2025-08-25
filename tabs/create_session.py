@@ -1035,19 +1035,7 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
 
 def load_from_config():
     """Load the camera type from config.ini file"""
-    # Get the config file path using AppData logic for Windows compatibility
-    def get_config_ini_path():
-        ini_name = 'config.ini'
-        if sys.platform == 'win32':
-            appdata = os.environ.get('APPDATA')
-            if appdata:
-                ini_name = os.path.join(appdata, 'AstroDwarfScheduler', 'config.ini')
-                os.makedirs(os.path.dirname(ini_name), exist_ok=True)
-                return ini_name
-        return os.path.join(BASE_DIR, ini_name)
-    
-    config_file = get_config_ini_path()
-    
+    config_file = 'config.ini'
     config = configparser.ConfigParser()
     if os.path.exists(config_file):
         config.read(config_file)

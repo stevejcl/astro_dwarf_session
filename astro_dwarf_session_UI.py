@@ -574,11 +574,22 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def toggle_buttons(self, state):
         # Invert the state for the start button
-        state_alt = tk.DISABLED if state == tk.NORMAL else tk.NORMAL
-        state = tk.DISABLED if state == tk.NONE else state
+        state_start = tk.DISABLED if state == tk.NORMAL else tk.NORMAL
+        state_stop = tk.DISABLED if state_start == tk.NORMAL else tk.NORMAL
+
+        if state == "waiting":
+            state_start = tk.DISABLED
+            state_stop = tk.NORMAL
+            state = tk.DISABLED
+
+        if state == tk.NONE:
+            state = tk.DISABLED
+            state_start = tk.DISABLED
+            state_stop = tk.DISABLED
+
         """Enable or disable buttons based on the state."""
-        self.start_button.config(state=state_alt)
-        self.stop_button.config(state=state)
+        self.start_button.config(state=state_start)
+        self.stop_button.config(state=state_stop)
         self.unlock_button.config(state=state)
         self.eq_button.config(state=state)
         self.polar_button.config(state=state)
@@ -822,7 +833,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.disable_controls()
         if not self.scheduler_running:
             self.log("Astro_Dwarf_Scheduler is starting...")
-            self.toggle_buttons(tk.NORMAL)
+            self.toggle_buttons("waiting")
             self.scheduler_running = True
             self.scheduler_stop_event.clear()
             self.start_logHandler()
@@ -911,6 +922,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 result = start_STA_connection(not self.bluetooth_connected)
 
             if result:
+                # Enable controls  
+                self.toggle_buttons(tk.NORMAL)
                 self.log("Connected to the Dwarf")
 
             while result and self.scheduler_running and not self.scheduler_stop_event.is_set():

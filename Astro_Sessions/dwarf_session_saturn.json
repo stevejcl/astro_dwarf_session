@@ -1,7 +1,7 @@
 {
     "command": {
         "id_command": {
-            "uuid": "00001",
+            "uuid": "00001-00001",
             "description": "Saturn",
             "date": "2024-09-24",
             "time": "08:00:00",
@@ -10,7 +10,26 @@
             "result": false,
             "message": "",
             "nb_try": 2,
-            "processed_date": "2024-10-10 18:48:33"
+            "starting_date": "2024-09-24 08:00:00",
+            "dwarf": "D3",
+            "processed_date": "2024-10-10 18:48:33",
+            "exposure_actual": null,
+            "gain_actual": null
+        },
+        "eq_solving": {
+            "do_action": false,
+            "wait_before": 10,
+            "wait_after": 10
+        },
+        "auto_focus": {
+            "do_action": false,
+            "wait_before": 10,
+            "wait_after": 10
+        },
+        "infinite_focus": {
+            "do_action": false,
+            "wait_before": 10,
+            "wait_after": 10
         },
         "calibration": {
             "do_action": false,
@@ -34,8 +53,8 @@
             "exposure": "1/5",
             "gain": "20",
             "binning": "0",
-            "IRCut": "0",
-            "count": "50",
+            "ircut": "0",
+            "count": 50,
             "wait_after": 3
         },
         "setup_wide_camera": {
@@ -43,7 +62,7 @@
             "exposure": "10",
             "gain": "90",
             "count": "10",
-            "wait_after": 30
+            "wait_after": "30"
         }
     }
 }

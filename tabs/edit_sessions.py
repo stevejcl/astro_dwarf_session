@@ -322,9 +322,7 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
             has_unsaved_changes['flag'] = False  # Reset change flag after loading
         except Exception as e:
             clear_form()
-            tk.Label(form_frame, text=f"Error loading file: {e}", fg="red").pack()
-            selected_file['name'] = None
-            selected_file['data'] = None
+            refresh_list()
 
     # Add event binding to detect when listbox loses selection
     def on_listbox_focus_out(event):

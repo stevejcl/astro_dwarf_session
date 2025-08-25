@@ -11,7 +11,7 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from config import DWARF_IP
-from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config, create_config_ini_symlink
+from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
@@ -255,10 +255,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def __init__(self):
         self.last_text = ""
         super().__init__()
-        
-        # Create config.ini symlink to ensure it's accessible in main folder
-        create_config_ini_symlink()
-        
+                
         self.title("Astro Dwarf Scheduler")
         self.geometry("810x800")
 

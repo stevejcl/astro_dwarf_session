@@ -17,7 +17,7 @@ The modern GUI provides six comprehensive tabs:
 
 #### 📋 **Main Tab**
 - **Multi-Configuration Support**: Manage multiple telescope setups
-- **Real-Time Video Preview**: Live MJPEG stream from telescope (220x140px)
+- **Real-Time Video Preview**: Live MJPEG stream from telescope
 - **Session Monitoring**: Live session info with runtime tracking and countdowns
 - **Connection Management**: Bluetooth/Wi-Fi connection controls
 - **Scheduler Controls**: Start/stop scheduler, calibration, polar alignment
@@ -28,7 +28,6 @@ The modern GUI provides six comprehensive tabs:
 - **Location Services**: Automatic location detection and manual coordinates
 - **Path Management**: Stellarium integration, session directories
 - **UI Preferences**: Display brightness and interface customization
-- **Windows Compatibility**: Automatic AppData usage for Program Files installations
 
 #### 🆕 **Create Session Tab**
 - **Manual Session Creation**: Target coordinates, imaging parameters, scheduling
@@ -41,7 +40,7 @@ The modern GUI provides six comprehensive tabs:
 
 #### 👁️ **Overview Session Tab**
 - **Session Queue Management**: Visual session pipeline (ToDo → Current → Done/Error)
-- **Real-Time Monitoring**: Live video feed with 5-second frame capture
+- **Real-Time Monitoring**: Live video feed with frame capture
 - **Session Details**: Complete session information display
 - **Queue Operations**: Move, delete, and organize sessions
 - **Execution Controls**: Start/stop individual or batch sessions
@@ -58,22 +57,16 @@ The modern GUI provides six comprehensive tabs:
 - **Form-Based Interface**: User-friendly parameter adjustment
 - **Bulk Operations**: Select and modify multiple sessions
 - **Real-Time Validation**: Immediate feedback on changes
-- **Backup Safety**: Automatic change tracking
 
 ### Advanced Features
-- **AppData Integration**: Automatic writable directory detection for Windows
 - **Directory Auto-Creation**: Intelligent session folder management
 - **Error Recovery**: Robust error handling and session retry logic
 - **Time Zone Support**: Proper handling of observation scheduling
 - **Configuration Backup**: Safe configuration management
 - **Video Stream Management**: Efficient MJPEG streaming with proper cleanup
-
-### Technical Improvements
 - **Memory Management**: Optimized video streaming and UI updates
 - **Thread Safety**: Proper multi-threaded operation
-- **Resource Cleanup**: Automatic cleanup on application exit
 - **Cross-Platform Paths**: Proper path handling for all operating systems
-- **Error Logging**: Comprehensive logging system with file rotation
 
 ## Installation
 
@@ -82,18 +75,14 @@ The modern GUI provides six comprehensive tabs:
 - Windows 10/11, macOS 10.15+, or modern Linux distribution
 
 ### Quick Setup
-1. Clone this repository:
-   ```sh
-   git clone <repository-url>
-   cd astro_dwarf_session
-   ```
+1. Download or clone this project to your local machine
 
 2. Install the required Python libraries:
    ```sh
    python -m pip install -r requirements.txt
    python -m pip install -r requirements-local.txt --target .
    ```
-   > **Note**: The `dwarf_python_api` library must be installed locally in the root path of this project using the `--target .` parameter. Ensure the dot at the end of the line is not missing.
+   > **Note**: The `dwarf_python_api` library must be installed locally in the root path of this project using the `--target .` parameter.
 
 3. **Optional**: Install video preview dependencies:
    ```sh
@@ -166,17 +155,17 @@ Pane,RA,DEC,Description
 ### Connection Issues
 - If Bluetooth fails, the application will prompt for connection attempts
 - Wi-Fi parameters can be set via command line for headless operation
-- Use Dwarfium app to establish initial connection if needed
-
-### Windows Compatibility
-- The application automatically detects Program Files installations
-- Configuration files are stored in `%APPDATA%` when needed
-- Directory permissions are handled automatically
+- Use the Dwarfium app to establish initial connection if needed
 
 ### Video Preview Issues
 - Install `Pillow` and `requests` if video preview shows installation message
 - Check network connectivity to telescope IP
 - Video stream URL: `http://{DWARF_IP}:8092/mainstream`
+
+### Session Management
+- Ensure proper permissions for session directories
+- Check that JSON session files are properly formatted
+- Review error logs for detailed troubleshooting information
 
 ## Architecture
 
@@ -188,11 +177,6 @@ astro_dwarf_session/
 ├── config.py                    # Configuration management
 ├── dwarf_session.py            # Session execution logic
 ├── tabs/                       # GUI tab modules
-│   ├── settings.py
-│   ├── create_session.py
-│   ├── overview_session.py
-│   ├── result_session.py
-│   └── edit_sessions.py
 ├── Astro_Sessions/             # Session data directories
 └── dwarf_python_api/           # Telescope API
 ```
@@ -206,14 +190,9 @@ astro_dwarf_session/
 
 ## Contributing
 
-We welcome contributions! The codebase includes:
-- 68+ functions across 5 main GUI tabs
-- Comprehensive error handling and logging
-- Cross-platform compatibility layer
-- Automated testing capabilities
+We welcome contributions! The codebase includes comprehensive error handling, logging, and cross-platform compatibility.
 
 ## Notes
 - Clear skies and good luck! The Dwarf will work for you.
-- For detailed function documentation, see the generated flowchart in the project directory.
 - The application automatically manages session directories and file organization.
 - All configuration changes are applied immediately without restart required.

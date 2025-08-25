@@ -910,6 +910,9 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
     var_goto_manual = tk.BooleanVar(value=True)
     var_no_goto = tk.BooleanVar(value=False)
 
+    entry = tk.Entry()
+    var = tk.StringVar()
+
     grid_row = 0
     for field, key in fields:
         label = tk.Label(scrollable_frame, width=20, text=field, anchor='w')
@@ -930,15 +933,15 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
             if config_vars.get(key) is not None and config_vars[key].get():
                 var.set(config_vars[key].get())
         if key == "max_retries":
-            var.set(2)
+            var.set("2")
         if key == "wait_before":
-            var.set(10)
+            var.set("10")
         if key == "wait_after":
-            var.set(10)
+            var.set("10")
         if key == "wait_after_target":
-            var.set(30)
+            var.set("30")
         if key == "wait_after_camera":
-            var.set(20)
+            var.set("20")
         if key != "target_type" and key != "target_solar":
             settings_vars[key] = var
 

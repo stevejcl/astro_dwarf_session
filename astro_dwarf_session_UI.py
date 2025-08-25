@@ -679,7 +679,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.stop_button = tk.Button(scheduler_frame, text="Stop Scheduler", command=self.stop_scheduler, state=tk.DISABLED, width=16)
         self.stop_button.grid(row=0, column=1, padx=2, sticky="sew")
 
-        self.unlock_button = tk.Button(scheduler_frame, text="Unset Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
+        self.unlock_button = tk.Button(scheduler_frame, text="Unset as Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
         self.unlock_button.grid(row=0, column=2, padx=2, sticky="sew")
 
         self.calibrate_button = tk.Button(scheduler_frame, text="Calibrate", command=self.start_calibration, state=tk.DISABLED, width=16)
@@ -821,11 +821,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.polar_button.config(state=tk.NORMAL)
             self.calibrate_button.config(state=tk.NORMAL)
             self.scheduler_start_time = datetime.now()  # Track when the scheduler starts
+            self.reset_total_runtime()
             # Only start if not already running
             if not hasattr(self, 'scheduler_thread') or not self.scheduler_thread.is_alive():
                 self.scheduler_thread = threading.Thread(target=self.run_scheduler, daemon=True)
                 self.scheduler_thread.start()
-            self.update_session_info()  # Start updating session info
         # Update file counts when scheduler starts
         if hasattr(self, 'update_session_counts'):
             self.update_session_counts()
@@ -1000,9 +1000,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
             if result:
                 def update_unlock_button():
                     if self.unset_lock_device_mode:
-                        self.unlock_button.config(text="Set Device as Host")
+                        self.unlock_button.config(text="Set as Host")
                     else:
-                        self.unlock_button.config(text="Unset Device as Host")
+                        self.unlock_button.config(text="Unset as Host")
                     self.unset_lock_device_mode = not self.unset_lock_device_mode
                     self.unlock_button.update()
                 self.after(0, update_unlock_button)

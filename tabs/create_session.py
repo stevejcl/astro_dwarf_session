@@ -723,7 +723,7 @@ def generate_json_preview(settings_vars, config_vars):
         "binning": binning_value,
         "ircut": ircut_value,
         "count": count,
-        "wait_after": 30
+        "wait_after": int(settings_vars["wait_after_camera"].get()) if settings_vars["wait_after_camera"].get() and settings_vars["wait_after_camera"].get().strip() else 0
     }
 
     setup_wide_camera = {
@@ -731,7 +731,7 @@ def generate_json_preview(settings_vars, config_vars):
         "exposure": "10",
         "gain": "90",
         "count": "10",
-        "wait_after": 30
+        "wait_after": "30"
     }
 
     # Modify the behavior for "Wide-Angle Camera"
@@ -741,6 +741,8 @@ def generate_json_preview(settings_vars, config_vars):
         setup_wide_camera["exposure"] = exposure  # Use input fields for wide-angle as well
         setup_wide_camera["gain"] = gain
         setup_wide_camera["count"] = count
+        setup_wide_camera["wait_after"] = int(settings_vars["wait_after_camera"].get()) if settings_vars["wait_after_camera"].get() and settings_vars["wait_after_camera"].get().strip() else 0
+
 
     data = {
         "command": {

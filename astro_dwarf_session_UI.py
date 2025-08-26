@@ -935,43 +935,38 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.toggle_buttons(tk.NORMAL)
                 self.log("Connected to the Dwarf")
 
-            while result and self.scheduler_running and not self.scheduler_stop_event.is_set():
-                try:
+                while result and self.scheduler_running and not self.scheduler_stop_event.is_set():
+                    try:
+                        session_start = datetime.now()
+                        sessions_processed = check_and_execute_commands(ui_instance=self, stop_event=self.scheduler_stop_event, skip_time_checks=self.skip_time_checks)
+                        session_end = datetime.now()
 
-                    # Execute commands and check if any sessions were processed
-                    self.session_running = True  # Mark session as running
-                    self._stop_video_stream = False
+                        if sessions_processed:
+                            # Add this session's runtime to the total
+                            session_runtime = (session_end - session_start).total_seconds()
+                            self.add_to_total_runtime(session_runtime)
+                            self.log("Session completed, checking for more sessions...")
+                            # Brief pause between sessions
+                            time.sleep(1)
+                            continue
 
-                    session_start = datetime.now()
-                    sessions_processed = check_and_execute_commands(self, stop_event=self.scheduler_stop_event, skip_time_checks=self.skip_time_checks)
-                    session_end = datetime.now()
+                        self.reset_total_runtime()
 
-                    if sessions_processed:
-                        # Add this session's runtime to the total
-                        session_runtime = (session_end - session_start).total_seconds()
-                        self.add_to_total_runtime(session_runtime)
-                        self.log("Session completed, checking for more sessions...")
-                        # Brief pause between sessions
-                        time.sleep(1)
-                        continue
+                        # If no sessions were processed and scheduler is still running, continue checking
+                        if not sessions_processed and self.scheduler_running and not self.scheduler_stop_event.is_set():
+                            self.session_running = False  # No session is running
 
-                    self.reset_total_runtime()
+                            # Instead of sleeping for 10 seconds, check every 0.1s if stopped
+                            total_sleep = 0
+                            while total_sleep < 10 and self.scheduler_running and not self.scheduler_stop_event.is_set():
+                                time.sleep(0.1)
+                                total_sleep += 0.1
 
-                    # If no sessions were processed and scheduler is still running, continue checking
-                    if not sessions_processed and self.scheduler_running and not self.scheduler_stop_event.is_set():
-                        self.session_running = False  # No session is running
-
-                        # Instead of sleeping for 10 seconds, check every 0.1s if stopped
-                        total_sleep = 0
-                        while total_sleep < 10 and self.scheduler_running and not self.scheduler_stop_event.is_set():
-                            time.sleep(0.1)
-                            total_sleep += 0.1
-
-                except Exception as e:
-                    self.after(0, lambda e=e: self.log(f"Error in scheduler loop: {e}", level="error"))
-                    self._stop_video_stream = True
-                    self.session_running = False
-                    break
+                    except Exception as e:
+                        self.after(0, lambda e=e: self.log(f"Error in scheduler loop: {e}", level="error"))
+                        self._stop_video_stream = True
+                        self.session_running = False
+                        break
 
         except KeyboardInterrupt:
             self.log("Operation interrupted by the user.")

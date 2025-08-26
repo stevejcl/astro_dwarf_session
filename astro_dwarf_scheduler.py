@@ -226,11 +226,12 @@ def get_json_files_sorted(directory):
     return [fname for datetime_str, fname in files_with_datetime]
 
 # Main function to check and execute the commands
-def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
+def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_checks=False):
     """
     Check for JSON command files and execute them based on their scheduled time.
     
     Args:
+        ui_instance: UI instance (from astro_dwarf_session_UI.py) or None for command line
         stop_event: Optional event to signal stopping
         skip_time_checks: If True, ignore scheduled time and execute immediately
     
@@ -257,6 +258,17 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
         todo_files.sort(key=lambda x: natural_sort_key(x))
         
         current_time = datetime.now()
+
+        # Execute commands and check if any sessions were processed
+        # Only manage session state if we have a UI instance
+        if ui_instance and hasattr(ui_instance, 'session_running'):
+            if not ui_instance.session_running:
+                print("Starting new session...")
+                ui_instance.session_running = True  # Mark session as running
+                if hasattr(ui_instance, '_stop_video_stream'):
+                    ui_instance._stop_video_stream = False
+                if hasattr(ui_instance, 'start_video_preview'):
+                    ui_instance.start_video_preview()
         
         for filename in todo_files:
             if stop_event and stop_event.is_set():
@@ -612,7 +624,7 @@ def main():
             log.notice ("##--------------------------------------##")
             log.notice ("   Waiting for Action files...")
             while True:
-                check_and_execute_commands(True)
+                check_and_execute_commands(ui_instance=None)
                 time.sleep(10)
         else:
              log.error("Can't connect to the Dwarf, process stop!")

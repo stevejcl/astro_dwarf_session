@@ -452,8 +452,8 @@ def start_dwarf_session(program, stop_event=None):
             if interrupted(): return
             print_wide_camera_data()
             if interrupted(): return
-            
-            wait_after = program.get('setup_wide_camera', {}).get('wait_after', 0)
+
+            wait_after = int(program.get('setup_wide_camera', {}).get('wait_after', 0))
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)

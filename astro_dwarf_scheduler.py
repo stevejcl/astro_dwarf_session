@@ -260,15 +260,6 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
         current_time = datetime.now()
 
         # Execute commands and check if any sessions were processed
-        # Only manage session state if we have a UI instance
-        if ui_instance and hasattr(ui_instance, 'session_running'):
-            if not ui_instance.session_running:
-                ui_instance.session_running = True  # Mark session as running
-                if hasattr(ui_instance, '_stop_video_stream'):
-                    ui_instance._stop_video_stream = False
-                if hasattr(ui_instance, 'start_video_preview'):
-                    ui_instance.start_video_preview()
-        
         for filename in todo_files:
             if stop_event and stop_event.is_set():
                 break
@@ -312,7 +303,16 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
                 if time_ready:
 
                     log.notice(f"Executing session: {target}")
-                    
+
+                    # Only manage session state if we have a UI instance
+                    if ui_instance and hasattr(ui_instance, 'session_running'):
+                        if not ui_instance.session_running:
+                            ui_instance.session_running = True  # Mark session as running
+                            if hasattr(ui_instance, '_stop_video_stream'):
+                                ui_instance._stop_video_stream = False
+                            if hasattr(ui_instance, 'start_video_preview'):
+                                ui_instance.start_video_preview()
+                                                    
                     # Move to Current directory
                     current_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Current", filename)
                     os.makedirs(os.path.dirname(current_path), exist_ok=True)
@@ -380,7 +380,7 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
 
                         # Rename the session filename date-time with the session date-time
                         dt_str = id_command['starting_date'].replace(':', '-').replace(' ', '-')
-                        new_filename_base = re.sub(r'^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-', '', filename)
+                        new_filename_base = re.sub(r'^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}_', '', filename)
                         new_filename = f"{dt_str}_{new_filename_base}"
 
                         # Move to Done directory
@@ -399,7 +399,6 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
                         log.success(f"Session {new_filename} completed successfully")
 
                         analyze_files()
-
                         
                     except Exception as e:
                         # Session failed
@@ -430,10 +429,14 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
                             os.remove(current_path)
                         
                         sessions_processed = True
-    
-                        #if __name__ != "__main__":
-                            #self.toggle_scheduler_buttons_state(state="normal")
 
+                    # Only manage session state if we have a UI instance
+                    if ui_instance and hasattr(ui_instance, 'session_running'):
+                        if ui_instance.session_running:
+                            ui_instance.session_running = False  # Mark session as not running
+                            if hasattr(ui_instance, '_stop_video_stream'):
+                                ui_instance._stop_video_stream = True
+                                
                     # Only process one session at a time                    
                     break
                         

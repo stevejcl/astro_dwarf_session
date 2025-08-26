@@ -121,10 +121,10 @@ def add_new_configuration(config_name):
     
 def toggle_scheduler_buttons_state(self, state):
     # Toggle the state of the scheduler buttons only if running from UI
-    self.after(0, lambda: self.start_button.config(state=state))
-    self.after(0, lambda: self.eq_button.config(state=state))
-    self.after(0, lambda: self.polar_button.config(state=state))
-    self.after(0, lambda: self.calibrate_button.config(state=state))
+    self.start_button.config(state=state)
+    self.eq_button.config(state=state)
+    self.polar_button.config(state=state)
+    self.calibrate_button.config(state=state)
 
 # Tooltip class
 class Tooltip:
@@ -240,11 +240,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     # If we got here, stream ended or stopped, retry after short delay
                 except requests.exceptions.RequestException as e:
                     # Handle network-related errors
-                    self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
+                    self.video_canvas.config(image='', text="No video stream.")
                 except Exception as e:
                     # Handle any other unexpected errors
-                    self.after(0, lambda: self.video_canvas.config(image='', text="Video stream error."))
-                
+                    self.video_canvas.config(image='', text="Video stream error.")
+
                 # Wait before retrying connection
                 time.sleep(3)
 
@@ -821,14 +821,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.bluetooth_connected = False
             self.result = start_connection(False, self.use_web.get())
             if self.result:
-                self.after(0, lambda: self.log("Bluetooth connected successfully."))
+                self.log("Bluetooth connected successfully.")
                 self.bluetooth_connected = True
                 # Enable the start scheduler button
-                self.after(0, lambda: self.start_button.config(state=tk.NORMAL))
+                self.start_button.config(state=tk.NORMAL)
             else:
-                self.after(0, lambda: self.log("Bluetooth connection failed."))
+                self.log("Bluetooth connection failed.")
         except Exception as e:
-            self.after(0, lambda: self.log(f"Bluetooth connection failed: {e}"))
+            self.log(f"Bluetooth connection failed: {e}")
 
       #  self.after(0, self.start_scheduler)
 
@@ -963,7 +963,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                                 total_sleep += 0.1
 
                     except Exception as e:
-                        self.after(0, lambda e=e: self.log(f"Error in scheduler loop: {e}", level="error"))
+                        self.log(f"Error in scheduler loop: {e}", level="error")
                         self._stop_video_stream = True
                         self.session_running = False
                         break
@@ -971,15 +971,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
         except KeyboardInterrupt:
             self.log("Operation interrupted by the user.")
         except Exception as e:
-            self.after(0, lambda e=e: self.log(f"Scheduler error: {e}", level="error"))
+            self.log(f"Scheduler error: {e}", level="error")
         finally:
             self.session_running = False  # Ensure session state is reset
             # Ensure proper cleanup
             try:
                 perform_disconnect()
-                self.after(0, lambda: self.log("Disconnected from the Dwarf."))
+                self.log("Disconnected from the Dwarf.")
             except Exception as e:
-                self.after(0, lambda: self.log(f"Error during disconnect: {e}", level="error"))
+                self.log(f"Error during disconnect: {e}", level="error")
 
             # Update UI state on main thread
             def update_ui_after_scheduler():
@@ -1016,24 +1016,24 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     self.unlock_button.update()
                 self.after(0, update_unlock_button)
         except Exception as e:
-            self.after(0, lambda e=e: self.log(f"Error in unset_lock_device: {e}", level="error"))
+            self.log(f"Error in unset_lock_device: {e}", level="error")
 
     def run_start_eq_solving(self):
         try:
             attempt = 0
             result = False
-            self.after(0, lambda: self.log("Starting EQ Solving process..."))
+            self.log("Starting EQ Solving process...")
             while not result and attempt < 3:
                 attempt += 1
-                self.after(0, lambda: setattr(self, '_stop_video_stream', False))
-                self.after(0, lambda: self.start_video_preview())            
+                setattr(self, '_stop_video_stream', False)
+                self.start_video_preview()
                 result = start_polar_align()
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
-            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
+            setattr(self, '_stop_video_stream', True)
         except Exception as e:
-            self.after(0, lambda e=e: self.log(f"Error in EQ Solving: {e}", level="error"))
-            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
+            self.log(f"Error in EQ Solving: {e}", level="error")
+            setattr(self, '_stop_video_stream', True)
 
     def run_start_polar_position(self):
         try:
@@ -1044,11 +1044,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
             attempt = 0
             result = False
-            self.after(0, lambda: self.log("Starting Polar Align positionning..."))
+            self.log("Starting Polar Align positionning...")
 
             while not result and attempt < 1:
-                self.after(0, lambda: setattr(self, '_stop_video_stream', False))
-                self.after(0, lambda: self.start_video_preview())
+                setattr(self, '_stop_video_stream', False)
+                self.start_video_preview()
                 attempt += 1
                 # Rotation Motor Resetting
                 result = motor_action(5)
@@ -1069,23 +1069,23 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     result = motor_action(3)
 
                 if result:
-                    self.after(0, lambda: self.log("Success Polar Align positionning"))
+                    self.log("Success Polar Align positionning")
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
 
-            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
+            setattr(self, '_stop_video_stream', True)
 
         except Exception as e:
-            self.after(0, lambda e=e: self.log(f"Error in Polar Align positionning: {e}", level="error"))
-            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
-            
+            self.log(f"Error in Polar Align positionning: {e}", level="error")
+            setattr(self, '_stop_video_stream', True)
+
     def run_start_calibration(self):
         try:
 
             # Session initialization
-            self.after(0, lambda: self.log("Starting Calibration process..."))
-            self.after(0, lambda: setattr(self, '_stop_video_stream', False))
-            self.after(0, lambda: self.start_video_preview())
+            self.log("Starting Calibration process...")
+            setattr(self, '_stop_video_stream', False)
+            self.start_video_preview()
 
             continue_action = perform_time()
             verify_action(continue_action, "step_0")
@@ -1099,26 +1099,26 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
             continue_action = perform_stop_goto()
             verify_action(continue_action, "step_6")
-            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds"))
+            self.log(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
 
-            self.after(0, lambda: self.log("Starting Calibration"))
-            self.after(0, lambda: self.log(f"Waiting for {wait_before} seconds"))
+            self.log("Starting Calibration")
+            self.log(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
             continue_action = perform_calibration()
             verify_action(continue_action, "step_7")
-            self.after(0, lambda: self.log(f"Waiting for {wait_after} seconds"))
+            self.log(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             continue_action = perform_stop_goto()
-            self.after(0, lambda: self.log(f"Waiting for {wait_after} seconds"))
+            self.log(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
             continue_action = perform_calibration()
 
-            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
-            
+            setattr(self, '_stop_video_stream', True)
+
         except Exception as e:
-            self.after(0, lambda e=e: self.log(f"Error in Calibration: {e}", level="error"))
-            self.after(0, lambda: setattr(self, '_stop_video_stream', True))
+            self.log(f"Error in Calibration: {e}", level="error")
+            setattr(self, '_stop_video_stream', True)
 
     def start_logHandler(self):
 

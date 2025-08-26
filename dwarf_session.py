@@ -30,11 +30,12 @@ import dwarf_python_api.get_config_data
 import dwarf_python_api.lib.my_logger as log
 
 # The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
+# Update: this appears to have changed recently and no longer needs to be incremented
 def get_dwarf_id_str_val(dwarf_id):
-   return str(int(dwarf_id) + 1) if dwarf_id is not None else None
+   return str(int(dwarf_id)) if dwarf_id is not None else None
 
 def get_dwarf_id_int_val(dwarf_id):
-   return int(dwarf_id) + 1 if dwarf_id is not None else 0
+   return int(dwarf_id) if dwarf_id is not None else 0
 
 def select_solar_target (target):
    

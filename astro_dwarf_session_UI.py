@@ -16,7 +16,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAst
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
-import dwarf_python_api.get_config_data
+import dwarf_python_api.get_config_data as config
 
 import logging
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
@@ -399,7 +399,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 wait_time += int(settings_vars.get("wait_after", 0))
             if settings_vars["calibration"]:
                 dwarf_id = 2  # Ensure dwarf_id is always defined
-                data_config = dwarf_python_api.get_config_data.get_config_data()
+                data_config = config.get_config_data()
                 if data_config.get("dwarf_id"):
                     dwarf_id = data_config['dwarf_id']
                 # wait between actions and time actions
@@ -940,7 +940,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     # Execute commands and check if any sessions were processed
                     self.session_running = True  # Mark session as running
                     self._stop_video_stream = False
-                    #self.start_video_preview()
 
                     session_start = datetime.now()
                     sessions_processed = check_and_execute_commands(self, stop_event=self.scheduler_stop_event, skip_time_checks=self.skip_time_checks)
@@ -1043,7 +1042,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def run_start_polar_position(self):
         try:
             dwarf_id = "2"
-            data_config = dwarf_python_api.get_config_data.get_config_data()
+            data_config = config.get_config_data()
             if data_config["dwarf_id"]:
                 dwarf_id = data_config['dwarf_id']
             dwarf_id_int = int(dwarf_id) + 1 if dwarf_id is not None else 0

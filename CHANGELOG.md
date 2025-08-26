@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7] - 2025-08-26
+
+### Many changes and additions on evolution branch
+- Edit Sessions tab added
+- Improved form layout on tabs
+- Added Video Preview on main tab
+- Session management and color changes
+- Session information improved
+- Colors on log console
+- Improved button functionality
+- Fixed a few bugs
+- Can import Telescopius Lists now
+- Possibly broke some things but are not aware of any yet
+
 ## [1.6.2] - 2025-03-25
 
 ### Integrate New Bluetooth API

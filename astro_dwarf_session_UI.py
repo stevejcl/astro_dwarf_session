@@ -10,13 +10,12 @@ import traceback
 import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
-from config import DWARF_IP
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
-import dwarf_python_api.get_config_data as config
+import dwarf_python_api.get_config_data as config_py
 
 import logging
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
@@ -203,11 +202,17 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.video_canvas.config(text="Install Pillow and requests for video preview.")
             return
 
+        dwarf_ip = "127.0.0.1"
+        data_config = config_py.get_config_data()
+        if data_config["ip"]:
+            dwarf_ip = data_config['ip']
+        self.video_stream_url = f"http://{dwarf_ip}:8092/mainstream"
+
         def video_stream_worker():
             print("Starting video stream worker")
             while not getattr(self, '_stop_video_stream', False):
                 try:
-                    print("Connecting to video stream...")
+                    print(f"Connecting to video stream on IP: {dwarf_ip}...")
                     stream = requests.get(self.video_stream_url, stream=True, timeout=60)
                     bytes_data = b""
                     last_update = 0
@@ -399,7 +404,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 wait_time += int(settings_vars.get("wait_after", 0))
             if settings_vars["calibration"]:
                 dwarf_id = 2  # Ensure dwarf_id is always defined
-                data_config = config.get_config_data()
+                data_config = config_py.get_config_data()
                 if data_config.get("dwarf_id"):
                     dwarf_id = data_config['dwarf_id']
                 # wait between actions and time actions
@@ -615,7 +620,6 @@ class AstroDwarfSchedulerApp(tk.Tk):
         preview_frame.pack_propagate(False)
         self.video_canvas = tk.Label(preview_frame, text="No video stream.")
         self.video_canvas.pack(fill="both", expand=True)
-        self.video_stream_url = f"http://{DWARF_IP}:8092/mainstream"
         self._stop_video_stream = True
         self.start_video_preview()
 
@@ -1042,10 +1046,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def run_start_polar_position(self):
         try:
             dwarf_id = "2"
-            data_config = config.get_config_data()
+            data_config = config_py.get_config_data()
             if data_config["dwarf_id"]:
                 dwarf_id = data_config['dwarf_id']
-            dwarf_id_int = int(dwarf_id) + 1 if dwarf_id is not None else 0
 
             attempt = 0
             result = False

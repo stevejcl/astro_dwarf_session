@@ -25,7 +25,7 @@ from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_pwd
 from tabs.result_session import analyze_files
 
 # import data for config.py
-import dwarf_python_api.get_config_data as config
+import dwarf_python_api.get_config_data as config_py
 
 import dwarf_python_api.lib.my_logger as log
 
@@ -60,7 +60,7 @@ def setup_new_config(config_name):
     global LIST_ASTRO_DIR
 
     if config_name == CONFIG_DEFAULT:
-        config.set_config_data(
+        config_py.set_config_data(
             config_file='config.py',
             config_file_tmp='config.tmp',
             lock_file='config.lock',
@@ -82,7 +82,7 @@ def setup_new_config(config_name):
         new_lock_file = f"config_{config_name}.lock"
 
         # Update CONFIG variables using the set_config_data function
-        config.set_config_data(
+        config_py.set_config_data(
             config_file=new_config_file,
             config_file_tmp=new_config_file_tmp,
             lock_file=new_lock_file,
@@ -102,7 +102,7 @@ def setup_new_config(config_name):
                 print(f"An error occurred: {e}")
 
             # get Original LOG_FILE
-            data_config = config.get_config_data("config.py")
+            data_config = config_py.get_config_data("config.py")
             if data_config['LOG_FILE'] == "False":
                 log_file = None
             else: 
@@ -115,7 +115,7 @@ def setup_new_config(config_name):
                 new_log_filename = f"{name}_{config_name}.{ext}"
                 # Add BASE_DIR to the log file path
                 new_log_file = os.path.join(BASE_DIR, new_log_filename)
-                config.update_config_data( "LOG_FILE", new_log_file, True)
+                config_py.update_config_data( "LOG_FILE", new_log_file, True)
 
         config_dir = os.path.join(DEVICES_DIR, config_name)
         SESSIONS_DIR = os.path.join(config_dir, 'Astro_Sessions')
@@ -331,7 +331,7 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         id_command['message'] = 'Session completed successfully'
                         
                         # Capture Dwarf device ID from config
-                        data_config = config.get_config_data()
+                        data_config = config_py.get_config_data()
                         dwarf_id = data_config.get("dwarf_id")
                         if dwarf_id:
                             id_command['dwarf'] = f"D{dwarf_id}"
@@ -399,7 +399,7 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         id_command['message'] = f'Session failed: {str(e)}'
                         
                         # ADD: Still capture Dwarf device ID even on failure
-                        data_config = config.get_config_data()
+                        data_config = config_py.get_config_data()
                         dwarf_id = data_config.get("dwarf_id")
                         if dwarf_id:
                             id_command['dwarf'] = f"D{dwarf_id}"
@@ -462,11 +462,11 @@ def start_connection(startSTA = False, use_web_page = False):
         if use_web_page:
             subprocess.run(["extern\\connect_bluetooth.exe", "--web"])
         else:
-            config.update_config_data( "ip", "", True)
+            config_py.update_config_data( "ip", "", True)
             subprocess.run(["extern\\connect_bluetooth.exe"])
       
         # Parse the returned value
-        data_config = config.get_config_data()
+        data_config = config_py.get_config_data()
         dwarf_ip = data_config["ip"]
         result = True if dwarf_ip else False
 
@@ -483,7 +483,7 @@ def start_connection(startSTA = False, use_web_page = False):
 def start_STA_connection(CheckDwarfId = False):
 
     result = False
-    data_config = config.get_config_data()
+    data_config = config_py.get_config_data()
     dwarf_ip = data_config["ip"]
     dwarf_id = data_config["dwarf_id"]
 
@@ -525,7 +525,7 @@ def update_get_config_data(IPDwarf=None):
                 print(f"ID: {new_id}")
                 print(f"Name: {name}")
 
-                config.update_config_data( 'dwarf_id', new_id)
+                config_py.update_config_data( 'dwarf_id', new_id)
 
                 return {'id': new_id, 'name': name}
             else:
@@ -570,12 +570,12 @@ def main():
                         sys.exit(1)
                 i += 1
             if dwarf_id:
-                config.update_config_data( 'dwarf_id', dwarf_id)
+                config_py.update_config_data( 'dwarf_id', dwarf_id)
             if dwarf_ip:
-                config.update_config_data( 'ip', dwarf_ip)
+                config_py.update_config_data( 'ip', dwarf_ip)
 
         # test if Ip and Id is set
-        data_config = config.get_config_data()
+        data_config = config_py.get_config_data()
         if data_config["dwarf_id"]:
             dwarf_id = data_config['dwarf_id']
         if data_config["ip"]:

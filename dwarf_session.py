@@ -26,7 +26,7 @@ from dwarf_python_api.lib.data_wide_utils import get_wide_exposure_name_by_index
 from dwarf_python_api.lib.data_wide_utils import get_wide_gain_name_by_index
 
 # import data for config.py
-import dwarf_python_api.get_config_data
+import dwarf_python_api.get_config_data as config_py
 import dwarf_python_api.lib.my_logger as log
 
 # The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
@@ -128,7 +128,7 @@ def start_dwarf_session(program, stop_event=None):
         def interrupted():
             return stop_event is not None and stop_event.is_set()
         
-        data_config = dwarf_python_api.get_config_data.get_config_data()
+        data_config = config_py.get_config_data()
         dwarf_id = "3"  # Default Dwarf ID
         if data_config["dwarf_id"]:
             dwarf_id = data_config['dwarf_id']
@@ -505,7 +505,7 @@ def print_camera_data():
     result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
-    data_config = dwarf_python_api.get_config_data.get_config_data()
+    data_config = config_py.get_config_data()
     dwarf_id = str(data_config['dwarf_id']) if data_config.get('dwarf_id') is not None else "3"
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {get_dwarf_id_int_val(dwarf_id)}")
@@ -633,7 +633,7 @@ def print_wide_camera_data():
     result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
-    data_config = dwarf_python_api.get_config_data.get_config_data()
+    data_config = config_py.get_config_data()
     dwarf_id = str(data_config['dwarf_id']) if data_config.get('dwarf_id') is not None else "3"
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {get_dwarf_id_int_val(dwarf_id)}")

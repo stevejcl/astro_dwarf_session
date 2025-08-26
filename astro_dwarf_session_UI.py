@@ -384,22 +384,22 @@ class AstroDwarfSchedulerApp(tk.Tk):
             # Initialise wait time - manual adjustment
             wait_time = 0
 
-            if settings_vars["eq_solving"]:
+            if settings_vars.get("eq_solving", False):
                 # wait time actions
                 wait_time += 60
                 wait_time += int(settings_vars.get("wait_before", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
-            if settings_vars["auto_focus"]:
+            if settings_vars.get("auto_focus", False):
                 # wait time actions
                 wait_time += 10
                 wait_time += int(settings_vars.get("wait_before", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
-            if settings_vars["infinite_focus"]:
+            if settings_vars.get("infinite_focus", False):
                 # wait time actions
                 wait_time += 5
                 wait_time += int(settings_vars.get("wait_before", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
-            if settings_vars["calibration"]:
+            if settings_vars.get("calibration", False):
                 dwarf_id = 2  # Ensure dwarf_id is always defined
                 data_config = config_py.get_config_data()
                 if data_config.get("dwarf_id"):
@@ -409,7 +409,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 wait_time += 90 if dwarf_id == "3" else 0
                 wait_time += int(settings_vars.get("wait_before", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
-            if settings_vars["goto_solar"] or settings_vars["goto_manual"]:
+            if settings_vars.get("goto_solar", False) or settings_vars.get("goto_manual", False):
                 wait_time += 30
                 wait_time += int(settings_vars.get("wait_after_target", 0))
 

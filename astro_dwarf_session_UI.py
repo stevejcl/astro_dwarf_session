@@ -34,9 +34,6 @@ import os
 DEVICES_DIR = os.path.join(BASE_DIR, "Devices_Sessions")
 DEVICES_FILE = os.path.join(DEVICES_DIR, 'list_devices.txt')
 
-# Devices list file
-DEVICES_FILE = os.path.join(DEVICES_DIR, 'list_devices.txt')
-
 def load_configuration():
     # Ensure the devices directory exists
     os.makedirs(DEVICES_DIR, exist_ok=True)

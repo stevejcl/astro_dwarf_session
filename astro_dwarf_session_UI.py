@@ -209,7 +209,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             print("Starting video stream worker")
             while not getattr(self, '_stop_video_stream', False):
                 try:
-                    print(f"Connecting to video stream on IP: {dwarf_ip}...")
+                    #print(f"Connecting to video stream on IP: {dwarf_ip}...")
                     stream = requests.get(self.video_stream_url, stream=True, timeout=60)
                     bytes_data = b""
                     last_update = 0

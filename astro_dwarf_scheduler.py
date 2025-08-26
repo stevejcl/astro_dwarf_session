@@ -263,7 +263,6 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
         # Only manage session state if we have a UI instance
         if ui_instance and hasattr(ui_instance, 'session_running'):
             if not ui_instance.session_running:
-                print("Starting new session...")
                 ui_instance.session_running = True  # Mark session as running
                 if hasattr(ui_instance, '_stop_video_stream'):
                     ui_instance._stop_video_stream = False

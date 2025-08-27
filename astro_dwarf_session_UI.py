@@ -11,7 +11,7 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown
+from dwarf_python_api.lib.dwarf_utils import read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
@@ -1069,8 +1069,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     time.sleep(10)  # Sleep for 10 seconds between checks
             setattr(self, '_stop_video_stream', True)
         except Exception as e:
-            self.log(f"Error in EQ Solving: {e}", level="error")
-            setattr(self, '_stop_video_stream', True)
+            try:
+                read_longitude()
+                read_latitude()
+                self.log(f"Error during EQ Solving: {e}", level="error")
+            except Exception as e:
+                self.log(f"Error: Missing Longitude/Latitude in settings", level="error")
+            finally:    
+                setattr(self, '_stop_video_stream', True)
 
     def run_start_polar_position(self):
         try:

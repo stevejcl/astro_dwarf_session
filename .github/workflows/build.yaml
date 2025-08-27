@@ -59,16 +59,9 @@ jobs:
 
       - name: Create DMG from .app bundle
         run: |
-          if [ -d "dist/astro_dwarf_session_UI.app" ]; then
-            hdiutil create -volname "AstroDwarfScheduler" \
-                           -srcfolder dist/astro_dwarf_session_UI.app \
-                           -ov -format UDZO AstroDwarfScheduler-GUI-mac.dmg
-          else
-            echo "Error: astro_dwarf_session_UI.app not found in dist directory"
-            echo "Available .app bundles in dist:"
-            find dist -name "*.app" -type d || echo "No .app bundles found"
-            exit 1
-          fi
+          hdiutil create -volname "AstroDwarfScheduler" \
+            -srcfolder dist/AstroDwarfScheduler.app \
+            -ov -format UDZO AstroDwarfScheduler-GUI-mac.dmg
   
       - name: List files to verify DMG creation
         run: ls -l AstroDwarfScheduler-GUI-mac.dmg
@@ -133,16 +126,9 @@ jobs:
         
       - name: Create DMG from .app bundle
         run: |
-          if [ -d "dist/astro_dwarf_scheduler.app" ]; then
-            hdiutil create -volname "AstroDwarfSchedulerConsole" \
-                           -srcfolder dist/astro_dwarf_scheduler.app \
-                           -ov -format UDZO AstroDwarfScheduler-Console-mac.dmg
-          else
-            echo "Error: astro_dwarf_scheduler.app not found in dist directory"
-            echo "Available .app bundles in dist:"
-            find dist -name "*.app" -type d || echo "No .app bundles found"
-            exit 1
-          fi
+          hdiutil create -volname "AstroDwarfSchedulerConsole" \
+            -srcfolder dist/AstroDwarfSchedulerConsole.app \
+            -ov -format UDZO AstroDwarfScheduler-Console-mac.dmg
   
       - name: List files to verify Console creation
         run: ls -l AstroDwarfScheduler-Console-mac.dmg

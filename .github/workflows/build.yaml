@@ -558,14 +558,20 @@ jobs:
         run: |
           python setupBLE.py build
 
-      - name: Move and rename to extern
+      - name: Copy BLE utility to Install folder
         run: |
-          powershell Move-Item -Path build\exe.win-amd64-3.11 -Destination build\exe.win-amd64-3.12\extern
+          if not exist "Install\dwarf_ble_connect" mkdir "Install\dwarf_ble_connect"
+          xcopy /E /I /Y "build\exe.win-amd64-3.11\*" "Install\dwarf_ble_connect\"
 
-      - name: create symbolic link
+      - name: Debug - List Install structure
         run: |
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
+          echo "Install directory:"
+          dir Install\
+          echo "BLE Connect directory:"
+          dir Install\dwarf_ble_connect\
+          echo "Config files check:"
+          if exist "Install\config.py" echo "config.py exists in Install"
+          if exist "Install\config.ini" echo "config.ini exists in Install"
 
       - name: Install Inno Setup
         run: |

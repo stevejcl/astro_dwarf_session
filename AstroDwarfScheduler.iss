@@ -29,10 +29,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1
 
 [Files]
-; Main GUI Application (exclude extern to avoid conflicts)
-Source: "build\exe.win-amd64-3.12\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "extern"
-; BLE Connect Utility (from extern folder if it exists)
-Source: "build\exe.win-amd64-3.12\extern\*"; DestDir: "{app}\extern"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists(ExpandConstant('{src}\build\exe.win-amd64-3.12\extern'))
+; Main GUI Application
+Source: "build\exe.win-amd64-3.12\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Install folder contents (config files, icons, etc.)
+Source: "Install\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Session directories (if they exist)
 Source: "Astro_Sessions\*"; DestDir: "{app}\Astro_Sessions"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists(ExpandConstant('{src}\Astro_Sessions'))
 ; Documentation (if they exist)

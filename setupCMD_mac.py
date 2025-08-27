@@ -4,6 +4,7 @@ Setup script for building Astro Dwarf Scheduler Console application on macOS usi
 
 from setuptools import setup
 import sys
+import os
 
 # py2app setup options
 OPTIONS = {
@@ -22,11 +23,16 @@ OPTIONS = {
     }
 }
 
-DATA_FILES = [
-    ('dwarf_ble_connect', ['dwarf_ble_connect']),
-    ('', ['config.ini', 'config.py']),
-    ('Astro_Sessions', ['Astro_Sessions']),
-]
+# Include data files that exist  
+DATA_FILES = []
+if os.path.exists('dwarf_ble_connect'):
+    DATA_FILES.append('dwarf_ble_connect')
+if os.path.exists('config.ini'):
+    DATA_FILES.append('config.ini')
+if os.path.exists('config.py'):
+    DATA_FILES.append('config.py')
+if os.path.exists('Astro_Sessions'):
+    DATA_FILES.append('Astro_Sessions')
 
 setup(
     name="AstroDwarfSchedulerConsole",
@@ -37,5 +43,4 @@ setup(
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},
     setup_requires=['py2app'],
-    install_requires=[],
 )

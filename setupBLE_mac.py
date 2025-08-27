@@ -4,6 +4,7 @@ Setup script for building Dwarfium BLE Connect application on macOS using py2app
 
 from setuptools import setup
 import sys
+import os
 
 # py2app setup options
 OPTIONS = {
@@ -24,9 +25,10 @@ OPTIONS = {
     }
 }
 
-DATA_FILES = [
-    ('dwarf_ble_connect', ['dwarf_ble_connect']),
-]
+# Include data files that exist
+DATA_FILES = []
+if os.path.exists('dwarf_ble_connect'):
+    DATA_FILES.append('dwarf_ble_connect')
 
 setup(
     name="DwarfiumBLEConnect",
@@ -37,7 +39,4 @@ setup(
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},
     setup_requires=['py2app'],
-    install_requires=[
-        'bleak',
-    ],
 )

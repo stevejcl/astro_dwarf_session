@@ -32,31 +32,43 @@ jobs:
             fi
           done
 
-      - name: Build macOS .app bundle with setupUI.py
+      - name: Build macOS .app bundle with setupUI_mac.py
         run: |
           python setupUI_mac.py py2app
-        continue-on-error: true
+          if [ $? -ne 0 ]; then
+            echo "setupUI_mac.py build failed"
+            exit 1
+          fi
   
-      - name: Build macOS .app bundle with setupBLE.py
+      - name: Build macOS .app bundle with setupBLE_mac.py
         run: |
           python setupBLE_mac.py py2app
-        continue-on-error: true
+          if [ $? -ne 0 ]; then
+            echo "setupBLE_mac.py build failed"
+            exit 1
+          fi
 
-      - name: Move and rename to extern
+      - name: List build outputs for debugging
         run: |
-          mkdir -p build/exe.macosx-3.12/extern
-          find build/exe.macosx-3.12 -mindepth 1 -maxdepth 1 ! -name extern -exec mv {} build/exe.macosx-3.12/extern/ \;
+          echo "Contents of current directory:"
+          ls -la
+          echo "Contents of dist directory (if exists):"
+          ls -la dist/ || echo "dist directory not found"
+          echo "Contents of build directory (if exists):"
+          ls -la build/ || echo "build directory not found"
 
-      - name: Create symbolic links
-        run: |
-          ln -s ../config.py build/exe.macosx-3.12/extern/config.py
-          ln -s ../config.ini build/exe.macosx-3.12/extern/config.ini    
-  
       - name: Create DMG from .app bundle
         run: |
-          hdiutil create -volname "AstroDwarfScheduler" \
-                         -srcfolder dist/AstroDwarfScheduler.app \
-                         -ov -format UDZO AstroDwarfScheduler-GUI-mac.dmg
+          if [ -d "dist/astro_dwarf_session_UI.app" ]; then
+            hdiutil create -volname "AstroDwarfScheduler" \
+                           -srcfolder dist/astro_dwarf_session_UI.app \
+                           -ov -format UDZO AstroDwarfScheduler-GUI-mac.dmg
+          else
+            echo "Error: astro_dwarf_session_UI.app not found in dist directory"
+            echo "Available .app bundles in dist:"
+            find dist -name "*.app" -type d || echo "No .app bundles found"
+            exit 1
+          fi
   
       - name: List files to verify DMG creation
         run: ls -l AstroDwarfScheduler-GUI-mac.dmg
@@ -94,31 +106,43 @@ jobs:
             fi
           done
 
-      - name: Build macOS .app bundle with setupCMD.py
+      - name: Build macOS .app bundle with setupCMD_mac.py
         run: |
           python setupCMD_mac.py py2app
-        continue-on-error: true
+          if [ $? -ne 0 ]; then
+            echo "setupCMD_mac.py build failed"
+            exit 1
+          fi
   
-      - name: Build macOS .app bundle with setupBLE.py
+      - name: Build macOS .app bundle with setupBLE_mac.py
         run: |
           python setupBLE_mac.py py2app
-        continue-on-error: true
+          if [ $? -ne 0 ]; then
+            echo "setupBLE_mac.py build failed"
+            exit 1
+          fi
+
+      - name: List build outputs for debugging
+        run: |
+          echo "Contents of current directory:"
+          ls -la
+          echo "Contents of dist directory (if exists):"
+          ls -la dist/ || echo "dist directory not found"
+          echo "Contents of build directory (if exists):"
+          ls -la build/ || echo "build directory not found"
         
-      - name: Move and rename to extern
-        run: |
-          mkdir -p build/exe.macosx-3.12/extern
-          find build/exe.macosx-3.12 -mindepth 1 -maxdepth 1 ! -name extern -exec mv {} build/exe.macosx-3.12/extern/ \;
-
-      - name: Create symbolic links
-        run: |
-          ln -s ../config.py build/exe.macosx-3.12/extern/config.py
-          ln -s ../config.ini build/exe.macosx-3.12/extern/config.ini    
-
       - name: Create DMG from .app bundle
         run: |
-          hdiutil create -volname "AstroDwarfScheduler" \
-                         -srcfolder dist/AstroDwarfScheduler.app \
-                         -ov -format UDZO AstroDwarfScheduler-Console-mac.dmg
+          if [ -d "dist/astro_dwarf_scheduler.app" ]; then
+            hdiutil create -volname "AstroDwarfSchedulerConsole" \
+                           -srcfolder dist/astro_dwarf_scheduler.app \
+                           -ov -format UDZO AstroDwarfScheduler-Console-mac.dmg
+          else
+            echo "Error: astro_dwarf_scheduler.app not found in dist directory"
+            echo "Available .app bundles in dist:"
+            find dist -name "*.app" -type d || echo "No .app bundles found"
+            exit 1
+          fi
   
       - name: List files to verify Console creation
         run: ls -l AstroDwarfScheduler-Console-mac.dmg

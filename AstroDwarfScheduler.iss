@@ -1,6 +1,7 @@
 [Setup]
 AppName=Astro Dwarf Scheduler
 AppVersion=1.7.0
+AppId={{8A9B2C3D-4E5F-6789-ABCD-EF0123456789}
 AppPublisher=Astro Dwarf Team
 AppPublisherURL=https://github.com/styelz/astro_dwarf_session
 AppSupportURL=https://github.com/styelz/astro_dwarf_session/issues
@@ -18,6 +19,9 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
+CloseApplications=yes
+RestartApplications=no
+AllowCancelDuringInstall=yes
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 
@@ -38,6 +42,11 @@ Source: "Astro_Sessions\*"; DestDir: "{app}\Astro_Sessions"; Flags: ignoreversio
 ; Documentation (if they exist)
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{src}\README.md'))
 Source: "CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{src}\CHANGELOG.md'))
+
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\__pycache__"
+Type: filesandordirs; Name: "{app}\*.log"
+Type: files; Name: "{app}\*.tmp"
 
 [Icons]
 Name: "{group}\Astro Dwarf Scheduler (GUI)"; Filename: "{app}\astro_dwarf_session_UI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\astro_dwarf_session_UI.ico"
@@ -67,6 +76,20 @@ begin
   Result := DirExists(DirName);
 end;
 
+// Terminate running application processes
+function TerminateApp(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  // Try to terminate the main application gracefully
+  if Exec('taskkill', '/F /IM astro_dwarf_session_UI.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Sleep(1000);
+  // Try to terminate the BLE connect utility
+  if Exec('taskkill', '/F /IM connect_bluetooth.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Sleep(1000);
+end;
+
 function GetUninstallString(): String;
 var
   sUnInstPath: String;
@@ -93,7 +116,8 @@ begin
   sUnInstallString := GetUninstallString();
   if sUnInstallString <> '' then begin
     sUnInstallString := RemoveQuotes(sUnInstallString);
-    if Exec(sUnInstallString, '/SILENT /NORESTART /SUPPRESSMSGBOXES','', SW_HIDE, ewWaitUntilTerminated, iResultCode) then
+    // Use more aggressive silent uninstall flags
+    if Exec(sUnInstallString, '/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /FORCECLOSEAPPLICATIONS','', SW_HIDE, ewWaitUntilTerminated, iResultCode) then
       Result := 3
     else
       Result := 2;
@@ -105,6 +129,8 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if (CurStep=ssInstall) then
   begin
+    // Always terminate running applications before install
+    TerminateApp();
     if (IsUpgrade()) then
     begin
       UnInstallOldVersion();

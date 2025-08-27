@@ -290,7 +290,7 @@ jobs:
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
         with:
-          name: AstroDwarfScheduler-Console
+          name: AstroDwarfScheduler-Console-win
           path: AstroDwarfScheduler-Console-win.tar.gz
 
   build_UI_linux:

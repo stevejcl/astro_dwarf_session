@@ -29,18 +29,15 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1
 
 [Files]
-; Main GUI Application
-Source: "build\exe.win-amd64-3.12\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; BLE Connect Utility (from extern folder)
-Source: "build\exe.win-amd64-3.12\extern\*"; DestDir: "{app}\extern"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Configuration files
-Source: "config.ini"; DestDir: "{app}"; Flags: ignoreversion
-Source: "config.py"; DestDir: "{app}"; Flags: ignoreversion
-; Session directories
-Source: "Astro_Sessions\*"; DestDir: "{app}\Astro_Sessions"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Documentation
-Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
+; Main GUI Application (exclude extern to avoid conflicts)
+Source: "build\exe.win-amd64-3.12\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "extern"
+; BLE Connect Utility (from extern folder if it exists)
+Source: "build\exe.win-amd64-3.12\extern\*"; DestDir: "{app}\extern"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists(ExpandConstant('{src}\build\exe.win-amd64-3.12\extern'))
+; Session directories (if they exist)
+Source: "Astro_Sessions\*"; DestDir: "{app}\Astro_Sessions"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists(ExpandConstant('{src}\Astro_Sessions'))
+; Documentation (if they exist)
+Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{src}\README.md'))
+Source: "CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{src}\CHANGELOG.md'))
 
 [Icons]
 Name: "{group}\Astro Dwarf Scheduler (GUI)"; Filename: "{app}\astro_dwarf_session_UI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\astro_dwarf_session_UI.ico"
@@ -59,6 +56,17 @@ Type: filesandordirs; Name: "{app}\__pycache__"
 Type: filesandordirs; Name: "{app}\*.log"
 
 [Code]
+// File and directory existence check functions
+function FileExists(FileName: string): Boolean;
+begin
+  Result := FileExists(FileName);
+end;
+
+function DirExists(DirName: string): Boolean;
+begin
+  Result := DirExists(DirName);
+end;
+
 function GetUninstallString(): String;
 var
   sUnInstPath: String;

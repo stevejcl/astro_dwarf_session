@@ -22,7 +22,16 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install py2app
-  
+
+      - name: Convert source files to UTF-8
+        run: |
+          find ./ -type f -name "*.py" | while read file; do
+            if ! iconv -f UTF-8 -t UTF-8 "$file" > /dev/null 2>&1; then
+              echo "Fixing encoding: $file"
+              iconv -f ISO-8859-1 -t UTF-8 "$file" -o "$file.utf8" && mv "$file.utf8" "$file"
+            fi
+          done
+
       - name: Build macOS .app bundle with setupUI.py
         run: |
           python setupUI_mac.py py2app
@@ -75,7 +84,16 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install py2app
-  
+
+      - name: Convert source files to UTF-8
+        run: |
+          find ./ -type f -name "*.py" | while read file; do
+            if ! iconv -f UTF-8 -t UTF-8 "$file" > /dev/null 2>&1; then
+              echo "Fixing encoding: $file"
+              iconv -f ISO-8859-1 -t UTF-8 "$file" -o "$file.utf8" && mv "$file.utf8" "$file"
+            fi
+          done
+            
       - name: Build macOS .app bundle with setupCMD.py
         run: |
           python setupCMD_mac.py py2app

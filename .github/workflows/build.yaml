@@ -560,18 +560,18 @@ jobs:
 
       - name: Copy BLE utility to Install folder
         run: |
-          if not exist "Install\dwarf_ble_connect" mkdir "Install\dwarf_ble_connect"
-          xcopy /E /I /Y "build\exe.win-amd64-3.11\*" "Install\dwarf_ble_connect\"
+          if (!(Test-Path "Install\dwarf_ble_connect")) { New-Item -ItemType Directory -Path "Install\dwarf_ble_connect" -Force }
+          Copy-Item -Path "build\exe.win-amd64-3.11\*" -Destination "Install\dwarf_ble_connect\" -Recurse -Force
 
       - name: Debug - List Install structure
         run: |
-          echo "Install directory:"
-          dir Install\
-          echo "BLE Connect directory:"
-          dir Install\dwarf_ble_connect\
-          echo "Config files check:"
-          if exist "Install\config.py" echo "config.py exists in Install"
-          if exist "Install\config.ini" echo "config.ini exists in Install"
+          Write-Host "Install directory:"
+          Get-ChildItem Install\
+          Write-Host "BLE Connect directory:"
+          Get-ChildItem Install\dwarf_ble_connect\
+          Write-Host "Config files check:"
+          if (Test-Path "Install\config.py") { Write-Host "config.py exists in Install" }
+          if (Test-Path "Install\config.ini") { Write-Host "config.ini exists in Install" }
 
       - name: Install Inno Setup
         run: |

@@ -293,9 +293,76 @@ jobs:
           name: AstroDwarfScheduler-Console
           path: AstroDwarfScheduler-Console.tar.gz
 
+  build_installer:
+    runs-on: windows-latest
+    needs: [build_UI, build_console]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-local.txt --target .
+          pip install cx_Freeze
+
+      - name: Build the executable with setupUI.py
+        run: |
+          python setupUI.py build
+
+      - name: Set up Python3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-local.txt --target .
+          pip install cx_Freeze
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build
+
+      - name: Move and rename to extern
+        run: |
+          powershell Move-Item -Path build\exe.win-amd64-3.11 -Destination build\exe.win-amd64-3.12\extern
+
+      - name: create symbolic link
+        run: |
+           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
+           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Build Installer with Inno Setup
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" AstroDwarfScheduler.iss
+
+      - name: List installer files
+        run: |
+          dir installer\
+
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer
+          path: installer\AstroDwarfScheduler-Setup.exe
+
   release:
     runs-on: ubuntu-latest
-    needs: [build_UI_mac, build_console_mac, build_UI, build_console]
+    needs: [build_UI_mac, build_console_mac, build_UI, build_console, build_installer]
 
     steps:
       - name: Checkout code
@@ -321,9 +388,23 @@ jobs:
         with:
           name: AstroDwarfScheduler-Console
 
+      - name: Download Windows Installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer
+
       - name: Get version from CHANGELOG.md
         id: get_version
-        run: echo "RVERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)" >> $GITHUB_ENV
+        run: |
+          RAW_VERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)
+          # Ensure version has at least 3 parts (x.y.z format)
+          if [[ $RAW_VERSION =~ ^[0-9]+\.[0-9]+$ ]]; then
+            FORMATTED_VERSION="${RAW_VERSION}.0"
+          else
+            FORMATTED_VERSION="${RAW_VERSION}"
+          fi
+          echo "RVERSION=${FORMATTED_VERSION}" >> $GITHUB_ENV
+          echo "Extracted version: ${FORMATTED_VERSION}"
 
       - name: Check for files
         id: checkfiles

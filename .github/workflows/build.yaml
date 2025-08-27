@@ -59,9 +59,17 @@ jobs:
 
       - name: Create DMG from .app bundle
         run: |
+          # Create temporary directory for DMG contents
+          mkdir -p dmg_temp
+          cp -R dist/AstroDwarfScheduler.app dmg_temp/
+          cp -R dist/DwarfiumBLEConnect.app dmg_temp/
+          
           hdiutil create -volname "AstroDwarfScheduler" \
-            -srcfolder dist/AstroDwarfScheduler.app \
+            -srcfolder dmg_temp \
             -ov -format UDZO AstroDwarfScheduler-GUI-mac.dmg
+          
+          # Clean up temp directory
+          rm -rf dmg_temp
   
       - name: List files to verify DMG creation
         run: ls -l AstroDwarfScheduler-GUI-mac.dmg
@@ -126,9 +134,17 @@ jobs:
         
       - name: Create DMG from .app bundle
         run: |
+          # Create temporary directory for DMG contents
+          mkdir -p dmg_temp
+          cp -R dist/AstroDwarfSchedulerConsole.app dmg_temp/
+          cp -R dist/DwarfiumBLEConnect.app dmg_temp/
+          
           hdiutil create -volname "AstroDwarfSchedulerConsole" \
-            -srcfolder dist/AstroDwarfSchedulerConsole.app \
+            -srcfolder dmg_temp \
             -ov -format UDZO AstroDwarfScheduler-Console-mac.dmg
+          
+          # Clean up temp directory
+          rm -rf dmg_temp
   
       - name: List files to verify Console creation
         run: ls -l AstroDwarfScheduler-Console-mac.dmg

@@ -155,7 +155,7 @@ jobs:
           name: AstroDwarfScheduler-Console-mac
           path: AstroDwarfScheduler-Console-mac.dmg
 
-  build_UI:
+  build_UI_win:
     runs-on: windows-latest
 
     steps:
@@ -213,18 +213,18 @@ jobs:
           cwd: ./build/exe.win-amd64-3.12
           files: |
             ./
-          outPath: AstroDwarfScheduler-GUI.tar.gz
+          outPath: AstroDwarfScheduler-GUI-win.tar.gz
 
       - name: List files to verify tar creation
-        run: ls -l AstroDwarfScheduler-GUI.tar.gz
-  
+        run: ls -l AstroDwarfScheduler-GUI-win.tar.gz
+
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI
-          path: AstroDwarfScheduler-GUI.tar.gz
+          path: AstroDwarfScheduler-GUI-win.tar.gz
 
-  build_console:
+  build_console_win:
     runs-on: windows-latest
 
     steps:
@@ -282,16 +282,16 @@ jobs:
           cwd: ./build/exe.win-amd64-3.12
           files: |
             ./
-          outPath: AstroDwarfScheduler-Console.tar.gz
+          outPath: AstroDwarfScheduler-Console-win.tar.gz
 
       - name: List files to verify tar creation
-        run: ls -l AstroDwarfScheduler-Console.tar.gz
-  
+        run: ls -l AstroDwarfScheduler-Console-win.tar.gz
+
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console
-          path: AstroDwarfScheduler-Console.tar.gz
+          path: AstroDwarfScheduler-Console-win.tar.gz
 
   build_UI_linux:
     runs-on: ubuntu-latest
@@ -520,7 +520,7 @@ jobs:
 
   build_installer:
     runs-on: windows-latest
-    needs: [build_UI, build_console]
+    needs: [build_UI_win, build_console_win]
 
     steps:
       - name: Checkout code
@@ -593,7 +593,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    needs: [build_UI_mac, build_console_mac, build_UI, build_console, build_UI_linux, build_console_linux, build_installer]
+    needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer]
 
     steps:
       - name: Checkout code
@@ -612,12 +612,12 @@ jobs:
       - name: Download UI WIN executable artifact
         uses: actions/download-artifact@v4
         with:
-          name: AstroDwarfScheduler-GUI
+          name: AstroDwarfScheduler-GUI-win
 
       - name: Download Console WIN executable artifact
         uses: actions/download-artifact@v4
         with:
-          name: AstroDwarfScheduler-Console
+          name: AstroDwarfScheduler-Console-win
 
       - name: Download Windows Installer artifact
         uses: actions/download-artifact@v4

@@ -589,7 +589,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Installer-win
-          path: installer\AstroDwarfScheduler-Setup.exe
+          path: installer\AstroDwarfScheduler-Setup-win.exe
 
   release:
     runs-on: ubuntu-latest

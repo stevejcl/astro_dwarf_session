@@ -23,7 +23,7 @@ PrivilegesRequired=lowest
 SolidCompression=yes
 WizardStyle=modern
 OutputDir=installer
-OutputBaseFilename=AstroDwarfScheduler-Setup
+OutputBaseFilename=AstroDwarfScheduler-Setup-win
 ; Use Install folder icon for consistency
 SetupIconFile=Install\astro_dwarf_session_UI.ico
 CloseApplications=yes

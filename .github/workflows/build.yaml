@@ -25,12 +25,12 @@ jobs:
   
       - name: Build macOS .app bundle with setupUI.py
         run: |
-          python setupUI.py py2app
+          python setupUI_mac.py py2app
         continue-on-error: true
   
       - name: Build macOS .app bundle with setupBLE.py
         run: |
-          python setupBLE.py py2app
+          python setupBLE_mac.py py2app
         continue-on-error: true
 
       - name: Move and rename to extern
@@ -78,12 +78,12 @@ jobs:
   
       - name: Build macOS .app bundle with setupCMD.py
         run: |
-          python setupCMD.py py2app
+          python setupCMD_mac.py py2app
         continue-on-error: true
   
       - name: Build macOS .app bundle with setupBLE.py
         run: |
-          python setupBLE.py py2app
+          python setupBLE_mac.py py2app
         continue-on-error: true
         
       - name: Move and rename to extern

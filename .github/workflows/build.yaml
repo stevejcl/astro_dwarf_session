@@ -4,6 +4,81 @@ on:
   workflow_dispatch:
 
 jobs:
+  build_UI_mac:
+    runs-on: macos-latest  
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+  
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+  
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-local.txt
+          pip install py2app
+  
+      - name: Build macOS .app bundle with py2app
+        run: |
+          python setupUI.py py2app
+  
+      - name: Create DMG from .app bundle
+        run: |
+          hdiutil create -volname "AstroDwarfScheduler" \
+                         -srcfolder dist/AstroDwarfScheduler.app \
+                         -ov -format UDZO AstroDwarfScheduler-GUI-mac.dmg
+  
+      - name: List files to verify DMG creation
+        run: ls -l AstroDwarfScheduler-GUI-mac.dmg
+  
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-GUI-mac
+          path: AstroDwarfScheduler-GUI-mac.dmg
+
+  build_console_mac:
+    runs-on: macos-latest  
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+  
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+  
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-local.txt
+          pip install py2app
+  
+      - name: Build macOS .app bundle with py2app
+        run: |
+          python setupCMD.py py2app
+  
+      - name: Create DMG from .app bundle
+        run: |
+          hdiutil create -volname "AstroDwarfScheduler" \
+                         -srcfolder dist/AstroDwarfScheduler.app \
+                         -ov -format UDZO AstroDwarfScheduler-Console-mac.dmg
+  
+      - name: List files to verify Console creation
+        run: ls -l AstroDwarfScheduler-Console-mac.dmg
+  
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console-mac
+          path: AstroDwarfScheduler-Console-mac.dmg
+
   build_UI:
     runs-on: windows-latest
 
@@ -147,12 +222,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download UI executable artifact
+      - name: Download UI MAC executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-GUI-mac
+
+      - name: Download Console MAC executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console-mac
+
+      - name: Download UI WIN executable artifact
         uses: actions/download-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI
 
-      - name: Download Console executable artifact
+      - name: Download Console WIN executable artifact
         uses: actions/download-artifact@v4
         with:
           name: AstroDwarfScheduler-Console

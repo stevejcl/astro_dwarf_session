@@ -221,7 +221,7 @@ jobs:
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
         with:
-          name: AstroDwarfScheduler-GUI
+          name: AstroDwarfScheduler-GUI-win
           path: AstroDwarfScheduler-GUI-win.tar.gz
 
   build_console_win:

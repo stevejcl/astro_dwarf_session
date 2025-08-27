@@ -582,28 +582,40 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.add_button.config(state=tk.NORMAL)
 
     def toggle_buttons(self, state):
-        # Invert the state for the start button
-        state_start = tk.DISABLED if state == tk.NORMAL else tk.NORMAL
-        state_stop = tk.DISABLED if state_start == tk.NORMAL else tk.NORMAL
-
+        # For the scheduler button, we need different logic
         if state == "waiting":
-            state_start = tk.DISABLED
-            state_stop = tk.NORMAL
-            state = tk.DISABLED
-
-        if state == tk.NONE:
-            state = tk.DISABLED
-            state_start = tk.DISABLED
-            state_stop = tk.DISABLED
+            scheduler_state = tk.NORMAL  # Allow stopping while waiting
+            scheduler_text = "Stop Scheduler"
+            other_state = tk.DISABLED
+        elif state == tk.NORMAL:
+            # When other buttons are enabled, scheduler depends on its current state
+            if self.scheduler_running:
+                scheduler_state = tk.NORMAL
+                scheduler_text = "Stop Scheduler"
+            else:
+                scheduler_state = tk.NORMAL
+                scheduler_text = "Start Scheduler"
+            other_state = state
+        elif state == tk.DISABLED:
+            if self.scheduler_running:
+                scheduler_state = tk.NORMAL
+                scheduler_text = "Stop Scheduler"
+            else:
+                scheduler_state = tk.DISABLED
+                scheduler_text = "Start Scheduler"
+            other_state = state
+        else:  # tk.NONE or other states
+            scheduler_state = tk.DISABLED
+            scheduler_text = "Start Scheduler"
+            other_state = tk.DISABLED
 
         """Enable or disable buttons based on the state."""
-        self.start_button.config(state=state_start)
-        self.stop_button.config(state=state_stop)
-        self.unlock_button.config(state=state)
-        self.eq_button.config(state=state)
-        self.polar_button.config(state=state)
-        self.calibrate_button.config(state=state)
-        #self.powerdown_button.config(state=state)
+        self.scheduler_button.config(state=scheduler_state, text=scheduler_text)
+        self.unlock_button.config(state=other_state)
+        self.eq_button.config(state=other_state)
+        self.polar_button.config(state=other_state)
+        self.calibrate_button.config(state=other_state)
+        #self.powerdown_button.config(state=other_state)
 
     def create_main_tab(self):
         self.log_text = None
@@ -700,30 +712,27 @@ class AstroDwarfSchedulerApp(tk.Tk):
         scheduler_frame = tk.Frame(self.tab_main)
         scheduler_frame.pack(anchor="w", padx=10, pady=(10, 2), fill="x")
 
-        # Configure columns to expand equally
+        # Configure columns to expand equally (reduced to 5 columns since we merged start/stop buttons)
         for i in range(5):
             scheduler_frame.grid_columnconfigure(i, weight=1)
 
-        self.start_button = tk.Button(scheduler_frame, text="Start Scheduler", command=self.start_scheduler, state=tk.DISABLED, width=18, font=("Arial", 9))
-        self.start_button.grid(row=0, column=0, padx=2, sticky="sew")
+        self.scheduler_button = tk.Button(scheduler_frame, text="Start Scheduler", command=self.toggle_scheduler, state=tk.DISABLED, width=16)
+        self.scheduler_button.grid(row=0, column=0, padx=2, sticky="sew")
 
-        self.stop_button = tk.Button(scheduler_frame, text="Stop Scheduler", command=self.stop_scheduler, state=tk.DISABLED, width=18, font=("Arial", 9))
-        self.stop_button.grid(row=0, column=1, padx=2, sticky="sew")
+        self.unlock_button = tk.Button(scheduler_frame, text="Unset as Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
+        self.unlock_button.grid(row=0, column=1, padx=2, sticky="sew")
 
-        self.unlock_button = tk.Button(scheduler_frame, text="Unset as Host", command=self.unset_lock_device, state=tk.DISABLED, width=18, font=("Arial", 9))
-        self.unlock_button.grid(row=0, column=2, padx=2, sticky="sew")
+        self.calibrate_button = tk.Button(scheduler_frame, text="Calibrate", command=self.start_calibration, state=tk.DISABLED, width=16)
+        self.calibrate_button.grid(row=0, column=2, padx=2, sticky="sew")
 
-        self.calibrate_button = tk.Button(scheduler_frame, text="Calibrate", command=self.start_calibration, state=tk.DISABLED, width=15, font=("Arial", 9))
-        self.calibrate_button.grid(row=0, column=3, padx=2, sticky="sew")
+        self.polar_button = tk.Button(scheduler_frame, text="Polar Position", command=self.start_polar_position, state=tk.DISABLED, width=16)
+        self.polar_button.grid(row=0, column=3, padx=2, sticky="sew")
 
-        self.polar_button = tk.Button(scheduler_frame, text="Polar Position", command=self.start_polar_position, state=tk.DISABLED, width=18, font=("Arial", 9))
-        self.polar_button.grid(row=0, column=4, padx=2, sticky="sew")
+        self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=16)
+        self.eq_button.grid(row=0, column=4, padx=2, sticky="sew")
 
-        self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=10, font=("Arial", 9))
-        self.eq_button.grid(row=0, column=5, padx=2, sticky="sew")
-
-        #self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=9, font=("Arial", 9))
-        #self.powerdown_button.grid(row=0, column=6, padx=2, sticky="sew")
+        #self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
+        #self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")
 
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)
@@ -827,7 +836,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.log("Bluetooth connected successfully.")
                 self.bluetooth_connected = True
                 # Enable the start scheduler button
-                self.start_button.config(state=tk.NORMAL)
+                self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
             else:
                 self.log("Bluetooth connection failed.")
         except Exception as e:
@@ -839,7 +848,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.log("Bluetooth connection skipped.")
         # Enable the start scheduler button
         self.bluetooth_connected = False
-        self.start_button.config(state=tk.NORMAL)
+        self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
 
     def start_scheduler(self):
         self.disable_controls()
@@ -879,6 +888,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
         # Update file counts when scheduler stops
         if hasattr(self, 'update_session_counts'):
             self.update_session_counts()
+
+    def toggle_scheduler(self):
+        """Toggle between start and stop scheduler functionality."""
+        if self.scheduler_running:
+            self.stop_scheduler()
+        else:
+            self.start_scheduler()
 
     def unset_lock_device(self):
         # Only start if not already running

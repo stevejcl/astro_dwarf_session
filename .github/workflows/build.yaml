@@ -588,7 +588,7 @@ jobs:
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: AstroDwarfScheduler-Installer
+          name: AstroDwarfScheduler-Installer-win
           path: installer\AstroDwarfScheduler-Setup.exe
 
   release:
@@ -622,7 +622,7 @@ jobs:
       - name: Download Windows Installer artifact
         uses: actions/download-artifact@v4
         with:
-          name: AstroDwarfScheduler-Installer
+          name: AstroDwarfScheduler-Installer-win
 
       - name: Download GUI Linux executable artifact
         uses: actions/download-artifact@v4

@@ -11,7 +11,7 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action#, perform_powerdown
+from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
@@ -615,7 +615,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.eq_button.config(state=other_state)
         self.polar_button.config(state=other_state)
         self.calibrate_button.config(state=other_state)
-        #self.powerdown_button.config(state=other_state)
+        self.powerdown_button.config(state=other_state)
 
     def create_main_tab(self):
         self.log_text = None
@@ -731,6 +731,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=16)
         self.eq_button.grid(row=0, column=4, padx=2, sticky="sew")
 
+        # Commented out until dwarf_python_api is updated to include power down functionality
         #self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
         #self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")
 
@@ -920,11 +921,22 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.cal_thread = threading.Thread(target=self.run_start_calibration, daemon=True)
             self.cal_thread.start()
 
-    #def start_powerdown(self):
-    #    # Only start if not already running
-    #    if not hasattr(self, 'powerdown_thread') or not self.powerdown_thread.is_alive():
-    #        self.powerdown_thread = threading.Thread(target=self.run_start_powerdown, daemon=True)
-    #        self.powerdown_thread.start()
+    def start_powerdown(self):
+        # Show confirmation dialog
+        result = messagebox.askyesno(
+            "Confirm Power Down", 
+            "Are you sure you want to power down the Dwarf?\n\nThis will shut down the device completely.",
+            icon="warning"
+        )
+        
+        if result:  # User clicked "Yes"
+            # Only start if not already running and user confirmed
+            if not hasattr(self, 'powerdown_thread') or not self.powerdown_thread.is_alive():
+                self.powerdown_thread = threading.Thread(target=self.run_start_powerdown, daemon=True)
+                self.powerdown_thread.start()
+        else:
+            # User clicked "No" or closed dialog - do nothing
+            self.log("Power down cancelled by user.")
 
     def verifyCountdown(self, wait):
         '''
@@ -1145,13 +1157,20 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.log(f"Error in Calibration: {e}", level="error")
             setattr(self, '_stop_video_stream', True)
 
-    #def run_start_powerdown(self):
-    #    try:
-    #        self.log("Starting Power Down process...")
-    #        perform_powerdown()
-    #    except Exception as e:
-    #        self.log(f"Error in Power Down: {e}", level="error")
-    #        setattr(self, '_stop_video_stream', True)
+    def run_start_powerdown(self):
+        try:
+            self.log("Starting Power Down process...")
+            self.toggle_buttons(tk.NONE)
+            # Run toggle_scheduler in background with 5 second delay
+            def delayed_toggle():
+                time.sleep(5)
+                self.toggle_scheduler()            
+            threading.Thread(target=delayed_toggle, daemon=True).start()
+            perform_powerdown()
+            
+        except Exception as e:
+            self.log(f"Error in Power Down: {e}", level="error")
+            setattr(self, '_stop_video_stream', True)
 
     def start_logHandler(self):
 

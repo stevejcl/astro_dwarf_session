@@ -36,7 +36,7 @@ jobs:
       - name: Move and rename to extern
         run: |
           mkdir -p build/exe.macosx-3.12/extern
-          mv build/exe.macosx-3.12/* build/exe.macosx-3.12/extern/
+          find build/exe.macosx-3.12 -mindepth 1 -maxdepth 1 ! -name extern -exec mv {} build/exe.macosx-3.12/extern/ \;
 
       - name: Create symbolic links
         run: |
@@ -89,7 +89,7 @@ jobs:
       - name: Move and rename to extern
         run: |
           mkdir -p build/exe.macosx-3.12/extern
-          mv build/exe.macosx-3.12/* build/exe.macosx-3.12/extern/
+          find build/exe.macosx-3.12 -mindepth 1 -maxdepth 1 ! -name extern -exec mv {} build/exe.macosx-3.12/extern/ \;
 
       - name: Create symbolic links
         run: |

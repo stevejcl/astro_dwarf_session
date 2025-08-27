@@ -731,9 +731,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=16)
         self.eq_button.grid(row=0, column=4, padx=2, sticky="sew")
 
-        # Commented out until dwarf_python_api is updated to include power down functionality
-        #self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
-        #self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")
+        # Hidden until dwarf_python_api is updated to include power down functionality
+        self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
+        # self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")  # Hidden until API is updated
 
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)

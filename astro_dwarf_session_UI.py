@@ -11,7 +11,7 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action
+from dwarf_python_api.lib.dwarf_utils import perform_disconnect, perform_stopAstroPhoto, perform_update_camera_setting, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action#, perform_powerdown
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
@@ -119,13 +119,6 @@ def add_new_configuration(config_name):
 
     print(f"Configuration '{config_name}' added successfully with required directory structure.")
     
-def toggle_scheduler_buttons_state(self, state):
-    # Toggle the state of the scheduler buttons only if running from UI
-    self.start_button.config(state=state)
-    self.eq_button.config(state=state)
-    self.polar_button.config(state=state)
-    self.calibrate_button.config(state=state)
-
 # Tooltip class
 class Tooltip:
     """Create a tooltip for a given widget."""
@@ -299,7 +292,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.update_session_counts()
         self.settings_vars = {}
         self.config_vars = {}
-        settings.create_settings_tab(self.tab_settings, self.config_vars)
+        
+        # Define callback to update create session tab when camera type changes
+        def on_camera_type_change(camera_type_display):
+            from tabs import create_session
+            create_session.update_exposure_gain_dropdowns_from_camera_type(camera_type_display, self.settings_vars)
+        
+        settings.create_settings_tab(self.tab_settings, self.config_vars, on_camera_type_change)
         # Store refresh functions for tabs
         self.overview_refresh = None
         self.edit_sessions_refresh = None
@@ -604,10 +603,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.eq_button.config(state=state)
         self.polar_button.config(state=state)
         self.calibrate_button.config(state=state)
+        #self.powerdown_button.config(state=state)
 
     def create_main_tab(self):
         self.log_text = None
-        # Multipla configuration prompt label
+        # Multiple configuration prompt label
         self.labelConfig = tk.Label(self.tab_main, text="Configuration", font=("Arial", 12))
         self.labelConfig.pack(anchor="w", padx=10, pady=(10,0))
 
@@ -704,23 +704,26 @@ class AstroDwarfSchedulerApp(tk.Tk):
         for i in range(5):
             scheduler_frame.grid_columnconfigure(i, weight=1)
 
-        self.start_button = tk.Button(scheduler_frame, text="Start Scheduler", command=self.start_scheduler, state=tk.DISABLED, width=16)
+        self.start_button = tk.Button(scheduler_frame, text="Start Scheduler", command=self.start_scheduler, state=tk.DISABLED, width=18, font=("Arial", 9))
         self.start_button.grid(row=0, column=0, padx=2, sticky="sew")
-        
-        self.stop_button = tk.Button(scheduler_frame, text="Stop Scheduler", command=self.stop_scheduler, state=tk.DISABLED, width=16)
+
+        self.stop_button = tk.Button(scheduler_frame, text="Stop Scheduler", command=self.stop_scheduler, state=tk.DISABLED, width=18, font=("Arial", 9))
         self.stop_button.grid(row=0, column=1, padx=2, sticky="sew")
 
-        self.unlock_button = tk.Button(scheduler_frame, text="Unset as Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
+        self.unlock_button = tk.Button(scheduler_frame, text="Unset as Host", command=self.unset_lock_device, state=tk.DISABLED, width=18, font=("Arial", 9))
         self.unlock_button.grid(row=0, column=2, padx=2, sticky="sew")
 
-        self.calibrate_button = tk.Button(scheduler_frame, text="Calibrate", command=self.start_calibration, state=tk.DISABLED, width=16)
+        self.calibrate_button = tk.Button(scheduler_frame, text="Calibrate", command=self.start_calibration, state=tk.DISABLED, width=15, font=("Arial", 9))
         self.calibrate_button.grid(row=0, column=3, padx=2, sticky="sew")
 
-        self.polar_button = tk.Button(scheduler_frame, text="Polar Position", command=self.start_polar_position, state=tk.DISABLED, width=16)
+        self.polar_button = tk.Button(scheduler_frame, text="Polar Position", command=self.start_polar_position, state=tk.DISABLED, width=18, font=("Arial", 9))
         self.polar_button.grid(row=0, column=4, padx=2, sticky="sew")
 
-        self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=16)
+        self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=10, font=("Arial", 9))
         self.eq_button.grid(row=0, column=5, padx=2, sticky="sew")
+
+        #self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=9, font=("Arial", 9))
+        #self.powerdown_button.grid(row=0, column=6, padx=2, sticky="sew")
 
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)
@@ -900,6 +903,12 @@ class AstroDwarfSchedulerApp(tk.Tk):
         if not hasattr(self, 'cal_thread') or not self.cal_thread.is_alive():
             self.cal_thread = threading.Thread(target=self.run_start_calibration, daemon=True)
             self.cal_thread.start()
+
+    #def start_powerdown(self):
+    #    # Only start if not already running
+    #    if not hasattr(self, 'powerdown_thread') or not self.powerdown_thread.is_alive():
+    #        self.powerdown_thread = threading.Thread(target=self.run_start_powerdown, daemon=True)
+    #        self.powerdown_thread.start()
 
     def verifyCountdown(self, wait):
         '''
@@ -1119,6 +1128,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
         except Exception as e:
             self.log(f"Error in Calibration: {e}", level="error")
             setattr(self, '_stop_video_stream', True)
+
+    #def run_start_powerdown(self):
+    #    try:
+    #        self.log("Starting Power Down process...")
+    #        perform_powerdown()
+    #    except Exception as e:
+    #        self.log(f"Error in Power Down: {e}", level="error")
+    #        setattr(self, '_stop_video_stream', True)
 
     def start_logHandler(self):
 

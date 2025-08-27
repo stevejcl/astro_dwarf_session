@@ -178,7 +178,7 @@ def update_config_py_dwarf_ip(new_ip):
         print(f"Error updating config.py: {e}")
 
 # Create the settings tab
-def create_settings_tab(tab_settings, settings_vars):
+def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback=None):
 
     config = load_config()
     # --- Modern scrollable frame setup ---
@@ -349,6 +349,9 @@ def create_settings_tab(tab_settings, settings_vars):
                 def make_camera_type_handler(bound_var):
                     def handler(event):
                         update_ircut_options(bound_var.get())
+                        # Call the callback if provided to update create session tab
+                        if camera_type_change_callback:
+                            camera_type_change_callback(bound_var.get())
                     return handler
                 combo.bind('<<ComboboxSelected>>', make_camera_type_handler(var))
             else:

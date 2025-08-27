@@ -64,6 +64,7 @@ def create_form_fields(scrollable_frame, settings_vars, config_vars):
         exposure_var.set(config_vars["exposure"].get())
     else:
         exposure_var.set("30")
+
     settings_vars["exposure"] = exposure_var
     settings_vars["exposure_dropdown"] = exposure_dropdown  # Store dropdown reference
     add_row(row, "Exposure", exposure_dropdown)
@@ -78,6 +79,19 @@ def create_form_fields(scrollable_frame, settings_vars, config_vars):
     settings_vars["gain_dropdown"] = gain_dropdown  # Store dropdown reference
     add_row(row, "Gain", gain_dropdown)
     row += 1
+
+    # Populate dropdown values based on device type from config
+    config = load_from_config()
+    device_type = config.get("CONFIG", "device_type", fallback="Dwarf II")
+    
+    # Create dummy ircut dropdown since update_options expects it
+    class DummyDropdown:
+        def __setitem__(self, key, value):
+            pass
+    ircut_dummy = DummyDropdown()
+    
+    # Populate the exposure and gain dropdowns with appropriate values
+    update_options(device_type, exposure_dropdown, gain_dropdown, ircut_dummy)
 
 def create_mutually_exclusive_checkboxes(parent, var1, var2, var3, label1, label2, label3):
     """Create two mutually exclusive checkboxes using boolean variables."""
@@ -124,6 +138,56 @@ def create_mutually_exclusive_checkboxes(parent, var1, var2, var3, label1, label
 
     check3 = tk.Checkbutton(parent, text=label3, variable=var3, command=on_check3)
     check3.pack(side=tk.LEFT)  # Pack side by side
+
+def update_exposure_gain_dropdowns_from_camera_type(camera_type_display, settings_vars):
+    """Update exposure and gain dropdowns when camera type changes from settings tab"""
+    try:
+        if "exposure_dropdown" in settings_vars and "gain_dropdown" in settings_vars:
+            exposure_dropdown = settings_vars["exposure_dropdown"]
+            gain_dropdown = settings_vars["gain_dropdown"]
+            
+            # Create dummy ircut dropdown since update_options expects it
+            class DummyDropdown:
+                def __setitem__(self, key, value):
+                    pass
+            ircut_dummy = DummyDropdown()
+            
+            # Map display names to device types for update_options function
+            device_type_map = {
+                "Dwarf II": "Dwarf II",
+                "Dwarf 3 Tele Lens": "Dwarf 3 Tele Lens", 
+                "Dwarf 3 Wide Lens": "Dwarf 3 Wide Lens"
+            }
+            
+            device_type = device_type_map.get(camera_type_display, "Dwarf II")
+            
+            # Update the dropdown options
+            update_options(device_type, exposure_dropdown, gain_dropdown, ircut_dummy)
+            
+            # Load current settings from config.ini to use as defaults
+            config = load_from_config()
+            config_exposure = config.get("CONFIG", "exposure", fallback="30")
+            config_gain = config.get("CONFIG", "gain", fallback="90")
+            
+            # Set the dropdown values to config settings if they exist in the available options
+            if "exposure" in settings_vars:
+                exposure_values = exposure_dropdown['values']
+                if config_exposure in exposure_values:
+                    settings_vars["exposure"].set(config_exposure)
+                elif exposure_values:
+                    # If config value not available, use the first option
+                    settings_vars["exposure"].set(exposure_values[0])
+                    
+            if "gain" in settings_vars:
+                gain_values = gain_dropdown['values']
+                if config_gain in gain_values:
+                    settings_vars["gain"].set(config_gain)
+                elif gain_values:
+                    # If config value not available, use the first option
+                    settings_vars["gain"].set(gain_values[0])
+                
+    except Exception as e:
+        print(f"[ERROR] Failed to update exposure/gain dropdowns: {e}")
 
 # Function to generate increasing UUID
 uuid_counter = 1
@@ -1032,6 +1096,11 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
 
     # Initialize the "uuid" key in settings_vars
     settings_vars["uuid"] = tk.StringVar()
+    
+    # Initial update of exposure and gain dropdowns based on current config
+    config = load_from_config()
+    device_type = config.get("CONFIG", "device_type", fallback="Dwarf II")
+    update_exposure_gain_dropdowns_from_camera_type(device_type, settings_vars)
 
 def load_from_config():
     """Load the camera type from config.ini file"""
@@ -1061,14 +1130,8 @@ def update_exposure_gain_fields(settings_vars):
         # Get device type from config
         device_type = config.get("CONFIG", "device_type", fallback="Dwarf II")
         
-        # Update dropdown options based on device type
-        if "exposure_dropdown" in settings_vars and "gain_dropdown" in settings_vars:
-            exposure_dropdown = settings_vars["exposure_dropdown"]
-            gain_dropdown = settings_vars["gain_dropdown"]
-            # Create dummy ircut dropdown since update_options expects it
-            ircut_dropdown = type('obj', (object,), {'__setitem__': lambda self, key, value: None})()
-            
-            update_options(device_type, exposure_dropdown, gain_dropdown, ircut_dropdown)
+        # Use the camera type change function to update dropdowns
+        update_exposure_gain_dropdowns_from_camera_type(device_type, settings_vars)
         
         # Update exposure from config.ini
         if "exposure" in settings_vars:

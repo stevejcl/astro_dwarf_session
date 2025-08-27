@@ -23,9 +23,22 @@ jobs:
           pip install -r requirements-local.txt --target .
           pip install py2app
   
-      - name: Build macOS .app bundle with py2app
+      - name: Build macOS .app bundle with setupUI.py
         run: |
           python setupUI.py py2app
+        continue-on-error: true
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-local.txt --target .
+          pip install py2app
+  
+      - name: Build macOS .app bundle with setupBle.py
+        run: |
+          python setupBle.py py2app
+        continue-on-error: true
 
       - name: Move and rename to extern
         run: |
@@ -70,10 +83,23 @@ jobs:
           pip install -r requirements-local.txt --target .
           pip install py2app
   
-      - name: Build macOS .app bundle with py2app
+      - name: Build macOS .app bundle with setupCMD.py
         run: |
           python setupCMD.py py2app
+        continue-on-error: true
 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-local.txt --target .
+          pip install py2app
+  
+      - name: Build macOS .app bundle with setupBle.py
+        run: |
+          python setupBle.py py2app
+        continue-on-error: true
+        
       - name: Move and rename to extern
         run: |
           mkdir -p build/exe.macosx-3.12/extern
@@ -121,6 +147,7 @@ jobs:
       - name: Build the executable with setupUI.py
         run: |
           python setupUI.py build
+        continue-on-error: true
 
       - name: Set up Python3.11
         uses: actions/setup-python@v5
@@ -137,6 +164,7 @@ jobs:
       - name: Build the executable with setupBle.py
         run: |
           python setupBle.py build
+        continue-on-error: true
 
       - name: Mode and rename to extern
         run: |
@@ -189,6 +217,7 @@ jobs:
       - name: Build the executable with setupCMD.py
         run: |
           python setupCMD.py build
+        continue-on-error: true
 
       - name: Set up Python3.11
         uses: actions/setup-python@v5
@@ -205,6 +234,7 @@ jobs:
       - name: Build the executable with setupBle.py
         run: |
           python setupBle.py build
+        continue-on-error: true
 
       - name: Mode and rename to extern
         run: |

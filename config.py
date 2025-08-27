@@ -1,5 +1,5 @@
-DWARF_IP = "192.168.1.42"
-DWARF_ID = "3"
+DWARF_IP = ""
+DWARF_ID = "2"
 DWARF_UI = ""
 CLIENT_ID = "0000DAF2-0000-1000-8000-00805F9B34FB"
 # TIMEOUT_CMD for TimeOut deconnection (s) after not receiving command

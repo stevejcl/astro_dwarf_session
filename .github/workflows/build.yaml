@@ -319,27 +319,66 @@ jobs:
 
       - name: Build GUI executable with PyInstaller
         run: |
-          pyinstaller --onedir --windowed \
-            --add-data "dwarf_ble_connect:dwarf_ble_connect" \
-            --add-data "config.ini:." \
-            --add-data "config.py:." \
-            --add-data "Astro_Sessions:Astro_Sessions" \
-            --name "AstroDwarfScheduler" \
-            astro_dwarf_session_UI.py
+          # Check what files exist
+          echo "Checking available files:"
+          ls -la
+          
+          # Build with only existing files
+          PYINSTALLER_ARGS="--onedir --windowed --name AstroDwarfScheduler"
+          
+          if [ -d "dwarf_ble_connect" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
+          fi
+          
+          if [ -f "config.ini" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.ini:."
+          fi
+          
+          if [ -f "config.py" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.py:."
+          fi
+          
+          if [ -d "Astro_Sessions" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data Astro_Sessions:Astro_Sessions"
+          fi
+          
+          echo "Running: pyinstaller $PYINSTALLER_ARGS astro_dwarf_session_UI.py"
+          pyinstaller $PYINSTALLER_ARGS astro_dwarf_session_UI.py
 
       - name: Build BLE Connect executable
         run: |
-          pyinstaller --onedir \
-            --add-data "dwarf_ble_connect:dwarf_ble_connect" \
-            --name "DwarfiumBLEConnect" \
-            connect_bluetooth.py
+          # Check what files exist
+          echo "Checking available files for BLE:"
+          ls -la
+          
+          # Build with only existing files
+          PYINSTALLER_ARGS="--onedir --name DwarfiumBLEConnect"
+          
+          if [ -d "dwarf_ble_connect" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
+          fi
+          
+          echo "Running: pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py"
+          pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py
 
       - name: Organize files for distribution
         run: |
           mkdir -p linux_dist
-          cp -r dist/AstroDwarfScheduler/* linux_dist/
+          
+          # Copy GUI files if they exist
+          if [ -d "dist/AstroDwarfScheduler" ]; then
+            cp -r dist/AstroDwarfScheduler/* linux_dist/
+          else
+            echo "Warning: AstroDwarfScheduler not found"
+          fi
+          
+          # Copy BLE files if they exist
           mkdir -p linux_dist/extern
-          cp -r dist/DwarfiumBLEConnect/* linux_dist/extern/
+          if [ -d "dist/DwarfiumBLEConnect" ]; then
+            cp -r dist/DwarfiumBLEConnect/* linux_dist/extern/
+          else
+            echo "Warning: DwarfiumBLEConnect not found"
+          fi
           
       - name: Create start scripts
         run: |
@@ -390,27 +429,66 @@ jobs:
 
       - name: Build Console executable with PyInstaller
         run: |
-          pyinstaller --onedir \
-            --add-data "dwarf_ble_connect:dwarf_ble_connect" \
-            --add-data "config.ini:." \
-            --add-data "config.py:." \
-            --add-data "Astro_Sessions:Astro_Sessions" \
-            --name "AstroDwarfSchedulerConsole" \
-            astro_dwarf_scheduler.py
+          # Check what files exist
+          echo "Checking available files:"
+          ls -la
+          
+          # Build with only existing files
+          PYINSTALLER_ARGS="--onedir --name AstroDwarfSchedulerConsole"
+          
+          if [ -d "dwarf_ble_connect" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
+          fi
+          
+          if [ -f "config.ini" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.ini:."
+          fi
+          
+          if [ -f "config.py" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.py:."
+          fi
+          
+          if [ -d "Astro_Sessions" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data Astro_Sessions:Astro_Sessions"
+          fi
+          
+          echo "Running: pyinstaller $PYINSTALLER_ARGS astro_dwarf_scheduler.py"
+          pyinstaller $PYINSTALLER_ARGS astro_dwarf_scheduler.py
 
       - name: Build BLE Connect executable
         run: |
-          pyinstaller --onedir \
-            --add-data "dwarf_ble_connect:dwarf_ble_connect" \
-            --name "DwarfiumBLEConnect" \
-            connect_bluetooth.py
+          # Check what files exist
+          echo "Checking available files for BLE:"
+          ls -la
+          
+          # Build with only existing files
+          PYINSTALLER_ARGS="--onedir --name DwarfiumBLEConnect"
+          
+          if [ -d "dwarf_ble_connect" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
+          fi
+          
+          echo "Running: pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py"
+          pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py
 
       - name: Organize files for distribution
         run: |
           mkdir -p linux_dist
-          cp -r dist/AstroDwarfSchedulerConsole/* linux_dist/
+          
+          # Copy Console files if they exist
+          if [ -d "dist/AstroDwarfSchedulerConsole" ]; then
+            cp -r dist/AstroDwarfSchedulerConsole/* linux_dist/
+          else
+            echo "Warning: AstroDwarfSchedulerConsole not found"
+          fi
+          
+          # Copy BLE files if they exist
           mkdir -p linux_dist/extern
-          cp -r dist/DwarfiumBLEConnect/* linux_dist/extern/
+          if [ -d "dist/DwarfiumBLEConnect" ]; then
+            cp -r dist/DwarfiumBLEConnect/* linux_dist/extern/
+          else
+            echo "Warning: DwarfiumBLEConnect not found"
+          fi
           
       - name: Create start scripts
         run: |

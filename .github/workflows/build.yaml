@@ -276,7 +276,9 @@ jobs:
           path: AstroDwarfScheduler-Console-win.tar.gz
 
   build_UI_linux:
-    runs-on: fedora:39  # or any distro with glibc 2.38+
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:39
     
     steps:
       - name: Checkout code
@@ -391,7 +393,9 @@ jobs:
           path: AstroDwarfScheduler-GUI-linux.tar.gz
 
   build_console_linux:
-    runs-on: fedora:39  # or any distro with glibc 2.38+
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:39
 
     steps:
       - name: Checkout code
@@ -574,7 +578,10 @@ jobs:
           path: installer\AstroDwarfScheduler-Setup-win.exe
 
   release:
-    runs-on: fedora:39  # or any distro with glibc 2.38+
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:39
+
     needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer_win]
 
     steps:

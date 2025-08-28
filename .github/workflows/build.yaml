@@ -292,7 +292,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo yum update -y
-          sudo yum install -y python3-tkinter git
+          sudo yum install -y python3-tkinter git binutils
 
       - name: Install Python dependencies
         run: |
@@ -409,7 +409,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo yum update -y
-          sudo yum install -y git
+          sudo yum install -y git binutils
 
       - name: Install Python dependencies
         run: |

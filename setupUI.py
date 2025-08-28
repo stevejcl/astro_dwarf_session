@@ -23,6 +23,7 @@ setup(
         Executable(
             "astro_dwarf_session_UI.py",
             base=base,
-            icon="Install/astro_dwarf_session_UI.ico"        )
+            icon="Install/astro_dwarf_session_UI.ico"
+        )
     ]
 )

@@ -143,22 +143,16 @@ jobs:
           python setupUI.py build
         continue-on-error: true
         
-      - name: Compress with tar (preserve symlinks)
-        uses: a7ul/tar-action@v1.1.0
-        id: compress
-        with:
-          command: c
-          cwd: ./build/exe.win-amd64-3.12
-          files: |
-            ./
-          outPath: AstroDwarfScheduler-GUI-win.tar.gz
+      - name: Create tar.gz archive
+        run: |
+          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build/exe.win-amd64-3.12 .
 
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI-win
           path: AstroDwarfScheduler-GUI-win.tar.gz
-
+  
   build_console_win:
     runs-on: windows-latest
 
@@ -183,15 +177,9 @@ jobs:
           python setupCMD.py build
         continue-on-error: true
 
-      - name: Compress with tar (preserve symlinks)
-        uses: a7ul/tar-action@v1.1.0
-        id: compress
-        with:
-          command: c
-          cwd: ./build/exe.win-amd64-3.12
-          files: |
-            ./
-          outPath: AstroDwarfScheduler-Console-win.tar.gz
+      - name: Create tar.gz archive
+        run: |
+          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build/exe.win-amd64-3.12 .
 
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
@@ -219,58 +207,28 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
-          python -m pip install -r requirements.txt
-          python -m pip install -r requirements-local.txt
-          python -m pip install pyinstaller
+          python -m pip install --break-system-packages -r requirements.txt
+          python -m pip install --break-system-packages -r requirements-local.txt
+          python -m pip install --break-system-packages cx_Freeze
 
-      - name: Build GUI executable with PyInstaller
+      - name: Build the executable with setupUI.py
         run: |
-          # Check what files exist
-          echo "Checking available files:"
-          ls -la
-          
-          # Build with only existing files
-          PYINSTALLER_ARGS="--onedir --windowed --name AstroDwarfScheduler"
-                    
-          if [ -f "config.ini" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.ini:."
-          fi
-          
-          if [ -f "config.py" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.py:."
-          fi
-          
-          if [ -d "Astro_Sessions" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data Astro_Sessions:Astro_Sessions"
-          fi
-          
-          echo "Running: pyinstaller $PYINSTALLER_ARGS astro_dwarf_session_UI.py"
-          pyinstaller $PYINSTALLER_ARGS astro_dwarf_session_UI.py
-
-      - name: Organize files for distribution
-        run: |
-          mkdir -p linux_dist
-          
-          # Copy GUI files if they exist
-          if [ -d "dist/AstroDwarfScheduler" ]; then
-            cp -r dist/AstroDwarfScheduler/* linux_dist/
-          else
-            echo "Warning: AstroDwarfScheduler not found"
-          fi
+          python setupUI.py build
+        continue-on-error: true
                     
       - name: Create start scripts
         run: |
           # Create GUI launcher script
-          cat > linux_dist/astro-dwarf-scheduler-gui.sh << 'EOF'
+          cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh << 'EOF'
           #!/bin/bash
           cd "$(dirname "$0")"
-          ./AstroDwarfScheduler
+          ./astro_dwarf_session_UI
           EOF
-          chmod +x linux_dist/astro-dwarf-scheduler-gui.sh
+          chmod +x build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh
           
       - name: Create tar.gz archive
         run: |
-          tar -czf AstroDwarfScheduler-GUI-linux.tar.gz -C linux_dist .
+          tar -czf AstroDwarfScheduler-GUI-linux.tar.gz -C build/exe.linux-x86_64-3.12 .
 
       - name: Upload Linux GUI executable
         uses: actions/upload-artifact@v4
@@ -298,58 +256,28 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
-          python -m pip install -r requirements.txt
-          python -m pip install -r requirements-local.txt
-          python -m pip install pyinstaller
+          python -m pip install --break-system-packages -r requirements.txt
+          python -m pip install --break-system-packages -r requirements-local.txt
+          python -m pip install --break-system-packages cx_Freeze
 
-      - name: Build Console executable with PyInstaller
+      - name: Build the executable with setupCMD.py
         run: |
-          # Check what files exist
-          echo "Checking available files:"
-          ls -la
-          
-          # Build with only existing files
-          PYINSTALLER_ARGS="--onedir --name AstroDwarfSchedulerConsole"
-                    
-          if [ -f "config.ini" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.ini:."
-          fi
-          
-          if [ -f "config.py" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.py:."
-          fi
-          
-          if [ -d "Astro_Sessions" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data Astro_Sessions:Astro_Sessions"
-          fi
-          
-          echo "Running: pyinstaller $PYINSTALLER_ARGS astro_dwarf_scheduler.py"
-          pyinstaller $PYINSTALLER_ARGS astro_dwarf_scheduler.py
-
-      - name: Organize files for distribution
-        run: |
-          mkdir -p linux_dist
-          
-          # Copy Console files if they exist
-          if [ -d "dist/AstroDwarfSchedulerConsole" ]; then
-            cp -r dist/AstroDwarfSchedulerConsole/* linux_dist/
-          else
-            echo "Warning: AstroDwarfSchedulerConsole not found"
-          fi
+          python setupCMD.py build
+        continue-on-error: true
                     
       - name: Create start scripts
         run: |
           # Create Console launcher script
-          cat > linux_dist/astro-dwarf-scheduler-console.sh << 'EOF'
+          cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh << 'EOF'
           #!/bin/bash
           cd "$(dirname "$0")"
-          ./AstroDwarfSchedulerConsole
+          ./astro_dwarf_scheduler
           EOF
-          chmod +x linux_dist/astro-dwarf-scheduler-console.sh
+          chmod +x build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh
           
       - name: Create tar.gz archive
         run: |
-          tar -czf AstroDwarfScheduler-Console-linux.tar.gz -C linux_dist .
+          tar -czf AstroDwarfScheduler-Console-linux.tar.gz -C build/exe.linux-x86_64-3.12 .
 
       - name: Upload Linux Console executable
         uses: actions/upload-artifact@v4

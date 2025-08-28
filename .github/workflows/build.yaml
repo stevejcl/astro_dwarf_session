@@ -195,16 +195,7 @@ jobs:
         run: |
           python setupBLE.py build
         continue-on-error: true
-
-      - name: Move and rename to extern
-        run: |
-          powershell Move-Item -Path build\exe.win-amd64-3.12 -Destination build\exe.win-amd64-3.12\extern
-
-      - name: create symbolic link
-        run: |
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
-
+        
       - name: Compress with tar (preserve symlinks)
         uses: a7ul/tar-action@v1.1.0
         id: compress
@@ -264,15 +255,6 @@ jobs:
         run: |
           python setupBLE.py build
         continue-on-error: true
-
-      - name: Move and rename to extern
-        run: |
-          powershell Move-Item -Path build\exe.win-amd64-3.12 -Destination build\exe.win-amd64-3.12\extern
-
-      - name: create symbolic link
-        run: |
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
 
       - name: Compress with tar (preserve symlinks)
         uses: a7ul/tar-action@v1.1.0

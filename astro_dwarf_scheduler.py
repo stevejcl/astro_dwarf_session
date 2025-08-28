@@ -7,7 +7,7 @@ import subprocess
 
 from datetime import datetime, timedelta
 
-from dwarf_session import start_dwarf_session, get_dwarf_id_str_val, get_dwarf_id_int_val
+from dwarf_session import start_dwarf_session
 
 from dwarf_python_api.lib.dwarf_utils import perform_time
 from dwarf_python_api.lib.dwarf_utils import perform_timezone
@@ -24,6 +24,9 @@ from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_pwd
 
 # import data for config.py
 import dwarf_python_api.get_config_data
+# The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
+# the value return by get_config_data must be used with these functions
+from dwarf_python_api.get_config_data import config_to_dwarf_id_str, config_to_dwarf_id_int
 
 import dwarf_python_api.lib.my_logger as log
 
@@ -185,7 +188,7 @@ def update_process_status(program, status, result=None, message=None, nb_try=Non
     if nb_try is not None:
         command['nb_try'] = nb_try
     if dwarf_id is not None:
-        command['dwarf'] = "D" + get_dwarf_id_str_val(dwarf_id)
+        command['dwarf'] = "D" + config_to_dwarf_id_str(dwarf_id)
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if status == "pending":
         command['starting_date'] = current_datetime
@@ -397,7 +400,7 @@ def start_STA_connection(CheckDwarfId = False):
         log.error("The dwarf Ip has not been set , need Bluetooth First, can't connect to wifi")
     else:
         #init Frame : TIME and TIMEZONE
-        log.notice(f'Connecting to the dwarf {get_dwarf_id_int_val(dwarf_id)} on {dwarf_ip}')
+        log.notice(f'Connecting to the dwarf {config_to_dwarf_id_int(dwarf_id)} on {dwarf_ip}')
         result = perform_time()
        
         if result:
@@ -497,7 +500,7 @@ def main():
         attempt = 0
         while not result and attempt < max_retries:
             log.notice ("##--------------------------------------##")
-            log.notice(f'Try to connect to the dwarf {get_dwarf_id_int_val(dwarf_id)} on {dwarf_ip}')
+            log.notice(f'Try to connect to the dwarf {config_to_dwarf_id_int(dwarf_id)} on {dwarf_ip}')
             result = start_STA_connection()
             attempt += 1
 

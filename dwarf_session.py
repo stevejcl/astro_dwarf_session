@@ -32,14 +32,11 @@ from dwarf_python_api.lib.data_wide_utils import get_wide_gain_name_by_index
 # import data for config.py
 import dwarf_python_api.get_config_data
 
-import dwarf_python_api.lib.my_logger as log
-
 # The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
-def get_dwarf_id_str_val(dwarf_id):
-   return str(int(dwarf_id) + 1) if dwarf_id is not None else None
+# the value return by get_config_data must be used with these functions
+from dwarf_python_api.get_config_data import config_to_dwarf_id_str, config_to_dwarf_id_int
 
-def get_dwarf_id_int_val(dwarf_id):
-   return int(dwarf_id) + 1 if dwarf_id is not None else 0
+import dwarf_python_api.lib.my_logger as log
 
 def select_solar_target (target):
    
@@ -140,7 +137,7 @@ def start_dwarf_session(program, type_dwarf = 2):
         dump_json = json.dumps(program, indent=4)
 
         log.notice("######################")
-        log.notice(f"Starting new Session for Dwarf {get_dwarf_id_int_val(dwarf_id)} on {dwarf_ip}")
+        log.notice(f"Starting new Session for Dwarf {config_to_dwarf_id_int(dwarf_id)} on {dwarf_ip}")
         log.notice("######################")
         log.debug(f"program: {dump_json}")
         log.debug("######################")
@@ -198,7 +195,7 @@ def start_dwarf_session(program, type_dwarf = 2):
                 log.notice(f"     exposure  => {exp_val}s")
                 log.notice(f"     gain  => {gain_val}")
                 log.notice(f"     binning => {'4k' if binning_val == 0 else '2k'}")
-                if get_dwarf_id_str_val(dwarf_id) == "3":
+                if config_to_dwarf_id_str(dwarf_id) == "3":
                     log.notice(f"     IR => {'VIS_FILTER' if IR_val == 0 else 'ASTRO_FILTER' if IR_val == 1 else 'DUAL_BAND'}")
                 else:
                     log.notice(f"     IR  => {'IR_CUT' if IR_val== 0 else 'IR_PASS'}")
@@ -275,7 +272,7 @@ def start_dwarf_session(program, type_dwarf = 2):
             continue_action = perform_update_camera_setting("gain", "80")
             verify_action(continue_action, "step_3")
 
-            if get_dwarf_id_str_val(dwarf_id) == "3":
+            if config_to_dwarf_id_str(dwarf_id) == "3":
                 log.notice("    Set IR to Astro Filter")
             else:
                 log.notice("    Set IR to IR_PASS")
@@ -329,9 +326,9 @@ def start_dwarf_session(program, type_dwarf = 2):
         if take_photo:
             log.notice(f"Processing Astro Photo Session : {count_val} images")
             if exp_val:
-                continue_action = perform_update_camera_setting("exposure", exp_val, dwarf_id)
+                continue_action = perform_update_camera_setting("exposure", exp_val, config_to_dwarf_id_str(dwarf_id))
             if gain_val:
-                continue_action = perform_update_camera_setting("gain", gain_val, dwarf_id)
+                continue_action = perform_update_camera_setting("gain", gain_val, config_to_dwarf_id_str(dwarf_id))
             if IR_val:
                 continue_action = perform_update_camera_setting("IR", IR_val)
             if binning_val:
@@ -359,9 +356,9 @@ def start_dwarf_session(program, type_dwarf = 2):
         if take_widephoto:
             log.notice(f"Processing Astro Wide Photo Session : {count_val} images")
             if wide_exp_val:
-                continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, dwarf_id)
+                continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, config_to_dwarf_id_str(dwarf_id))
             if wide_gain_val:
-                continue_action = perform_update_camera_setting("wide_gain", wide_gain_val, dwarf_id)
+                continue_action = perform_update_camera_setting("wide_gain", wide_gain_val, config_to_dwarf_id_str(dwarf_id))
             if count_val:
                 continue_action = perform_update_camera_setting("count", count_val)
 
@@ -422,7 +419,7 @@ def print_camera_data():
     data_config = dwarf_python_api.get_config_data.get_config_data()
     dwarf_id = data_config['dwarf_id'] 
     log.notice("----------------------")
-    log.notice(f"Connected to Dwarf {get_dwarf_id_int_val(dwarf_id)}")
+    log.notice(f"Connected to Dwarf {config_to_dwarf_id_int(dwarf_id)}")
 
     # ALL PARAMS
     if (result):
@@ -436,7 +433,7 @@ def print_camera_data():
             # Extract specific fields for the matching entry
            index_value = matching_entry["index"]
 
-           camera_exposure = str(get_exposure_name_by_index(index_value,dwarf_id))
+           camera_exposure = str(get_exposure_name_by_index(index_value,config_to_dwarf_id_str(dwarf_id)))
            log.notice(f"the exposure is: {camera_exposure}")
         else:
            log.notice("the exposure has not been found")
@@ -452,7 +449,7 @@ def print_camera_data():
            index_value = matching_entry["index"]
 
 
-           camera_gain = str(get_gain_name_by_index(index_value,dwarf_id))
+           camera_gain = str(get_gain_name_by_index(index_value,config_to_dwarf_id_str(dwarf_id)))
            log.notice(f"the gain is: {camera_gain}")
         else:
            log.notice("the gain has not been found")
@@ -467,15 +464,15 @@ def print_camera_data():
             # Extract specific fields for the matching entry
             camera_IR = str(matching_entry["index"])
 
-            if camera_IR == "0" and get_dwarf_id_str_val(dwarf_id) == "2":
+            if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "2":
                 log.notice("the IR value is: IRCut")
-            if camera_IR == "1" and get_dwarf_id_str_val(dwarf_id) == "2":
+            if camera_IR == "1" and config_to_dwarf_id_str(dwarf_id) == "2":
                 log.notice("the IR value is: IRPass")
-            if camera_IR == "0" and get_dwarf_id_str_val(dwarf_id) == "3":
+            if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "3":
                 log.notice("the IR value is: VIS FILTER")
-            if camera_IR == "1" and get_dwarf_id_str_val(dwarf_id) == "3":
+            if camera_IR == "1" and config_to_dwarf_id_str(dwarf_id) == "3":
                 log.notice("the IR value is: ASTRO FILTER")
-            if camera_IR == "2" and get_dwarf_id_str_val(dwarf_id) == "3":
+            if camera_IR == "2" and config_to_dwarf_id_str(dwarf_id) == "3":
                 log.notice("the IR value is: DUAL BAND")
         else:
            log.notice("the IRfilter has not been found")
@@ -550,7 +547,7 @@ def print_wide_camera_data():
     data_config = dwarf_python_api.get_config_data.get_config_data()
     dwarf_id = data_config['dwarf_id'] 
     log.notice("----------------------")
-    log.notice(f"Connected to Dwarf {get_dwarf_id_int_val(dwarf_id)}")
+    log.notice(f"Connected to Dwarf {config_to_dwarf_id_int(dwarf_id)}")
 
     # ALL PARAMS
     if (result):
@@ -564,7 +561,7 @@ def print_wide_camera_data():
             # Extract specific fields for the matching entry
            index_value = matching_entry["index"]
 
-           camera_wide_exposure = str(get_wide_exposure_name_by_index(index_value,dwarf_id))
+           camera_wide_exposure = str(get_wide_exposure_name_by_index(index_value,config_to_dwarf_id_str(dwarf_id)))
            log.notice(f"the exposure is: {camera_wide_exposure}")
         else:
            log.notice("the exposure has not been found")
@@ -580,7 +577,7 @@ def print_wide_camera_data():
            index_value = matching_entry["index"]
 
 
-           camera_wide_gain = str(get_wide_gain_name_by_index(index_value,dwarf_id))
+           camera_wide_gain = str(get_wide_gain_name_by_index(index_value,config_to_dwarf_id_str(dwarf_id)))
            log.notice(f"the gain is: {camera_wide_gain}")
         else:
            log.notice("the gain has not been found")

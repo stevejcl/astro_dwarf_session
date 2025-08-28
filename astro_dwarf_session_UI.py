@@ -10,6 +10,9 @@ from dwarf_python_api.lib.dwarf_utils import perform_disconnect, unset_HostMaste
 
 # import data for config.py
 import dwarf_python_api.get_config_data
+# The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
+# the value return by get_config_data must be used with these functions
+from dwarf_python_api.get_config_data import config_to_dwarf_id_int
 
 import logging
 import dwarf_python_api.lib.my_logger as log
@@ -561,7 +564,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             data_config = dwarf_python_api.get_config_data.get_config_data()
             if data_config["dwarf_id"]:
                 dwarf_id = data_config['dwarf_id']
-            dwarf_id_int = int(dwarf_id) + 1 if dwarf_id is not None else 0
+            dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
             attempt = 0
             result = False

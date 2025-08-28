@@ -39,30 +39,12 @@ jobs:
             echo "setupUI_mac.py build failed"
             exit 1
           fi
-  
-      - name: Build macOS .app bundle with setupBLE_mac.py
-        run: |
-          python setupBLE_mac.py py2app
-          if [ $? -ne 0 ]; then
-            echo "setupBLE_mac.py build failed"
-            exit 1
-          fi
-
-      - name: List build outputs for debugging
-        run: |
-          echo "Contents of current directory:"
-          ls -la
-          echo "Contents of dist directory (if exists):"
-          ls -la dist/ || echo "dist directory not found"
-          echo "Contents of build directory (if exists):"
-          ls -la build/ || echo "build directory not found"
 
       - name: Create DMG from .app bundle
         run: |
           # Create temporary directory for DMG contents
           mkdir -p dmg_temp
           cp -R dist/AstroDwarfScheduler.app dmg_temp/
-          cp -R dist/DwarfiumBLEConnect.app dmg_temp/
           
           hdiutil create -volname "AstroDwarfScheduler" \
             -srcfolder dmg_temp \
@@ -114,30 +96,12 @@ jobs:
             echo "setupCMD_mac.py build failed"
             exit 1
           fi
-  
-      - name: Build macOS .app bundle with setupBLE_mac.py
-        run: |
-          python setupBLE_mac.py py2app
-          if [ $? -ne 0 ]; then
-            echo "setupBLE_mac.py build failed"
-            exit 1
-          fi
-
-      - name: List build outputs for debugging
-        run: |
-          echo "Contents of current directory:"
-          ls -la
-          echo "Contents of dist directory (if exists):"
-          ls -la dist/ || echo "dist directory not found"
-          echo "Contents of build directory (if exists):"
-          ls -la build/ || echo "build directory not found"
-        
+          
       - name: Create DMG from .app bundle
         run: |
           # Create temporary directory for DMG contents
           mkdir -p dmg_temp
           cp -R dist/AstroDwarfSchedulerConsole.app dmg_temp/
-          cp -R dist/DwarfiumBLEConnect.app dmg_temp/
           
           hdiutil create -volname "AstroDwarfSchedulerConsole" \
             -srcfolder dmg_temp \
@@ -178,23 +142,6 @@ jobs:
         run: |
           python setupUI.py build
         continue-on-error: true
-
-      - name: Set up Python3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip --root-user-action=ignore
-          python -m pip install -r requirements.txt
-          python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
-
-      - name: Build the executable with setupBLE.py
-        run: |
-          python setupBLE.py build
-        continue-on-error: true
         
       - name: Compress with tar (preserve symlinks)
         uses: a7ul/tar-action@v1.1.0
@@ -205,9 +152,6 @@ jobs:
           files: |
             ./
           outPath: AstroDwarfScheduler-GUI-win.tar.gz
-
-      - name: List files to verify tar creation
-        run: ls -l AstroDwarfScheduler-GUI-win.tar.gz
 
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
@@ -239,23 +183,6 @@ jobs:
           python setupCMD.py build
         continue-on-error: true
 
-      - name: Set up Python3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip --root-user-action=ignore
-          python -m pip install -r requirements.txt
-          python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
-
-      - name: Build the executable with setupBLE.py
-        run: |
-          python setupBLE.py build
-        continue-on-error: true
-
       - name: Compress with tar (preserve symlinks)
         uses: a7ul/tar-action@v1.1.0
         id: compress
@@ -265,9 +192,6 @@ jobs:
           files: |
             ./
           outPath: AstroDwarfScheduler-Console-win.tar.gz
-
-      - name: List files to verify tar creation
-        run: ls -l AstroDwarfScheduler-Console-win.tar.gz
 
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
@@ -307,11 +231,7 @@ jobs:
           
           # Build with only existing files
           PYINSTALLER_ARGS="--onedir --windowed --name AstroDwarfScheduler"
-          
-          if [ -d "dwarf_ble_connect" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
-          fi
-          
+                    
           if [ -f "config.ini" ]; then
             PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.ini:."
           fi
@@ -327,22 +247,6 @@ jobs:
           echo "Running: pyinstaller $PYINSTALLER_ARGS astro_dwarf_session_UI.py"
           pyinstaller $PYINSTALLER_ARGS astro_dwarf_session_UI.py
 
-      - name: Build BLE Connect executable
-        run: |
-          # Check what files exist
-          echo "Checking available files for BLE:"
-          ls -la
-          
-          # Build with only existing files
-          PYINSTALLER_ARGS="--onedir --name DwarfiumBLEConnect"
-          
-          if [ -d "dwarf_ble_connect" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
-          fi
-          
-          echo "Running: pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py"
-          pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py
-
       - name: Organize files for distribution
         run: |
           mkdir -p linux_dist
@@ -353,15 +257,7 @@ jobs:
           else
             echo "Warning: AstroDwarfScheduler not found"
           fi
-          
-          # Copy BLE files if they exist
-          mkdir -p linux_dist/extern
-          if [ -d "dist/DwarfiumBLEConnect" ]; then
-            cp -r dist/DwarfiumBLEConnect/* linux_dist/extern/
-          else
-            echo "Warning: DwarfiumBLEConnect not found"
-          fi
-          
+                    
       - name: Create start scripts
         run: |
           # Create GUI launcher script
@@ -372,14 +268,6 @@ jobs:
           EOF
           chmod +x linux_dist/astro-dwarf-scheduler-gui.sh
           
-          # Create BLE launcher script
-          cat > linux_dist/dwarfium-ble-connect.sh << 'EOF'
-          #!/bin/bash
-          cd "$(dirname "$0")/extern"
-          ./DwarfiumBLEConnect
-          EOF
-          chmod +x linux_dist/dwarfium-ble-connect.sh
-
       - name: Create tar.gz archive
         run: |
           tar -czf AstroDwarfScheduler-GUI-linux.tar.gz -C linux_dist .
@@ -422,11 +310,7 @@ jobs:
           
           # Build with only existing files
           PYINSTALLER_ARGS="--onedir --name AstroDwarfSchedulerConsole"
-          
-          if [ -d "dwarf_ble_connect" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
-          fi
-          
+                    
           if [ -f "config.ini" ]; then
             PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data config.ini:."
           fi
@@ -442,22 +326,6 @@ jobs:
           echo "Running: pyinstaller $PYINSTALLER_ARGS astro_dwarf_scheduler.py"
           pyinstaller $PYINSTALLER_ARGS astro_dwarf_scheduler.py
 
-      - name: Build BLE Connect executable
-        run: |
-          # Check what files exist
-          echo "Checking available files for BLE:"
-          ls -la
-          
-          # Build with only existing files
-          PYINSTALLER_ARGS="--onedir --name DwarfiumBLEConnect"
-          
-          if [ -d "dwarf_ble_connect" ]; then
-            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
-          fi
-          
-          echo "Running: pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py"
-          pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py
-
       - name: Organize files for distribution
         run: |
           mkdir -p linux_dist
@@ -468,15 +336,7 @@ jobs:
           else
             echo "Warning: AstroDwarfSchedulerConsole not found"
           fi
-          
-          # Copy BLE files if they exist
-          mkdir -p linux_dist/extern
-          if [ -d "dist/DwarfiumBLEConnect" ]; then
-            cp -r dist/DwarfiumBLEConnect/* linux_dist/extern/
-          else
-            echo "Warning: DwarfiumBLEConnect not found"
-          fi
-          
+                    
       - name: Create start scripts
         run: |
           # Create Console launcher script
@@ -487,14 +347,6 @@ jobs:
           EOF
           chmod +x linux_dist/astro-dwarf-scheduler-console.sh
           
-          # Create BLE launcher script
-          cat > linux_dist/dwarfium-ble-connect.sh << 'EOF'
-          #!/bin/bash
-          cd "$(dirname "$0")/extern"
-          ./DwarfiumBLEConnect
-          EOF
-          chmod +x linux_dist/dwarfium-ble-connect.sh
-
       - name: Create tar.gz archive
         run: |
           tar -czf AstroDwarfScheduler-Console-linux.tar.gz -C linux_dist .
@@ -529,37 +381,6 @@ jobs:
         run: |
           python setupUI.py build
 
-      - name: Set up Python3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip --root-user-action=ignore
-          python -m pip install -r requirements.txt
-          python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
-
-      - name: Build the executable with setupBLE.py
-        run: |
-          python setupBLE.py build
-
-      - name: Copy BLE utility to Install folder
-        run: |
-          if (!(Test-Path "Install\dwarf_ble_connect")) { New-Item -ItemType Directory -Path "Install\dwarf_ble_connect" -Force }
-          Copy-Item -Path "build\exe.win-amd64-3.12\*" -Destination "Install\dwarf_ble_connect\" -Recurse -Force
-
-      - name: Debug - List Install structure
-        run: |
-          Write-Host "Install directory:"
-          Get-ChildItem Install\
-          Write-Host "BLE Connect directory:"
-          Get-ChildItem Install\dwarf_ble_connect\
-          Write-Host "Config files check:"
-          if (Test-Path "Install\config.py") { Write-Host "config.py exists in Install" }
-          if (Test-Path "Install\config.ini") { Write-Host "config.ini exists in Install" }
-
       - name: Install Inno Setup
         run: |
           choco install innosetup -y
@@ -567,10 +388,6 @@ jobs:
       - name: Build Installer with Inno Setup
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" AstroDwarfScheduler.iss
-
-      - name: List installer files
-        run: |
-          dir installer\
 
       - name: Upload Installer
         uses: actions/upload-artifact@v4

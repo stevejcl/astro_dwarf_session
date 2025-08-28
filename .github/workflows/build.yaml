@@ -18,7 +18,7 @@ jobs:
   
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install py2app
@@ -93,7 +93,7 @@ jobs:
   
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install py2app
@@ -169,7 +169,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze
@@ -186,7 +186,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze
@@ -229,7 +229,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze
@@ -246,7 +246,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze
@@ -296,7 +296,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt
           pip install pyinstaller
@@ -408,7 +408,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt
           pip install pyinstaller
@@ -519,7 +519,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze
@@ -535,7 +535,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --root-user-action=ignore
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
           pip install cx_Freeze

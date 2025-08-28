@@ -152,7 +152,7 @@ jobs:
         with:
           name: AstroDwarfScheduler-GUI-win
           path: AstroDwarfScheduler-GUI-win.tar.gz
-  
+
   build_console_win:
     runs-on: windows-latest
 
@@ -218,6 +218,7 @@ jobs:
                     
       - name: Create start scripts
         run: |
+          ls -l
           # Create GUI launcher script
           cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh << 'EOF'
           #!/bin/bash
@@ -267,6 +268,7 @@ jobs:
                     
       - name: Create start scripts
         run: |
+          ls -l
           # Create Console launcher script
           cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh << 'EOF'
           #!/bin/bash

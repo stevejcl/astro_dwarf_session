@@ -179,10 +179,10 @@ jobs:
           python setupUI.py build
         continue-on-error: true
 
-      - name: Set up Python3.11
+      - name: Set up Python3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -198,7 +198,7 @@ jobs:
 
       - name: Move and rename to extern
         run: |
-          powershell Move-Item -Path build\exe.win-amd64-3.11 -Destination build\exe.win-amd64-3.12\extern
+          powershell Move-Item -Path build\exe.win-amd64-3.12 -Destination build\exe.win-amd64-3.12\extern
 
       - name: create symbolic link
         run: |
@@ -248,10 +248,10 @@ jobs:
           python setupCMD.py build
         continue-on-error: true
 
-      - name: Set up Python3.11
+      - name: Set up Python3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -267,7 +267,7 @@ jobs:
 
       - name: Move and rename to extern
         run: |
-          powershell Move-Item -Path build\exe.win-amd64-3.11 -Destination build\exe.win-amd64-3.12\extern
+          powershell Move-Item -Path build\exe.win-amd64-3.12 -Destination build\exe.win-amd64-3.12\extern
 
       - name: create symbolic link
         run: |
@@ -294,8 +294,8 @@ jobs:
           path: AstroDwarfScheduler-Console-win.tar.gz
 
   build_UI_linux:
-    runs-on: ubuntu-latest
-
+    runs-on: fedora:39  # or any distro with glibc 2.38+
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -409,7 +409,7 @@ jobs:
           path: AstroDwarfScheduler-GUI-linux.tar.gz
 
   build_console_linux:
-    runs-on: ubuntu-latest
+    runs-on: fedora:39  # or any distro with glibc 2.38+
 
     steps:
       - name: Checkout code
@@ -542,10 +542,10 @@ jobs:
         run: |
           python setupUI.py build
 
-      - name: Set up Python3.11
+      - name: Set up Python3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -561,7 +561,7 @@ jobs:
       - name: Copy BLE utility to Install folder
         run: |
           if (!(Test-Path "Install\dwarf_ble_connect")) { New-Item -ItemType Directory -Path "Install\dwarf_ble_connect" -Force }
-          Copy-Item -Path "build\exe.win-amd64-3.11\*" -Destination "Install\dwarf_ble_connect\" -Recurse -Force
+          Copy-Item -Path "build\exe.win-amd64-3.12\*" -Destination "Install\dwarf_ble_connect\" -Recurse -Force
 
       - name: Debug - List Install structure
         run: |
@@ -592,7 +592,7 @@ jobs:
           path: installer\AstroDwarfScheduler-Setup-win.exe
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: fedora:39  # or any distro with glibc 2.38+
     needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer_win]
 
     steps:

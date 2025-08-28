@@ -290,7 +290,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y python3-tkinter git binutils
+          sudo apt install -y python3-tk git binutils
 
       - name: Install Python dependencies
         run: |

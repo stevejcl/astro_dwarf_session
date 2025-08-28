@@ -3,115 +3,34 @@ name: Build Executable
 on:
   workflow_dispatch:
 
-# Reusable steps (YAML anchors) to DRY common logic while keeping behavior identical
-x-steps:
-  checkout: &checkout
-    name: Checkout code
-    uses: actions/checkout@v4
-
-  setup-python-312: &setup-python-312
-    name: Set up Python 3.12
-    uses: actions/setup-python@v5
-    with:
-      python-version: '3.12'
-
-  mac-install-deps: &mac-install-deps
-    name: Install dependencies
-    run: |
-      python -m pip install --upgrade pip --root-user-action=ignore
-      python -m pip install -r requirements.txt
-      python -m pip install -r requirements-local.txt --target .
-      python -m pip install py2app
-
-  mac-convert-utf8: &mac-convert-utf8
-    name: Convert source files to UTF-8
-    run: |
-      find ./ -type f -name "*.py" | while read file; do
-        if ! iconv -f UTF-8 -t UTF-8 "$file" > /dev/null 2>&1; then
-          echo "Fixing encoding: $file"
-          iconv -f ISO-8859-1 -t UTF-8 "$file" > "${file}.utf8" && mv "${file}.utf8" "$file"
-        fi
-      done
-
-  mac-build-ble: &mac-build-ble
-    name: Build macOS .app bundle with setupBLE_mac.py
-    run: |
-      python setupBLE_mac.py py2app
-      if [ $? -ne 0 ]; then
-        echo "setupBLE_mac.py build failed"
-        exit 1
-      fi
-
-  mac-list-build-outputs: &mac-list-build-outputs
-    name: List build outputs for debugging
-    run: |
-      echo "Contents of current directory:"
-      ls -la
-      echo "Contents of dist directory (if exists):"
-      ls -la dist/ || echo "dist directory not found"
-      echo "Contents of build directory (if exists):"
-      ls -la build/ || echo "build directory not found"
-
-  win-install-deps: &win-install-deps
-    name: Install dependencies
-    run: |
-      python -m pip install --upgrade pip --root-user-action=ignore
-      python -m pip install -r requirements.txt
-      python -m pip install -r requirements-local.txt --target .
-      python -m pip install cx_Freeze
-
-  win-build-ble: &win-build-ble
-    name: Build the executable with setupBLE.py
-    run: |
-      python setupBLE.py build
-    continue-on-error: true
-
-  linux-sysdeps-ui: &linux-sysdeps-ui
-    name: Install system dependencies
-    run: |
-      sudo apt-get update
-      sudo apt-get install -y python3-tk git binutils
-
-  linux-sysdeps-console: &linux-sysdeps-console
-    name: Install system dependencies
-    run: |
-      sudo apt-get update
-      sudo apt-get install -y git binutils
-
-  linux-install-pydeps: &linux-install-pydeps
-    name: Install Python dependencies
-    run: |
-      python -m pip install --upgrade pip --root-user-action=ignore
-      python -m pip install -r requirements.txt
-      python -m pip install -r requirements-local.txt
-      python -m pip install pyinstaller
-
-  linux-build-ble: &linux-build-ble
-    name: Build BLE Connect executable
-    run: |
-      # Check what files exist
-      echo "Checking available files for BLE:"
-      ls -la
-      
-      # Build with only existing files
-      PYINSTALLER_ARGS="--onedir --name DwarfiumBLEConnect"
-      
-      if [ -d "dwarf_ble_connect" ]; then
-        PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
-      fi
-      
-      echo "Running: pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py"
-      pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py
-
 jobs:
   build_UI_mac:
     runs-on: macos-latest  
     
     steps:
-      - *checkout
-      - *setup-python-312
-      - *mac-install-deps
-      - *mac-convert-utf8
+      - name: Checkout code
+        uses: actions/checkout@v4
+  
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+  
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install py2app
+
+      - name: Convert source files to UTF-8
+        run: |
+          find ./ -type f -name "*.py" | while read file; do
+            if ! iconv -f UTF-8 -t UTF-8 "$file" > /dev/null 2>&1; then
+              echo "Fixing encoding: $file"
+              iconv -f ISO-8859-1 -t UTF-8 "$file" > "${file}.utf8" && mv "${file}.utf8" "$file"
+            fi
+          done
 
       - name: Build macOS .app bundle with setupUI_mac.py
         run: |
@@ -120,8 +39,23 @@ jobs:
             echo "setupUI_mac.py build failed"
             exit 1
           fi
-      - *mac-build-ble
-      - *mac-list-build-outputs
+  
+      - name: Build macOS .app bundle with setupBLE_mac.py
+        run: |
+          python setupBLE_mac.py py2app
+          if [ $? -ne 0 ]; then
+            echo "setupBLE_mac.py build failed"
+            exit 1
+          fi
+
+      - name: List build outputs for debugging
+        run: |
+          echo "Contents of current directory:"
+          ls -la
+          echo "Contents of dist directory (if exists):"
+          ls -la dist/ || echo "dist directory not found"
+          echo "Contents of build directory (if exists):"
+          ls -la build/ || echo "build directory not found"
 
       - name: Create DMG from .app bundle
         run: |
@@ -149,10 +83,29 @@ jobs:
   build_console_mac:
     runs-on: macos-latest  
     steps:
-      - *checkout
-      - *setup-python-312
-      - *mac-install-deps
-      - *mac-convert-utf8
+      - name: Checkout code
+        uses: actions/checkout@v4
+  
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+  
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install py2app
+
+      - name: Convert source files to UTF-8
+        run: |
+          find ./ -type f -name "*.py" | while read file; do
+            if ! iconv -f UTF-8 -t UTF-8 "$file" > /dev/null 2>&1; then
+              echo "Fixing encoding: $file"
+              iconv -f ISO-8859-1 -t UTF-8 "$file" > "${file}.utf8" && mv "${file}.utf8" "$file"
+            fi
+          done
 
       - name: Build macOS .app bundle with setupCMD_mac.py
         run: |
@@ -161,8 +114,23 @@ jobs:
             echo "setupCMD_mac.py build failed"
             exit 1
           fi
-      - *mac-build-ble
-      - *mac-list-build-outputs
+  
+      - name: Build macOS .app bundle with setupBLE_mac.py
+        run: |
+          python setupBLE_mac.py py2app
+          if [ $? -ne 0 ]; then
+            echo "setupBLE_mac.py build failed"
+            exit 1
+          fi
+
+      - name: List build outputs for debugging
+        run: |
+          echo "Contents of current directory:"
+          ls -la
+          echo "Contents of dist directory (if exists):"
+          ls -la dist/ || echo "dist directory not found"
+          echo "Contents of build directory (if exists):"
+          ls -la build/ || echo "build directory not found"
         
       - name: Create DMG from .app bundle
         run: |
@@ -191,17 +159,42 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - *checkout
-      - *setup-python-312
-      - *win-install-deps
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
 
       - name: Build the executable with setupUI.py
         run: |
           python setupUI.py build
         continue-on-error: true
-      - *setup-python-312
-      - *win-install-deps
-      - *win-build-ble
+
+      - name: Set up Python3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build
+        continue-on-error: true
         
       - name: Compress with tar (preserve symlinks)
         uses: a7ul/tar-action@v1.1.0
@@ -226,17 +219,42 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - *checkout
-      - *setup-python-312
-      - *win-install-deps
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
 
       - name: Build the executable with setupCMD.py
         run: |
           python setupCMD.py build
         continue-on-error: true
-      - *setup-python-312
-      - *win-install-deps
-      - *win-build-ble
+
+      - name: Set up Python3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build
+        continue-on-error: true
 
       - name: Compress with tar (preserve symlinks)
         uses: a7ul/tar-action@v1.1.0
@@ -261,10 +279,25 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - *checkout
-      - *setup-python-312
-      - *linux-sysdeps-ui
-      - *linux-install-pydeps
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3-tkinter git binutils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt
+          python -m pip install pyinstaller
 
       - name: Build GUI executable with PyInstaller
         run: |
@@ -294,7 +327,21 @@ jobs:
           echo "Running: pyinstaller $PYINSTALLER_ARGS astro_dwarf_session_UI.py"
           pyinstaller $PYINSTALLER_ARGS astro_dwarf_session_UI.py
 
-      - *linux-build-ble
+      - name: Build BLE Connect executable
+        run: |
+          # Check what files exist
+          echo "Checking available files for BLE:"
+          ls -la
+          
+          # Build with only existing files
+          PYINSTALLER_ARGS="--onedir --name DwarfiumBLEConnect"
+          
+          if [ -d "dwarf_ble_connect" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
+          fi
+          
+          echo "Running: pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py"
+          pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py
 
       - name: Organize files for distribution
         run: |
@@ -347,10 +394,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - *checkout
-      - *setup-python-312
-      - *linux-sysdeps-console
-      - *linux-install-pydeps
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git binutils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt
+          python -m pip install pyinstaller
 
       - name: Build Console executable with PyInstaller
         run: |
@@ -379,7 +441,22 @@ jobs:
           
           echo "Running: pyinstaller $PYINSTALLER_ARGS astro_dwarf_scheduler.py"
           pyinstaller $PYINSTALLER_ARGS astro_dwarf_scheduler.py
-      - *linux-build-ble
+
+      - name: Build BLE Connect executable
+        run: |
+          # Check what files exist
+          echo "Checking available files for BLE:"
+          ls -la
+          
+          # Build with only existing files
+          PYINSTALLER_ARGS="--onedir --name DwarfiumBLEConnect"
+          
+          if [ -d "dwarf_ble_connect" ]; then
+            PYINSTALLER_ARGS="$PYINSTALLER_ARGS --add-data dwarf_ble_connect:dwarf_ble_connect"
+          fi
+          
+          echo "Running: pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py"
+          pyinstaller $PYINSTALLER_ARGS connect_bluetooth.py
 
       - name: Organize files for distribution
         run: |
@@ -433,15 +510,37 @@ jobs:
     needs: [build_UI_win, build_console_win]
 
     steps:
-      - *checkout
-      - *setup-python-312
-      - *win-install-deps
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
 
       - name: Build the executable with setupUI.py
         run: |
           python setupUI.py build
-      - *setup-python-312
-      - *win-install-deps
+
+      - name: Set up Python3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
+
       - name: Build the executable with setupBLE.py
         run: |
           python setupBLE.py build
@@ -485,7 +584,8 @@ jobs:
     needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer_win]
 
     steps:
-      - *checkout
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Download UI MAC executable artifact
         uses: actions/download-artifact@v4

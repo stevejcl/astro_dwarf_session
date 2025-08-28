@@ -5,18 +5,25 @@ import sys
 buildOptions = dict(
     packages=["bleak"],
     include_files=[
-        ('dwarf_ble_connect/','./dwarf_ble_connect'),
-        ('Install/','.')
+        ('dwarf_ble_connect/', './dwarf_ble_connect'),
+        ('Install/', '.')
     ]
 )
 
 # Define the base for a GUI application
-base = 'Win32GUI' if sys.platform=='win32' else None
+base = 'Win32GUI' if sys.platform == 'win32' else None
+
 # Setup function
 setup(
     name="Astro Dwarf Scheduler",
-    version="1.0",
+    version="1.7.0",
     description="Dwarf Astro Scheduler",
-    options = dict(build_exe = buildOptions),
-    executables=[Executable("astro_dwarf_session_UI.py")]
+    options=dict(build_exe=buildOptions),
+    executables=[
+        Executable(
+            "astro_dwarf_session_UI.py",
+            base=base,
+            icon="Install/astro_dwarf_session_UI.ico"
+        )
+    ]
 )

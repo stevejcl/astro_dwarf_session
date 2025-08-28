@@ -26,15 +26,16 @@ from dwarf_python_api.lib.data_wide_utils import get_wide_exposure_name_by_index
 from dwarf_python_api.lib.data_wide_utils import get_wide_gain_name_by_index
 
 # import data for config.py
-import dwarf_python_api.get_config_data
+import dwarf_python_api.get_config_data as config_py
 import dwarf_python_api.lib.my_logger as log
 
 # The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
+# Update: this appears to have changed recently and no longer needs to be incremented
 def get_dwarf_id_str_val(dwarf_id):
-   return str(int(dwarf_id) + 1) if dwarf_id is not None else None
+   return str(int(dwarf_id)) if dwarf_id is not None else None
 
 def get_dwarf_id_int_val(dwarf_id):
-   return int(dwarf_id) + 1 if dwarf_id is not None else 0
+   return int(dwarf_id) if dwarf_id is not None else 0
 
 def select_solar_target (target):
    
@@ -127,7 +128,7 @@ def start_dwarf_session(program, stop_event=None):
         def interrupted():
             return stop_event is not None and stop_event.is_set()
         
-        data_config = dwarf_python_api.get_config_data.get_config_data()
+        data_config = config_py.get_config_data()
         dwarf_id = "3"  # Default Dwarf ID
         if data_config["dwarf_id"]:
             dwarf_id = data_config['dwarf_id']
@@ -451,8 +452,8 @@ def start_dwarf_session(program, stop_event=None):
             if interrupted(): return
             print_wide_camera_data()
             if interrupted(): return
-            
-            wait_after = program.get('setup_wide_camera', {}).get('wait_after', 0)
+
+            wait_after = int(program.get('setup_wide_camera', {}).get('wait_after', 0))
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
@@ -504,7 +505,7 @@ def print_camera_data():
     result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
-    data_config = dwarf_python_api.get_config_data.get_config_data()
+    data_config = config_py.get_config_data()
     dwarf_id = str(data_config['dwarf_id']) if data_config.get('dwarf_id') is not None else "3"
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {get_dwarf_id_int_val(dwarf_id)}")
@@ -632,7 +633,7 @@ def print_wide_camera_data():
     result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
-    data_config = dwarf_python_api.get_config_data.get_config_data()
+    data_config = config_py.get_config_data()
     dwarf_id = str(data_config['dwarf_id']) if data_config.get('dwarf_id') is not None else "3"
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {get_dwarf_id_int_val(dwarf_id)}")

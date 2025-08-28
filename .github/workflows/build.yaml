@@ -4,7 +4,116 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_UI:
+  build_UI_mac:
+    runs-on: macos-latest  
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+  
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+  
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install py2app
+
+      - name: Convert source files to UTF-8
+        run: |
+          find ./ -type f -name "*.py" | while read file; do
+            if ! iconv -f UTF-8 -t UTF-8 "$file" > /dev/null 2>&1; then
+              echo "Fixing encoding: $file"
+              iconv -f ISO-8859-1 -t UTF-8 "$file" > "${file}.utf8" && mv "${file}.utf8" "$file"
+            fi
+          done
+
+      - name: Build macOS .app bundle with setupUI_mac.py
+        run: |
+          python setupUI_mac.py py2app
+          if [ $? -ne 0 ]; then
+            echo "setupUI_mac.py build failed"
+            exit 1
+          fi
+
+      - name: Create DMG from .app bundle
+        run: |
+          # Create temporary directory for DMG contents
+          mkdir -p dmg_temp
+          cp -R dist/AstroDwarfScheduler.app dmg_temp/
+          
+          hdiutil create -volname "AstroDwarfScheduler" \
+            -srcfolder dmg_temp \
+            -ov -format UDZO AstroDwarfScheduler-GUI-mac.dmg
+          
+          # Clean up temp directory
+          rm -rf dmg_temp
+  
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-GUI-mac
+          path: AstroDwarfScheduler-GUI-mac.dmg
+
+  build_console_mac:
+    runs-on: macos-latest  
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+  
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+  
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install py2app
+
+      - name: Convert source files to UTF-8
+        run: |
+          find ./ -type f -name "*.py" | while read file; do
+            if ! iconv -f UTF-8 -t UTF-8 "$file" > /dev/null 2>&1; then
+              echo "Fixing encoding: $file"
+              iconv -f ISO-8859-1 -t UTF-8 "$file" > "${file}.utf8" && mv "${file}.utf8" "$file"
+            fi
+          done
+
+      - name: Build macOS .app bundle with setupCMD_mac.py
+        run: |
+          python setupCMD_mac.py py2app
+          if [ $? -ne 0 ]; then
+            echo "setupCMD_mac.py build failed"
+            exit 1
+          fi
+          
+      - name: Create DMG from .app bundle
+        run: |
+          # Create temporary directory for DMG contents
+          mkdir -p dmg_temp
+          cp -R dist/AstroDwarfSchedulerConsole.app dmg_temp/
+          
+          hdiutil create -volname "AstroDwarfSchedulerConsole" \
+            -srcfolder dmg_temp \
+            -ov -format UDZO AstroDwarfScheduler-Console-mac.dmg
+          
+          # Clean up temp directory
+          rm -rf dmg_temp
+    
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console-mac
+          path: AstroDwarfScheduler-Console-mac.dmg
+
+  build_UI_win:
     runs-on: windows-latest
 
     steps:
@@ -18,62 +127,28 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-local.txt --target .
-          pip install cx_Freeze
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
 
       - name: Build the executable with setupUI.py
         run: |
           python setupUI.py build
-
-      - name: Set up Python3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+        continue-on-error: true
+        
+      - name: Create tar.gz archive
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-local.txt --target .
-          pip install cx_Freeze
+          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build/exe.win-amd64-3.12 .
 
-      - name: Build the executable with setupBle.py
-        run: |
-          python setupBle.py build
-
-      - name: Mode and rename to extern
-        run: |
-          powershell Move-Item -Path build\exe.win-amd64-3.11 -Destination build\exe.win-amd64-3.12\extern
-
-      - name: create symbolic link
-        run: |
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
-
-      - name: Compress with tar (preserve symlinks)
-        uses: a7ul/tar-action@v1.1.0
-        id: compress
-        with:
-          command: c
-          cwd: ./build/exe.win-amd64-3.12
-          files: |
-            ./
-          outPath: AstroDwarfScheduler-GUI.tar.gz
-
-      - name: List files to verify tar creation
-        run: ls -l AstroDwarfScheduler-GUI.tar.gz
-  
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
         with:
-          name: AstroDwarfScheduler-GUI
-          path: AstroDwarfScheduler-GUI.tar.gz
+          name: AstroDwarfScheduler-GUI-win
+          path: AstroDwarfScheduler-GUI-win.tar.gz
 
-  build_console:
+  build_console_win:
     runs-on: windows-latest
-    needs: build_UI
 
     steps:
       - name: Checkout code
@@ -86,80 +161,218 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-local.txt --target .
-          pip install cx_Freeze
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
 
       - name: Build the executable with setupCMD.py
         run: |
           python setupCMD.py build
+        continue-on-error: true
 
-      - name: Set up Python3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+      - name: Create tar.gz archive
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-local.txt --target .
-          pip install cx_Freeze
+          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build/exe.win-amd64-3.12 .
 
-      - name: Build the executable with setupBle.py
-        run: |
-          python setupBle.py build
-
-      - name: Mode and rename to extern
-        run: |
-          powershell Move-Item -Path build\exe.win-amd64-3.11 -Destination build\exe.win-amd64-3.12\extern
-
-      - name: create symbolic link
-        run: |
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.py .\build\exe.win-amd64-3.12\config.py
-           cmd /c mklink .\build\exe.win-amd64-3.12\extern\config.ini .\build\exe.win-amd64-3.12\config.ini
-
-      - name: Compress with tar (preserve symlinks)
-        uses: a7ul/tar-action@v1.1.0
-        id: compress
-        with:
-          command: c
-          cwd: ./build/exe.win-amd64-3.12
-          files: |
-            ./
-          outPath: AstroDwarfScheduler-Console.tar.gz
-
-      - name: List files to verify tar creation
-        run: ls -l AstroDwarfScheduler-Console.tar.gz
-  
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
         with:
-          name: AstroDwarfScheduler-Console
-          path: AstroDwarfScheduler-Console.tar.gz
+          name: AstroDwarfScheduler-Console-win
+          path: AstroDwarfScheduler-Console-win.tar.gz
 
-  release:
+  build_UI_linux:
     runs-on: ubuntu-latest
-    needs: [build_UI, build_console]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3-tk git binutils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install --break-system-packages -r requirements.txt
+          python -m pip install --break-system-packages -r requirements-local.txt --target .
+          python -m pip install --break-system-packages cx_Freeze
+
+      - name: Build the executable with setupUI.py
+        run: |
+          python setupUI.py build
+        continue-on-error: true
+                    
+      - name: Create start scripts
+        run: |
+          # Create GUI launcher script
+          cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh << 'EOF'
+          #!/bin/bash
+          cd "$(dirname "$0")"
+          ./astro_dwarf_session_UI
+          EOF
+          chmod +x build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh
+          
+      - name: Create tar.gz archive
+        run: |
+          tar -czf AstroDwarfScheduler-GUI-linux.tar.gz -C build/exe.linux-x86_64-3.12 .
+
+      - name: Upload Linux GUI executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-GUI-linux
+          path: AstroDwarfScheduler-GUI-linux.tar.gz
+
+  build_console_linux:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download UI executable artifact
-        uses: actions/download-artifact@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
         with:
-          name: AstroDwarfScheduler-GUI
+          python-version: '3.12'
 
-      - name: Download Console executable artifact
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git binutils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install --break-system-packages -r requirements.txt
+          python -m pip install --break-system-packages -r requirements-local.txt --target .
+          python -m pip install --break-system-packages cx_Freeze
+
+      - name: Build the executable with setupCMD.py
+        run: |
+          python setupCMD.py build
+        continue-on-error: true
+                    
+      - name: Create start scripts
+        run: |
+          # Create Console launcher script
+          cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh << 'EOF'
+          #!/bin/bash
+          cd "$(dirname "$0")"
+          ./astro_dwarf_scheduler
+          EOF
+          chmod +x build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh
+          
+      - name: Create tar.gz archive
+        run: |
+          tar -czf AstroDwarfScheduler-Console-linux.tar.gz -C build/exe.linux-x86_64-3.12 .
+
+      - name: Upload Linux Console executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console-linux
+          path: AstroDwarfScheduler-Console-linux.tar.gz
+
+  build_installer_win:
+    runs-on: windows-latest
+    needs: [build_UI_win, build_console_win]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install cx_Freeze
+
+      - name: Build the executable with setupUI.py
+        run: |
+          python setupUI.py build
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Build Installer with Inno Setup
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" AstroDwarfScheduler.iss
+
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer-win
+          path: installer\AstroDwarfScheduler-Setup-win.exe
+
+  release:
+    runs-on: ubuntu-latest
+
+    needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer_win]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download UI MAC executable artifact
         uses: actions/download-artifact@v4
         with:
-          name: AstroDwarfScheduler-Console
+          name: AstroDwarfScheduler-GUI-mac
+
+      - name: Download Console MAC executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console-mac
+
+      - name: Download UI WIN executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-GUI-win
+
+      - name: Download Console WIN executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console-win
+
+      - name: Download Windows Installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer-win
+
+      - name: Download GUI Linux executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-GUI-linux
+
+      - name: Download Console Linux executable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Console-linux
 
       - name: Get version from CHANGELOG.md
         id: get_version
-        run: echo "RVERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)" >> $GITHUB_ENV
+        run: |
+          RAW_VERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)
+          # Ensure version has at least 3 parts (x.y.z format)
+          if [[ $RAW_VERSION =~ ^[0-9]+\.[0-9]+$ ]]; then
+            FORMATTED_VERSION="${RAW_VERSION}.0"
+          else
+            FORMATTED_VERSION="${RAW_VERSION}"
+          fi
+          echo "RVERSION=${FORMATTED_VERSION}" >> $GITHUB_ENV
+          echo "Extracted version: ${FORMATTED_VERSION}"
 
       - name: Check for files
         id: checkfiles

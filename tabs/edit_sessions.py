@@ -8,9 +8,9 @@ import time
 
 def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     frame = tk.Frame(parent_tab)
-    frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=0)
+    frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-    label = tk.Label(frame, text="Available Sessions (JSON files):", font=("Arial", 12))
+    label = tk.Label(frame, text="Available Sessions (JSON files):", font=("Arial", 12), pady=5)
     label.pack(anchor="w")
 
     listbox = tk.Listbox(frame, width=40, height=20, selectmode=tk.EXTENDED)
@@ -331,6 +331,44 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     
     listbox.bind('<FocusOut>', on_listbox_focus_out)
     listbox.bind('<<ListboxSelect>>', on_select)
+
+    def on_listbox_double_click(event):
+        selection = listbox.curselection()
+        if not selection:
+            return
+        old_fname = listbox.get(selection[0])
+        fpath_old = os.path.join(session_dir, old_fname)
+        # Prompt for new filename
+        from tkinter import simpledialog
+        new_fname = simpledialog.askstring("Rename File", f"Enter new filename for '{old_fname}':", initialvalue=old_fname)
+        if not new_fname or new_fname == old_fname:
+            return
+        # Validate filename
+        if not re.match(r'^[\w\-. ]+\.json$', new_fname):
+            messagebox.showerror("Invalid Filename", "Filename must end with .json and contain only letters, numbers, dashes, underscores, spaces, or dots.")
+            return
+        fpath_new = os.path.join(session_dir, new_fname)
+        if os.path.exists(fpath_new):
+            messagebox.showerror("File Exists", f"A file named '{new_fname}' already exists.")
+            return
+        try:
+            os.rename(fpath_old, fpath_new)
+            # If the currently selected file is being renamed, update selected_file
+            if selected_file['name'] == old_fname:
+                selected_file['name'] = new_fname
+            refresh_list()
+            # Reselect the renamed file
+            idx = None
+            for i in range(listbox.size()):
+                if listbox.get(i) == new_fname:
+                    idx = i
+                    break
+            if idx is not None:
+                listbox.selection_set(idx)
+        except Exception as e:
+            messagebox.showerror("Rename Error", f"Could not rename file: {e}")
+
+    listbox.bind('<Double-Button-1>', on_listbox_double_click)
     
     # Also save when the main frame loses focus (tab switch)
     def on_frame_focus_out(event):
@@ -373,9 +411,11 @@ def edit_sessions_tab(parent_tab, session_dir, refresh_callback=None):
     delete_btn.pack(side=tk.LEFT, padx=5)
     refresh_btn = tk.Button(button_frame, text="Refresh List", command=refresh_list)
     refresh_btn.pack(side=tk.LEFT, padx=5)
-    
+    rename_label = tk.Label(button_frame, text="Double click filenames to rename", fg="#555555", font=("Arial", 9, "italic"))
+    rename_label.pack(side=tk.LEFT, padx=5)
+
     # Information label to the right of the refresh button
-    info_label = tk.Label(button_frame, text="Updates are saved automatically", fg="#555555")
+    info_label = tk.Label(button_frame, text="Updates are saved automatically", fg="#555555", font=("Arial", 9, "italic"))
     info_label.pack(side=tk.RIGHT, padx=10)
 
     # Return a cleanup function that saves on tab close

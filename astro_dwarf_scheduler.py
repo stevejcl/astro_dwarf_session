@@ -25,7 +25,7 @@ from dwarf_python_api.lib.dwarf_utils import read_bluetooth_ble_STA_pwd
 from tabs.result_session import analyze_files
 
 # import data for config.py
-import dwarf_python_api.get_config_data
+import dwarf_python_api.get_config_data as config_py
 
 import dwarf_python_api.lib.my_logger as log
 
@@ -60,7 +60,7 @@ def setup_new_config(config_name):
     global LIST_ASTRO_DIR
 
     if config_name == CONFIG_DEFAULT:
-        dwarf_python_api.get_config_data.set_config_data(
+        config_py.set_config_data(
             config_file='config.py',
             config_file_tmp='config.tmp',
             lock_file='config.lock',
@@ -82,7 +82,7 @@ def setup_new_config(config_name):
         new_lock_file = f"config_{config_name}.lock"
 
         # Update CONFIG variables using the set_config_data function
-        dwarf_python_api.get_config_data.set_config_data(
+        config_py.set_config_data(
             config_file=new_config_file,
             config_file_tmp=new_config_file_tmp,
             lock_file=new_lock_file,
@@ -102,7 +102,7 @@ def setup_new_config(config_name):
                 print(f"An error occurred: {e}")
 
             # get Original LOG_FILE
-            data_config = dwarf_python_api.get_config_data.get_config_data("config.py")
+            data_config = config_py.get_config_data("config.py")
             if data_config['LOG_FILE'] == "False":
                 log_file = None
             else: 
@@ -115,7 +115,7 @@ def setup_new_config(config_name):
                 new_log_filename = f"{name}_{config_name}.{ext}"
                 # Add BASE_DIR to the log file path
                 new_log_file = os.path.join(BASE_DIR, new_log_filename)
-                dwarf_python_api.get_config_data.update_config_data( "LOG_FILE", new_log_file, True)
+                config_py.update_config_data( "LOG_FILE", new_log_file, True)
 
         config_dir = os.path.join(DEVICES_DIR, config_name)
         SESSIONS_DIR = os.path.join(config_dir, 'Astro_Sessions')
@@ -226,11 +226,12 @@ def get_json_files_sorted(directory):
     return [fname for datetime_str, fname in files_with_datetime]
 
 # Main function to check and execute the commands
-def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
+def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_checks=False):
     """
     Check for JSON command files and execute them based on their scheduled time.
     
     Args:
+        ui_instance: UI instance (from astro_dwarf_session_UI.py) or None for command line
         stop_event: Optional event to signal stopping
         skip_time_checks: If True, ignore scheduled time and execute immediately
     
@@ -257,7 +258,8 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
         todo_files.sort(key=lambda x: natural_sort_key(x))
         
         current_time = datetime.now()
-        
+
+        # Execute commands and check if any sessions were processed
         for filename in todo_files:
             if stop_event and stop_event.is_set():
                 break
@@ -301,7 +303,16 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                 if time_ready:
 
                     log.notice(f"Executing session: {target}")
-                    
+
+                    # Only manage session state if we have a UI instance
+                    if ui_instance and hasattr(ui_instance, 'session_running'):
+                        if not ui_instance.session_running:
+                            ui_instance.session_running = True  # Mark session as running
+                            if hasattr(ui_instance, '_stop_video_stream'):
+                                ui_instance._stop_video_stream = False
+                            if hasattr(ui_instance, 'start_video_preview'):
+                                ui_instance.start_video_preview()
+                                                    
                     # Move to Current directory
                     current_path = os.path.join(LIST_ASTRO_DIR_DEFAULT["SESSIONS_DIR"], "Current", filename)
                     os.makedirs(os.path.dirname(current_path), exist_ok=True)
@@ -331,7 +342,7 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         id_command['message'] = 'Session completed successfully'
                         
                         # Capture Dwarf device ID from config
-                        data_config = dwarf_python_api.get_config_data.get_config_data()
+                        data_config = config_py.get_config_data()
                         dwarf_id = data_config.get("dwarf_id")
                         if dwarf_id:
                             id_command['dwarf'] = f"D{dwarf_id}"
@@ -369,7 +380,7 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
 
                         # Rename the session filename date-time with the session date-time
                         dt_str = id_command['starting_date'].replace(':', '-').replace(' ', '-')
-                        new_filename_base = re.sub(r'^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-', '', filename)
+                        new_filename_base = re.sub(r'^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}_', '', filename)
                         new_filename = f"{dt_str}_{new_filename_base}"
 
                         # Move to Done directory
@@ -388,7 +399,6 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         log.success(f"Session {new_filename} completed successfully")
 
                         analyze_files()
-
                         
                     except Exception as e:
                         # Session failed
@@ -399,7 +409,7 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                         id_command['message'] = f'Session failed: {str(e)}'
                         
                         # ADD: Still capture Dwarf device ID even on failure
-                        data_config = dwarf_python_api.get_config_data.get_config_data()
+                        data_config = config_py.get_config_data()
                         dwarf_id = data_config.get("dwarf_id")
                         if dwarf_id:
                             id_command['dwarf'] = f"D{dwarf_id}"
@@ -419,10 +429,14 @@ def check_and_execute_commands(self, stop_event=None, skip_time_checks=False):
                             os.remove(current_path)
                         
                         sessions_processed = True
-    
-                        #if __name__ != "__main__":
-                            #self.toggle_scheduler_buttons_state(state="normal")
 
+                    # Only manage session state if we have a UI instance
+                    if ui_instance and hasattr(ui_instance, 'session_running'):
+                        if ui_instance.session_running:
+                            ui_instance.session_running = False  # Mark session as not running
+                            if hasattr(ui_instance, '_stop_video_stream'):
+                                ui_instance._stop_video_stream = True
+                                
                     # Only process one session at a time                    
                     break
                         
@@ -462,11 +476,11 @@ def start_connection(startSTA = False, use_web_page = False):
         if use_web_page:
             subprocess.run(["extern\\connect_bluetooth.exe", "--web"])
         else:
-            dwarf_python_api.get_config_data.update_config_data( "ip", "", True)
+            config_py.update_config_data( "ip", "", True)
             subprocess.run(["extern\\connect_bluetooth.exe"])
       
         # Parse the returned value
-        data_config = dwarf_python_api.get_config_data.get_config_data()
+        data_config = config_py.get_config_data()
         dwarf_ip = data_config["ip"]
         result = True if dwarf_ip else False
 
@@ -483,7 +497,7 @@ def start_connection(startSTA = False, use_web_page = False):
 def start_STA_connection(CheckDwarfId = False):
 
     result = False
-    data_config = dwarf_python_api.get_config_data.get_config_data()
+    data_config = config_py.get_config_data()
     dwarf_ip = data_config["ip"]
     dwarf_id = data_config["dwarf_id"]
 
@@ -525,7 +539,7 @@ def update_get_config_data(IPDwarf=None):
                 print(f"ID: {new_id}")
                 print(f"Name: {name}")
 
-                dwarf_python_api.get_config_data.update_config_data( 'dwarf_id', new_id)
+                config_py.update_config_data( 'dwarf_id', new_id)
 
                 return {'id': new_id, 'name': name}
             else:
@@ -570,12 +584,12 @@ def main():
                         sys.exit(1)
                 i += 1
             if dwarf_id:
-                dwarf_python_api.get_config_data.update_config_data( 'dwarf_id', dwarf_id)
+                config_py.update_config_data( 'dwarf_id', dwarf_id)
             if dwarf_ip:
-                dwarf_python_api.get_config_data.update_config_data( 'ip', dwarf_ip)
+                config_py.update_config_data( 'ip', dwarf_ip)
 
         # test if Ip and Id is set
-        data_config = dwarf_python_api.get_config_data.get_config_data()
+        data_config = config_py.get_config_data()
         if data_config["dwarf_id"]:
             dwarf_id = data_config['dwarf_id']
         if data_config["ip"]:
@@ -612,7 +626,7 @@ def main():
             log.notice ("##--------------------------------------##")
             log.notice ("   Waiting for Action files...")
             while True:
-                check_and_execute_commands(True)
+                check_and_execute_commands(ui_instance=None)
                 time.sleep(10)
         else:
              log.error("Can't connect to the Dwarf, process stop!")

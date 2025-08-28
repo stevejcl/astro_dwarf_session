@@ -1,14 +1,14 @@
 {
     "command": {
         "id_command": {
-            "uuid": "00001-00001",
+            "uuid": "00001-00004",
             "description": "First Test",
             "date": "2024-09-25",
             "time": "02:18:00",
             "process": "wait",
-            "max_retries": 3,
-            "result": true,
-            "message": {},
+            "max_retries": 2,
+            "result": false,
+            "message": "",
             "nb_try": 1,
             "starting_date": "2024-09-25 02:18:00",
             "dwarf": "D3",

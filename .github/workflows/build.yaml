@@ -53,9 +53,6 @@ jobs:
           # Clean up temp directory
           rm -rf dmg_temp
   
-      - name: List files to verify DMG creation
-        run: ls -l AstroDwarfScheduler-GUI-mac.dmg
-  
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
@@ -109,10 +106,7 @@ jobs:
           
           # Clean up temp directory
           rm -rf dmg_temp
-  
-      - name: List files to verify Console creation
-        run: ls -l AstroDwarfScheduler-Console-mac.dmg
-  
+    
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
@@ -218,7 +212,6 @@ jobs:
                     
       - name: Create start scripts
         run: |
-          ls -l
           # Create GUI launcher script
           cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh << 'EOF'
           #!/bin/bash
@@ -268,7 +261,6 @@ jobs:
                     
       - name: Create start scripts
         run: |
-          ls -l
           # Create Console launcher script
           cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh << 'EOF'
           #!/bin/bash

@@ -292,7 +292,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo yum update -y
-          sudo yum install -y python3-tkinter
+          sudo yum install -y python3-tkinter git
 
       - name: Install Python dependencies
         run: |
@@ -405,6 +405,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo yum update -y
+          sudo yum install -y git
 
       - name: Install Python dependencies
         run: |
@@ -579,8 +584,6 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    container:
-      image: fedora:39
 
     needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer_win]
 

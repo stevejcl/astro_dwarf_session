@@ -208,7 +208,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install --break-system-packages -r requirements.txt
-          python -m pip install --break-system-packages -r requirements-local.txt
+          python -m pip install --break-system-packages -r requirements-local.txt --target .
           python -m pip install --break-system-packages cx_Freeze
 
       - name: Build the executable with setupUI.py
@@ -258,7 +258,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install --break-system-packages -r requirements.txt
-          python -m pip install --break-system-packages -r requirements-local.txt
+          python -m pip install --break-system-packages -r requirements-local.txt --target .
           python -m pip install --break-system-packages cx_Freeze
 
       - name: Build the executable with setupCMD.py

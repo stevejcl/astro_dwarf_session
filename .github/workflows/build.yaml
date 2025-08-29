@@ -382,11 +382,21 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" AstroDwarfScheduler.iss
 
+      - name: Zip Windows installer
+        run: |
+          Compress-Archive -Path 'installer\AstroDwarfScheduler-Setup-win.exe' -DestinationPath 'installer\AstroDwarfScheduler-Setup-win.zip' -Force
+
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Installer-win
           path: installer\AstroDwarfScheduler-Setup-win.exe
+
+      - name: Upload Installer ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer-win-zip
+          path: installer\AstroDwarfScheduler-Setup-win.zip
 
   release:
     runs-on: ubuntu-latest
@@ -423,6 +433,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: AstroDwarfScheduler-Installer-win
+
+      - name: Download Windows Installer ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer-win-zip
 
       - name: Download GUI Linux executable artifact
         uses: actions/download-artifact@v4

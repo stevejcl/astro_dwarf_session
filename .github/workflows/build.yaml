@@ -144,7 +144,7 @@ jobs:
           python setupBLE.py build_exe --build-exe "build\setupBLE"
         continue-on-error: true
 
-      - name: Mode and rename to extern
+      - name: Move and rename to extern
         run: |
           powershell Move-Item -Path build\setupBLE -Destination build\setupUI\extern
 
@@ -192,7 +192,7 @@ jobs:
           python setupBLE.py build_exe --build-exe "build\setupBLE"
         continue-on-error: true
 
-      - name: Mode and rename to extern
+      - name: Move and rename to extern
         run: |
           powershell Move-Item -Path build\setupBLE -Destination build\setupCMD\extern
 

@@ -1093,7 +1093,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
             attempt = 0
             result = False
-            self.log("Starting Polar Align positionning...")
+            self.log("Starting Polar Align positioning...")
 
             while not result and attempt < 1:
                 setattr(self, '_stop_video_stream', False)
@@ -1118,14 +1118,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     result = motor_action(3)
 
                 if result:
-                    self.log("Success Polar Align positionning")
+                    self.log("Success Polar Align positioning")
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
 
             setattr(self, '_stop_video_stream', True)
 
         except Exception as e:
-            self.log(f"Error in Polar Align positionning: {e}", level="error")
+            self.log(f"Error in Polar Align positioning: {e}", level="error")
             setattr(self, '_stop_video_stream', True)
 
     def run_start_calibration(self):

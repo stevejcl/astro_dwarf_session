@@ -134,12 +134,26 @@ jobs:
 
       - name: Build the executable with setupUI.py
         run: |
-          python setupUI.py build
+          python setupUI.py build_exe --build-exe "build\setupUI"
         continue-on-error: true
-        
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build\setupBLE"
+        continue-on-error: true
+
+      - name: Mode and rename to extern
+        run: |
+          powershell Move-Item -Path build\setupBLE -Destination build\setupUI\extern
+
+      - name: create symbolic link
+        run: |
+           cmd /c mklink .\build\setupUI\extern\config.py ..\config.py
+           cmd /c mklink .\build\setupUI\extern\config.ini ..\config.ini
+
       - name: Create tar.gz archive
         run: |
-          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build/exe.win-amd64-3.12 .
+          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build\setupUI .
 
       - name: Upload zipped GUI executable
         uses: actions/upload-artifact@v4
@@ -168,12 +182,26 @@ jobs:
 
       - name: Build the executable with setupCMD.py
         run: |
-          python setupCMD.py build
+          python setupCMD.py build_exe --build-exe "build\setupCMD"
         continue-on-error: true
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build\setupBLE"
+        continue-on-error: true
+
+      - name: Mode and rename to extern
+        run: |
+          powershell Move-Item -Path build\setupBLE -Destination build\setupCMD\extern
+
+      - name: create symbolic link
+        run: |
+          cmd /c mklink .\build\setupCMD\extern\config.py ..\config.py
+          cmd /c mklink .\build\setupCMD\extern\config.ini ..\config.ini
 
       - name: Create tar.gz archive
         run: |
-          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build/exe.win-amd64-3.12 .
+          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build\setupCMD .
 
       - name: Upload zipped Console executable
         uses: actions/upload-artifact@v4
@@ -207,22 +235,37 @@ jobs:
 
       - name: Build the executable with setupUI.py
         run: |
-          python setupUI.py build
+          python setupUI.py build_exe --build-exe "build/setupUI"
         continue-on-error: true
-                    
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build/setupBLE"
+        continue-on-error: true
+        
+      - name: Move and rename to extern
+        run: |
+          mv build/setupBLE build/setupUI/extern
+
+      - name: create symbolic link
+        run: |
+          rm -f build/setupUI/config.py build/setupUI/config.ini
+          ln -s build/setupUI/extern/config.py ../config.py
+          ln -s build/setupUI/extern/config.ini ../config.ini
+
       - name: Create start scripts
         run: |
           # Create GUI launcher script
-          cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh << 'EOF'
+          cat > build/setupUI/astro-dwarf-scheduler-gui.sh << 'EOF'
           #!/bin/bash
           cd "$(dirname "$0")"
           ./astro_dwarf_session_UI
           EOF
-          chmod +x build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh
-          
+          chmod +x build/setupUI/astro-dwarf-scheduler-gui.sh
+
       - name: Create tar.gz archive
         run: |
-          tar -czf AstroDwarfScheduler-GUI-linux.tar.gz -C build/exe.linux-x86_64-3.12 .
+          tar -czf AstroDwarfScheduler-GUI-linux.tar.gz -C build/setupUI .
 
       - name: Upload Linux GUI executable
         uses: actions/upload-artifact@v4
@@ -256,22 +299,37 @@ jobs:
 
       - name: Build the executable with setupCMD.py
         run: |
-          python setupCMD.py build
+          python setupCMD.py build_exe --build-exe "build/setupCMD"
+        continue-on-error: true
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build/setupBLE"
         continue-on-error: true
                     
       - name: Create start scripts
         run: |
           # Create Console launcher script
-          cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh << 'EOF'
+          cat > build/setupCMD/astro-dwarf-scheduler-console.sh << 'EOF'
           #!/bin/bash
           cd "$(dirname "$0")"
           ./astro_dwarf_scheduler
           EOF
-          chmod +x build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh
-          
+          chmod +x build/setupCMD/astro-dwarf-scheduler-console.sh
+
+      - name: Move and rename to extern
+        run: |
+          mv build/setupBLE build/setupCMD/extern
+
+      - name: create symbolic link
+        run: |
+          rm -f build/setupCMD/config.py build/setupCMD/config.ini
+          ln -s build/setupCMD/extern/config.py ../config.py
+          ln -s build/setupCMD/extern/config.ini ../config.ini
+
       - name: Create tar.gz archive
         run: |
-          tar -czf AstroDwarfScheduler-Console-linux.tar.gz -C build/exe.linux-x86_64-3.12 .
+          tar -czf AstroDwarfScheduler-Console-linux.tar.gz -C build/setupCMD .
 
       - name: Upload Linux Console executable
         uses: actions/upload-artifact@v4
@@ -301,7 +359,20 @@ jobs:
 
       - name: Build the executable with setupUI.py
         run: |
-          python setupUI.py build
+          python setupUI.py build_exe --build-exe "build\setupUI"
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build\setupBLE"
+
+      - name: Move and rename to extern
+        run: |
+          powershell Move-Item -Path .\build\setupBLE -Destination .\build\setupUI\extern
+
+      - name: create symbolic link
+        run: |
+          cmd /c mklink .\build\setupUI\extern\config.py ..\config.py
+          cmd /c mklink .\build\setupUI\extern\config.ini ..\config.ini
 
       - name: Install Inno Setup
         run: |
@@ -311,14 +382,26 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" AstroDwarfScheduler.iss
 
+      - name: Zip Windows installer
+        run: |
+          Compress-Archive -Path 'installer\AstroDwarfScheduler-Setup-win.exe' -DestinationPath 'installer\AstroDwarfScheduler-Setup-win.zip' -Force
+
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Installer-win
           path: installer\AstroDwarfScheduler-Setup-win.exe
 
+      - name: Upload Installer ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer-win-zip
+          path: installer\AstroDwarfScheduler-Setup-win.zip
+
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer_win]
 
@@ -351,6 +434,11 @@ jobs:
         with:
           name: AstroDwarfScheduler-Installer-win
 
+      - name: Download Windows Installer ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer-win-zip
+
       - name: Download GUI Linux executable artifact
         uses: actions/download-artifact@v4
         with:
@@ -372,11 +460,28 @@ jobs:
             FORMATTED_VERSION="${RAW_VERSION}"
           fi
           echo "RVERSION=${FORMATTED_VERSION}" >> $GITHUB_ENV
+          echo "RVERSION=${FORMATTED_VERSION}" >> $GITHUB_OUTPUT
           echo "Extracted version: ${FORMATTED_VERSION}"
 
       - name: Check for files
         id: checkfiles
         run: ls /home/runner/work/astro_dwarf_session/astro_dwarf_session/
+
+      - name: Retag release to current commit (update source archives)
+        env:
+          VERSION: ${{ steps.get_version.outputs.RVERSION }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags --force
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} exists. Deleting and recreating at current commit..."
+            git tag -d "v${VERSION}" || true
+            git push --delete origin "v${VERSION}" || true
+          fi
+          git tag "v${VERSION}" "${GITHUB_SHA}"
+          git push origin "v${VERSION}"
 
       - name: Release with ncipollo/release-action
         id: release
@@ -385,5 +490,8 @@ jobs:
           artifacts: AstroDwarfScheduler*
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
-          skipIfReleaseExists: true
-          tag: v${{ env.RVERSION }}
+          # Allow updating existing releases so assets are regenerated on reruns of the same version
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          tag: v${{ steps.get_version.outputs.RVERSION }}

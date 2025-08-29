@@ -11,7 +11,7 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action #, perform_powerdown
+from dwarf_python_api.lib.dwarf_utils import read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
@@ -737,7 +737,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         # Hidden until dwarf_python_api is updated to include power down functionality
         self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
-        # self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")  # Hidden until API is updated
+        self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")  # Hidden until API is updated
 
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)

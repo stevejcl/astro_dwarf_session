@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3] - 2025-08-29
+
+### Updated to use last Dwarf_Python_Api
+
+### Bugfix
+- Avoid problem with Dwarf Type Devices used D2 or D3
+
 ## [1.6.2] - 2025-03-25
 
 ### Integrate New Bluetooth API

@@ -34,7 +34,6 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str, config_to_d
 
 import dwarf_python_api.lib.my_logger as log
 
-
 def select_solar_target (target):
    
     target_id = None

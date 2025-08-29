@@ -1088,6 +1088,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             data_config = config_py.get_config_data()
             if data_config["dwarf_id"]:
                 dwarf_id = data_config['dwarf_id']
+            dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
             attempt = 0
             result = False

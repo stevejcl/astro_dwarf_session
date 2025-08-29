@@ -319,6 +319,8 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer_win]
 
@@ -378,6 +380,22 @@ jobs:
       - name: Check for files
         id: checkfiles
         run: ls /home/runner/work/astro_dwarf_session/astro_dwarf_session/
+
+      - name: Retag release to current commit (update source archives)
+        env:
+          VERSION: ${{ steps.get_version.outputs.RVERSION }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags --force
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} exists. Deleting and recreating at current commit..."
+            git tag -d "v${VERSION}" || true
+            git push --delete origin "v${VERSION}" || true
+          fi
+          git tag "v${VERSION}" "${GITHUB_SHA}"
+          git push origin "v${VERSION}"
 
       - name: Release with ncipollo/release-action
         id: release

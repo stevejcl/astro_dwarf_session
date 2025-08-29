@@ -196,8 +196,8 @@ jobs:
 
       - name: create symbolic link
         run: |
-           cmd /c mklink .\build\setupCMD\extern\config.py .\build\setupCMD\config.py
-           cmd /c mklink .\build\setupCMD\extern\config.ini .\build\setupCMD\config.ini
+          cmd /c mklink .\build\setupCMD\extern\config.py .\build\setupCMD\config.py
+          cmd /c mklink .\build\setupCMD\extern\config.ini .\build\setupCMD\config.ini
 
       - name: Create tar.gz archive
         run: |
@@ -249,8 +249,9 @@ jobs:
 
       - name: create symbolic link
         run: |
-           ln -s build/setupUI/extern/config.py build/setupUI/config.py
-           ln -s build/setupUI/extern/config.ini build/setupUI/config.ini
+          rm -f build/setupUI/config.py build/setupUI/config.ini
+          ln -s build/setupUI/extern/config.py build/setupUI/config.py
+          ln -s build/setupUI/extern/config.ini build/setupUI/config.ini
 
       - name: Create start scripts
         run: |
@@ -322,8 +323,9 @@ jobs:
 
       - name: create symbolic link
         run: |
-           ln -s build/setupCMD/extern/config.py build/setupCMD/config.py
-           ln -s build/setupCMD/extern/config.ini build/setupCMD/config.ini
+          rm -f build/setupCMD/config.py build/setupCMD/config.ini
+          ln -s build/setupCMD/extern/config.py build/setupCMD/config.py
+          ln -s build/setupCMD/extern/config.ini build/setupCMD/config.ini
 
       - name: Create tar.gz archive
         run: |
@@ -357,7 +359,20 @@ jobs:
 
       - name: Build the executable with setupUI.py
         run: |
-          python setupUI.py build
+          python setupUI.py build_exe --build-exe "build\setupUI"
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build\setupBLE"
+
+      - name: Move and rename to extern
+        run: |
+          powershell Move-Item -Path .\build\setupBLE -Destination .\build\setupUI\extern
+
+      - name: create symbolic link
+        run: |
+          cmd /c mklink .\build\setupUI\extern\config.py .\build\setupUI\config.py
+          cmd /c mklink .\build\setupUI\extern\config.ini .\build\setupUI\config.ini
 
       - name: Install Inno Setup
         run: |

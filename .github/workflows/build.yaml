@@ -372,6 +372,7 @@ jobs:
             FORMATTED_VERSION="${RAW_VERSION}"
           fi
           echo "RVERSION=${FORMATTED_VERSION}" >> $GITHUB_ENV
+          echo "RVERSION=${FORMATTED_VERSION}" >> $GITHUB_OUTPUT
           echo "Extracted version: ${FORMATTED_VERSION}"
 
       - name: Check for files
@@ -385,5 +386,8 @@ jobs:
           artifacts: AstroDwarfScheduler*
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
-          skipIfReleaseExists: true
-          tag: v${{ env.RVERSION }}
+          # Allow updating existing releases so assets are regenerated on reruns of the same version
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          tag: v${{ steps.get_version.outputs.RVERSION }}

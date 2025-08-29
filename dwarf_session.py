@@ -265,11 +265,11 @@ def start_dwarf_session(program, type_dwarf = 2):
         if calibration:
             log.notice("Processing Calibration")
             log.notice("    Set Exposure to 1s")
-            continue_action = perform_update_camera_setting("exposure", "1")
+            continue_action = perform_update_camera_setting("exposure", "1", config_to_dwarf_id_str(dwarf_id))
             verify_action(continue_action, "step_2")
 
             log.notice("    Set Gain to 80")
-            continue_action = perform_update_camera_setting("gain", "80")
+            continue_action = perform_update_camera_setting("gain", "80", config_to_dwarf_id_str(dwarf_id))
             verify_action(continue_action, "step_3")
 
             if config_to_dwarf_id_str(dwarf_id) == "3":

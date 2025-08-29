@@ -428,7 +428,7 @@ def update_get_config_data(IPDwarf=None):
             # Check if the response has data
             if response.status_code == 200 and 'data' in response.json():
                 data = response.json().get('data')
-                new_id = data.get('id') + 1 
+                new_id = data.get('id') 
                 name = data.get('name')
                 
                 print(f"ID: {new_id}")
@@ -461,10 +461,11 @@ def main():
                 if sys.argv[i] == "--ble":
                     start_bluetooth = True
                     log.notice("Read: --ble parameter")
+                # ask for dwarf_id = 2 or 3, need to substract 1 to get the real dwarf_id use in config file
                 if sys.argv[i] == "--id":
                     if i + 1 < len(sys.argv):
-                        dwarf_id = sys.argv[i + 1]
-                        log.notice(f"Read: --id parameter => {dwarf_id}")
+                        dwarf_id = int(sys.argv[i + 1]) - 1
+                        log.notice(f"Read: --id parameter => {config_to_dwarf_id_str(dwarf_id)}")
                         i += 1
                     else:
                         log.error("Error: --id parameter requires an argument.")

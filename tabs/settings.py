@@ -14,8 +14,10 @@ import sys
 import os
 
 # Import DWARF_IP from config.py
+DWARF_IP_CURRENT = ""
 try:
     from config import DWARF_IP
+    DWARF_IP_CURRENT = DWARF_IP
 except ImportError:
     DWARF_IP = "192.168.88.1"  # Default fallback value
 
@@ -105,7 +107,7 @@ def save_config(config_data):
     with open(config_ini_path, 'w') as configfile:
         config.write(configfile)
         
-    # Update config.py with the new DWARF_IP value if it changed
+    # Update config.py with the new DWARF_IP value if it changed and not set in config.py
     if 'dwarf_ip' in config_data:   
         update_config_py_dwarf_ip(config_data['dwarf_ip'])
     # Update DWARF_ID in config.py based on camera_type (was device_type) selection
@@ -119,10 +121,12 @@ def update_config_py_dwarf_id(device_type):
         config_py_path = 'config.py'
         # Determine DWARF_ID value
         if device_type == 'Dwarf II':
-            dwarf_id_val = 2
+            dwarf_id_val = 1
         else:
-            dwarf_id_val = 3
-        if os.path.exists(config_py_path):
+            dwarf_id_val = 2
+        if DWARF_IP_CURRENT:
+            print("DWARF_IP already set, don't change DWARF_ID")
+        elif os.path.exists(config_py_path):
             # Read the current config.py content
             with open(config_py_path, 'r') as f:
                 lines = f.readlines()
@@ -149,8 +153,10 @@ def update_config_py_dwarf_ip(new_ip):
     try:
         import os
         config_py_path = 'config.py'
+        if DWARF_IP_CURRENT:
+            print("DWARF_IP already set, don't change it")
         
-        if os.path.exists(config_py_path):
+        elif os.path.exists(config_py_path):
             # Read the current config.py content
             with open(config_py_path, 'r') as f:
                 lines = f.readlines()

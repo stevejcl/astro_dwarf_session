@@ -1,5 +1,14 @@
+import os
+import platform
 import sys
 import dwarf_python_api.lib.my_logger as log
+
+# Prefer WinRT backend; fall back to .NET if winsdk not present
+if platform.system() == "Windows":
+    try:
+        import winsdk  # noqa: F401
+    except Exception:
+        os.environ.setdefault("BLEAK_BACKEND", "dotnet")
 
 from dwarf_ble_connect.connect_bluetooth import connect_bluetooth
 from dwarf_ble_connect.lib.connect_direct_bluetooth import connect_ble_direct_dwarf, connect_ble_dwarf_win
@@ -27,6 +36,7 @@ if __name__ == "__main__":
     ble_psd = read_bluetooth_ble_psd() or "DWARF_12345678"
     ble_STA_ssid = read_bluetooth_ble_STA_ssid() or ""
     ble_STA_pwd = read_bluetooth_ble_STA_pwd() or ""
+    auto_select = ""
     print("##############")
     print("Config Values:")
     print("Wifi PSD:", ble_psd)

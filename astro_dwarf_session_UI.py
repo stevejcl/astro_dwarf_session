@@ -18,7 +18,7 @@ from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 import dwarf_python_api.get_config_data as config_py
 # The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
 # the value return by get_config_data must be used with these functions
-from dwarf_python_api.get_config_data import config_to_dwarf_id_str
+from dwarf_python_api.get_config_data import config_to_dwarf_id_str, config_to_dwarf_id_int
 
 import logging
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
@@ -1088,6 +1088,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             data_config = config_py.get_config_data()
             if data_config["dwarf_id"]:
                 dwarf_id = data_config['dwarf_id']
+
             dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
             attempt = 0
@@ -1103,13 +1104,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 if result:
                     # Pitch Motor Resetting
                     result = motor_action(6)
-                if result and config_to_dwarf_id_str(dwarf_id) == "3":
+                if result and dwarf_id_int == 3:
                     # Rotation Motor positioning D3
                     result = motor_action(9)
                 elif result:
                     # Rotation Motor positioning
                     result = motor_action(2)
-                if result and config_to_dwarf_id_str(dwarf_id) == "3":
+                if result and dwarf_id_int == 3:
                     # Pitch Motor positioning D3
                     result = motor_action(7)
                 elif result:

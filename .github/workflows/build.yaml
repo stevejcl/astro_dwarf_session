@@ -256,12 +256,12 @@ jobs:
       - name: Create start scripts
         run: |
           # Create GUI launcher script
-          cat > build/setupCMD/astro-dwarf-scheduler-gui.sh << 'EOF'
+          cat > build/setupUI/astro-dwarf-scheduler-gui.sh << 'EOF'
           #!/bin/bash
           cd "$(dirname "$0")"
           ./astro_dwarf_session_UI
           EOF
-          chmod +x build/setupCMD/astro-dwarf-scheduler-gui.sh
+          chmod +x build/setupUI/astro-dwarf-scheduler-gui.sh
 
       - name: Create tar.gz archive
         run: |

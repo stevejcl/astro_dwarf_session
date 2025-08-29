@@ -10,3 +10,4 @@ build/
 *.bak
 /myenv3
 config.lock
+.vscode/

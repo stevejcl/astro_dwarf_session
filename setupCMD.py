@@ -127,13 +127,7 @@ buildOptions = dict(
     include_msvcr=True,
     # Compress packages to reduce size
     zip_include_packages=["*"],
-    zip_exclude_packages=[],
-    # Replace paths to make the build more portable
-    replace_paths=[("*", "")],
-    # Build constants for better optimization
-    constants=[],
-    # Don't create a zip file for the build
-    create_zipfile=False
+    zip_exclude_packages=[]
 )
 
 base = 'Win32GUI' if sys.platform=='win32' else None

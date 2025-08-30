@@ -214,7 +214,6 @@ jobs:
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
 
       - name: Build the executable with setupUI.py
         run: |
@@ -284,7 +283,6 @@ jobs:
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
 
       - name: Build the executable with setupCMD.py
         run: |
@@ -530,7 +528,6 @@ jobs:
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
 
       - name: Build the executable with setupUI.py
         run: |

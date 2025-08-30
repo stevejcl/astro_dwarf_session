@@ -244,15 +244,15 @@ jobs:
             Get-ChildItem -Path "build\setupUI" -Recurse -Directory | Where-Object { (Get-ChildItem -Path $_.FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0 } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Compress with tar (preserve symlinks)
+      - name: Compress with zip
         run: |
-          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build/setupUI .
+          Compress-Archive -Path "build/setupUI/*" -DestinationPath "AstroDwarfScheduler-GUI-win.zip" -Force
 
       - name: Upload GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI-win
-          path: AstroDwarfScheduler-GUI-win.tar.gz
+          path: AstroDwarfScheduler-GUI-win.zip
           retention-days: 0
 
   build_console_win:
@@ -314,15 +314,15 @@ jobs:
             Get-ChildItem -Path "build\setupCMD" -Recurse -Directory | Where-Object { (Get-ChildItem -Path $_.FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0 } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Compress with tar (preserve symlinks)
+      - name: Compress with zip
         run: |
-          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build/setupCMD .
+          Compress-Archive -Path "build/setupCMD/*" -DestinationPath "AstroDwarfScheduler-Console-win.zip" -Force
 
       - name: Upload Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console-win
-          path: AstroDwarfScheduler-Console-win.tar.gz
+          path: AstroDwarfScheduler-Console-win.zip
           retention-days: 0
 
   build_UI_linux:

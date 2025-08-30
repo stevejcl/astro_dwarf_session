@@ -132,8 +132,6 @@ buildOptions = dict(
     replace_paths=[("*", "")],
     # Build constants for better optimization
     constants=[],
-    # Don't include Python source files
-    include_python_files=False,
     # Don't create a zip file for the build
     create_zipfile=False
 )

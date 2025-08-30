@@ -235,15 +235,15 @@ jobs:
            cmd /c mklink .\build\setupUI\extern\config.py ..\config.py
            cmd /c mklink .\build\setupUI\extern\config.ini ..\config.ini
 
-      - name: Compress with zip (preserve symlinks)
+      - name: Compress with tar (preserve symlinks)
         run: |
-          Compress-Archive -Path ./build/setupUI/* -DestinationPath AstroDwarfScheduler-GUI-win.zip
+          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build/setupUI .
 
-      - name: Upload zipped GUI executable
+      - name: Upload GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI-win
-          path: AstroDwarfScheduler-GUI-win.zip
+          path: AstroDwarfScheduler-GUI-win.tar.gz
           retention-days: 0
 
   build_console_win:
@@ -296,15 +296,15 @@ jobs:
           cmd /c mklink .\build\setupCMD\extern\config.py ..\config.py
           cmd /c mklink .\build\setupCMD\extern\config.ini ..\config.ini
 
-      - name: Compress with zip (preserve symlinks)
+      - name: Compress with tar (preserve symlinks)
         run: |
-          Compress-Archive -Path ./build/setupCMD/* -DestinationPath AstroDwarfScheduler-Console-win.zip
+          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build/setupCMD .
 
-      - name: Upload zipped Console executable
+      - name: Upload Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console-win
-          path: AstroDwarfScheduler-Console-win.zip
+          path: AstroDwarfScheduler-Console-win.tar.gz
           retention-days: 0
 
   build_UI_linux:
@@ -520,9 +520,9 @@ jobs:
             exit 1
           }
 
-      - name: Zip Windows installer
+      - name: Create tar.gz Windows installer
         run: |
-          Compress-Archive -Path 'installer\AstroDwarfScheduler-Setup-win.exe' -DestinationPath 'installer\AstroDwarfScheduler-Setup-win.zip' -Force
+          tar -czf installer\AstroDwarfScheduler-Setup-win.tar.gz -C installer AstroDwarfScheduler-Setup-win.exe
 
       - name: Upload Installer
         uses: actions/upload-artifact@v4
@@ -531,11 +531,11 @@ jobs:
           path: installer\AstroDwarfScheduler-Setup-win.exe
           retention-days: 0
 
-      - name: Upload Installer ZIP
+      - name: Upload Installer TAR.GZ
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Installer-win-zip
-          path: installer\AstroDwarfScheduler-Setup-win.zip
+          path: installer\AstroDwarfScheduler-Setup-win.tar.gz
           retention-days: 0
 
   release:
@@ -609,10 +609,10 @@ jobs:
           required_files=(
             "AstroDwarfScheduler-GUI-mac.dmg"
             "AstroDwarfScheduler-Console-mac.dmg"
-            "AstroDwarfScheduler-GUI-win.zip"
-            "AstroDwarfScheduler-Console-win.zip"
+            "AstroDwarfScheduler-GUI-win.tar.gz"
+            "AstroDwarfScheduler-Console-win.tar.gz"
             "AstroDwarfScheduler-Setup-win.exe"
-            "AstroDwarfScheduler-Setup-win.zip"
+            "AstroDwarfScheduler-Setup-win.tar.gz"
             "AstroDwarfScheduler-GUI-linux.tar.gz"
             "AstroDwarfScheduler-Console-linux.tar.gz"
           )
@@ -675,14 +675,14 @@ jobs:
             ### Downloads
             - **macOS GUI**: `AstroDwarfScheduler-GUI-mac.dmg`
             - **macOS Console**: `AstroDwarfScheduler-Console-mac.dmg`
-            - **Windows GUI**: `AstroDwarfScheduler-GUI-win.zip`
-            - **Windows Console**: `AstroDwarfScheduler-Console-win.zip`
+            - **Windows GUI**: `AstroDwarfScheduler-GUI-win.tar.gz`
+            - **Windows Console**: `AstroDwarfScheduler-Console-win.tar.gz`
             - **Windows Installer**: `AstroDwarfScheduler-Setup-win.exe`
-            - **Windows Installer (ZIP)**: `AstroDwarfScheduler-Setup-win.zip`
+            - **Windows Installer (TAR.GZ)**: `AstroDwarfScheduler-Setup-win.tar.gz`
             - **Linux GUI**: `AstroDwarfScheduler-GUI-linux.tar.gz`
             - **Linux Console**: `AstroDwarfScheduler-Console-linux.tar.gz`
 
             ### Installation Instructions
             - **macOS**: Open the .dmg file and drag the app to Applications
-            - **Windows**: Use the installer or extract the ZIP file
+            - **Windows**: Use the installer or extract the TAR.GZ file
             - **Linux**: Extract the tar.gz and run the included scripts

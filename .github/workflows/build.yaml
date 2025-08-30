@@ -232,12 +232,18 @@ jobs:
 
       - name: Create symbolic links
         run: |
-           cmd /c mklink .\build\setupUI\extern\config.py ..\config.py
-           cmd /c mklink .\build\setupUI\extern\config.ini ..\config.ini
+          cmd /c mklink .\build\setupUI\extern\config.py ..\config.py
+          cmd /c mklink .\build\setupUI\extern\config.ini ..\config.ini
 
       - name: Compress with tar (preserve symlinks)
-        run: |
-          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build/setupUI .
+        uses: a7ul/tar-action@v1.1.0
+        id: compress
+        with:
+          command: c
+          cwd: ./build/setupUI
+          files: |
+            ./
+          outPath: AstroDwarfScheduler-GUI-win.tar.gz          
 
       - name: Upload GUI executable
         uses: actions/upload-artifact@v4
@@ -297,8 +303,14 @@ jobs:
           cmd /c mklink .\build\setupCMD\extern\config.ini ..\config.ini
 
       - name: Compress with tar (preserve symlinks)
-        run: |
-          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build/setupCMD .
+        uses: a7ul/tar-action@v1.1.0
+        id: compress
+        with:
+          command: c
+          cwd: ./build/setupCMD
+          files: |
+            ./
+          outPath: AstroDwarfScheduler-Console-win.tar.gz 
 
       - name: Upload Console executable
         uses: actions/upload-artifact@v4

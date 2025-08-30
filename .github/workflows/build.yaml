@@ -235,15 +235,24 @@ jobs:
            cmd /c mklink .\build\setupUI\extern\config.py ..\config.py
            cmd /c mklink .\build\setupUI\extern\config.ini ..\config.ini
 
-      - name: Compress with zip (preserve symlinks)
+      - name: Clean up build directory
         run: |
-          Compress-Archive -Path ./build/setupUI/* -DestinationPath AstroDwarfScheduler-GUI-win.zip
+          # Remove unnecessary files from build directory
+          if (Test-Path "build\setupUI") {
+            Get-ChildItem -Path "build\setupUI" -Recurse -Include "*.pyc","*.pyo","__pycache__","*.dist-info","*.egg-info","test*","tests","example*","doc*","*.txt","*.md" -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            # Remove empty directories
+            Get-ChildItem -Path "build\setupUI" -Recurse -Directory | Where-Object { (Get-ChildItem -Path $_.FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0 } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          }
 
-      - name: Upload zipped GUI executable
+      - name: Compress with tar (preserve symlinks)
+        run: |
+          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build/setupUI .
+
+      - name: Upload GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI-win
-          path: AstroDwarfScheduler-GUI-win.zip
+          path: AstroDwarfScheduler-GUI-win.tar.gz
           retention-days: 0
 
   build_console_win:
@@ -296,15 +305,24 @@ jobs:
           cmd /c mklink .\build\setupCMD\extern\config.py ..\config.py
           cmd /c mklink .\build\setupCMD\extern\config.ini ..\config.ini
 
-      - name: Compress with zip (preserve symlinks)
+      - name: Clean up build directory
         run: |
-          Compress-Archive -Path ./build/setupCMD/* -DestinationPath AstroDwarfScheduler-Console-win.zip
+          # Remove unnecessary files from build directory
+          if (Test-Path "build\setupCMD") {
+            Get-ChildItem -Path "build\setupCMD" -Recurse -Include "*.pyc","*.pyo","__pycache__","*.dist-info","*.egg-info","test*","tests","example*","doc*","*.txt","*.md" -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            # Remove empty directories
+            Get-ChildItem -Path "build\setupCMD" -Recurse -Directory | Where-Object { (Get-ChildItem -Path $_.FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0 } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          }
 
-      - name: Upload zipped Console executable
+      - name: Compress with tar (preserve symlinks)
+        run: |
+          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build/setupCMD .
+
+      - name: Upload Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console-win
-          path: AstroDwarfScheduler-Console-win.zip
+          path: AstroDwarfScheduler-Console-win.tar.gz
           retention-days: 0
 
   build_UI_linux:
@@ -370,6 +388,19 @@ jobs:
           ./astro_dwarf_session_UI
           EOF
           chmod +x build/setupUI/astro-dwarf-scheduler-gui.sh
+
+      - name: Clean up build directory
+        run: |
+          # Remove unnecessary files from build directory
+          find build/setupUI -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.dist-info" -o -name "*.egg-info" \) -delete
+          find build/setupUI -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupUI -type d -name "test*" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupUI -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupUI -type d -name "example*" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupUI -type d -name "doc*" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupUI -name "*.txt" -o -name "*.md" | grep -v "requirements" | xargs rm -f 2>/dev/null || true
+          # Remove empty directories
+          find build/setupUI -type d -empty -delete 2>/dev/null || true
 
       - name: Create tar.gz archive
         run: |
@@ -445,6 +476,19 @@ jobs:
           rm -f build/setupCMD/config.py build/setupCMD/config.ini
           ln -s build/setupCMD/extern/config.py ../config.py
           ln -s build/setupCMD/extern/config.ini ../config.ini
+
+      - name: Clean up build directory
+        run: |
+          # Remove unnecessary files from build directory
+          find build/setupCMD -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.dist-info" -o -name "*.egg-info" \) -delete
+          find build/setupCMD -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupCMD -type d -name "test*" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupCMD -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupCMD -type d -name "example*" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupCMD -type d -name "doc*" -exec rm -rf {} + 2>/dev/null || true
+          find build/setupCMD -name "*.txt" -o -name "*.md" | grep -v "requirements" | xargs rm -f 2>/dev/null || true
+          # Remove empty directories
+          find build/setupCMD -type d -empty -delete 2>/dev/null || true
 
       - name: Create tar.gz archive
         run: |

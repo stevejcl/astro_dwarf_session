@@ -3,7 +3,7 @@ import sys
 
 # Include additional files and folders
 buildOptions = dict(
-    packages=["bleak", "asyncio"],
+    packages=["bleak", "asyncio", "serial", "serial.tools", "serial.tools.list_ports", "requests", "filelock", "websockets", "google.protobuf", "paramiko"],
     excludes=[
         # Standard library exclusions
         "tkinter.test",

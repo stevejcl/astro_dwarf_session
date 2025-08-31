@@ -10,7 +10,6 @@ build/
 *.bak
 /myenv3
 config.lock
-<<<<<<< HEAD
 /Astro_Sessions
 /Devices_Sessions
 *.pyd
@@ -20,6 +19,3 @@ config.lock
 /myenvUbuntu
 /old_test
 /doc
-=======
-.vscode/
->>>>>>> main

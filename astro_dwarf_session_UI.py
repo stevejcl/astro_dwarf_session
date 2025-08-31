@@ -448,8 +448,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
         '''
         User wants to quit
         '''
-        print("Wait during closing...")
-        self.log("Wait during closing...")
+        print("Waiting during closing...")
+        self.log("Waiting during closing...")
 
         # Stop video stream
         self._stop_video_stream = True
@@ -474,7 +474,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             pass  # Ignore errors during forced disconnect
     
         if self.scheduler_running:
-            self.log("Force closing scheduler...")
+            self.log("Force closing the scheduler...")
             self.scheduler_running = False
             self.scheduler_stop_event.set()
             
@@ -494,7 +494,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             # Schedule the countdown to run again after 1 second
             self.after(1000, self.countdown, wait - 1)
         else:
-            self.log("Timeout reached, force closing...")
+            self.log("Timeout reached, forcing closure...")
             # Cannot forcibly terminate threads safely in Python; log and proceed to close
             if hasattr(self, 'scheduler_thread') and self.scheduler_thread.is_alive():
                 self.log("Scheduler thread is still running and cannot be forcibly stopped safely.", level="warning")
@@ -569,7 +569,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.log(f"New configuration '{config_name}' created.")
             else:
                 self.log(f"Configuration '{config_name}' selected.")
-            self.log(f"  Session directory is : '{LIST_ASTRO_DIR['SESSIONS_DIR']}'.")
+            self.log(f"Session directory: '{LIST_ASTRO_DIR['SESSIONS_DIR']}'.")
 
         self.refresh_data()
         # Always update file counts after config change
@@ -861,7 +861,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def start_scheduler(self):
         self.disable_controls()
         if not self.scheduler_running:
-            self.log("Astro_Dwarf_Scheduler is starting...")
+            self.log("Astro Dwarf Scheduler is starting...")
             self.toggle_buttons("waiting")
             self.scheduler_running = True
             self.scheduler_stop_event.clear()
@@ -1085,12 +1085,12 @@ class AstroDwarfSchedulerApp(tk.Tk):
             finally:    
                 setattr(self, '_stop_video_stream', True)
 
+    def run_start_polar_position(self):
+        try:
             dwarf_id = 2
             data_config = config_py.get_config_data()
             if data_config.get("dwarf_id"):
                 dwarf_id = data_config['dwarf_id']
-
-            dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
             dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
@@ -1121,7 +1121,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     result = motor_action(3)
 
                 if result:
-                    self.log("Success Polar Align positioning")
+                    self.log("Successfully positioned for polar alignment")
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
 

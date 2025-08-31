@@ -226,6 +226,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION_BLE }}
 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+
       - name: Build the executable with setupBLE.py
         run: |
           python setupBLE.py build_exe --build-exe "build\setupBLE"
@@ -291,6 +297,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION_BLE }}
 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+                    
       - name: Build the executable with setupBLE.py
         run: |
           python setupBLE.py build_exe --build-exe "build\setupBLE"
@@ -359,6 +371,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION_BLE }}
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install --user -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install --user cx_Freeze
 
       - name: Build the executable with setupBLE.py
         run: |
@@ -440,6 +459,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION_BLE }}
 
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install --user -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install --user cx_Freeze
+
       - name: Build the executable with setupBLE.py
         run: |
           python setupBLE.py build_exe --build-exe "build/setupBLE"
@@ -510,6 +536,12 @@ jobs:
         run: |
           python setupUI.py build_exe --build-exe "build\setupUI"
 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip --root-user-action=ignore
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          
       - name: Build the executable with setupBLE.py
         run: |
           python setupBLE.py build_exe --build-exe "build\setupBLE"

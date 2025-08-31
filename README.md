@@ -157,6 +157,14 @@ Pane,RA,DEC,Description
 - Wi-Fi parameters can be set via command line for headless operation
 - Use the Dwarfium app to establish initial connection if needed
 
+### Configuration Issues
+- **Dwarf ID Inconsistency Fix**: The system handles dwarf_id values differently between Bluetooth and IP connections:
+  - **Device returns actual ID**: Dwarf II = 2, Dwarf III = 3
+  - **Config stores offset ID**: Dwarf II = 1, Dwarf III = 2
+  - **Bluetooth connection**: Correctly sends offset values
+  - **IP connection**: Now converts actual device ID to offset before storing
+  - **Result**: Consistent dwarf_id handling across all connection methods
+
 ### Video Preview Issues
 - Install `Pillow` and `requests` if video preview shows installation message
 - Check network connectivity to telescope IP

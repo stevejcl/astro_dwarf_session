@@ -1,12 +1,11 @@
-venv/
-dwarf_ble_connect/
-dwarf_python_api*/
+/venv
+/dwarf_ble_connect
+/dwarf_python_api*
 *.log
 *.log.old
 *.pyc
 *.tmp
-config.ini.bak
-build/
+/build
 *.bak
 /myenv3
 config.lock
@@ -19,3 +18,5 @@ config.lock
 /myenvUbuntu
 /old_test
 /doc
+/.vscode
+/__pycache__

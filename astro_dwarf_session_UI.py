@@ -11,14 +11,14 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action #, perform_powerdown
+from dwarf_python_api.lib.dwarf_utils import read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
 import dwarf_python_api.get_config_data as config_py
 # The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
 # the value return by get_config_data must be used with these functions
-from dwarf_python_api.get_config_data import config_to_dwarf_id_str
+from dwarf_python_api.get_config_data import config_to_dwarf_id_str, config_to_dwarf_id_int
 
 import logging
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
@@ -407,10 +407,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 if data_config.get("dwarf_id"):
                     dwarf_id = data_config['dwarf_id']
 
+                dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
+
                 # wait between actions and time actions
                 wait_time += 10 + 60
-                wait_time += 90 if config_to_dwarf_id_str(dwarf_id) == "3" else 0
+                wait_time += 90 if dwarf_id_int == 3 else 0
                 wait_time += int(settings_vars.get("wait_before", 0))
+                wait_time += int(settings_vars.get("wait_after", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
             if settings_vars.get("goto_solar", False) or settings_vars.get("goto_manual", False):
                 wait_time += 30
@@ -445,8 +448,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
         '''
         User wants to quit
         '''
-        print("Wait during closing...")
-        self.log("Wait during closing...")
+        print("Waiting during closing...")
+        self.log("Waiting during closing...")
 
         # Stop video stream
         self._stop_video_stream = True
@@ -471,7 +474,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             pass  # Ignore errors during forced disconnect
     
         if self.scheduler_running:
-            self.log("Force closing scheduler...")
+            self.log("Force closing the scheduler...")
             self.scheduler_running = False
             self.scheduler_stop_event.set()
             
@@ -491,7 +494,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             # Schedule the countdown to run again after 1 second
             self.after(1000, self.countdown, wait - 1)
         else:
-            self.log("Timeout reached, force closing...")
+            self.log("Timeout reached, forcing closure...")
             # Cannot forcibly terminate threads safely in Python; log and proceed to close
             if hasattr(self, 'scheduler_thread') and self.scheduler_thread.is_alive():
                 self.log("Scheduler thread is still running and cannot be forcibly stopped safely.", level="warning")
@@ -566,7 +569,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.log(f"New configuration '{config_name}' created.")
             else:
                 self.log(f"Configuration '{config_name}' selected.")
-            self.log(f"  Session directory is : '{LIST_ASTRO_DIR['SESSIONS_DIR']}'.")
+            self.log(f"Session directory: '{LIST_ASTRO_DIR['SESSIONS_DIR']}'.")
 
         self.refresh_data()
         # Always update file counts after config change
@@ -735,9 +738,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=16)
         self.eq_button.grid(row=0, column=4, padx=2, sticky="sew")
 
-        # Hidden until dwarf_python_api is updated to include power down functionality
+        # Power Down button (enabled if API supports power down functionality)
         self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
-        # self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")  # Hidden until API is updated
+        self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")
 
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)
@@ -858,7 +861,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def start_scheduler(self):
         self.disable_controls()
         if not self.scheduler_running:
-            self.log("Astro_Dwarf_Scheduler is starting...")
+            self.log("Astro Dwarf Scheduler is starting...")
             self.toggle_buttons("waiting")
             self.scheduler_running = True
             self.scheduler_stop_event.clear()
@@ -1084,14 +1087,16 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_polar_position(self):
         try:
-            dwarf_id = "2"
+            dwarf_id = 2
             data_config = config_py.get_config_data()
-            if data_config["dwarf_id"]:
+            if data_config.get("dwarf_id"):
                 dwarf_id = data_config['dwarf_id']
+
+            dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
             attempt = 0
             result = False
-            self.log("Starting Polar Align positionning...")
+            self.log("Starting Polar Alignment positioning...")
 
             while not result and attempt < 1:
                 setattr(self, '_stop_video_stream', False)
@@ -1102,13 +1107,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 if result:
                     # Pitch Motor Resetting
                     result = motor_action(6)
-                if result and config_to_dwarf_id_str(dwarf_id) == "3":
+                if result and dwarf_id_int == 3:
                     # Rotation Motor positioning D3
                     result = motor_action(9)
                 elif result:
                     # Rotation Motor positioning
                     result = motor_action(2)
-                if result and config_to_dwarf_id_str(dwarf_id) == "3":
+                if result and dwarf_id_int == 3:
                     # Pitch Motor positioning D3
                     result = motor_action(7)
                 elif result:
@@ -1116,14 +1121,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     result = motor_action(3)
 
                 if result:
-                    self.log("Success Polar Align positionning")
+                    self.log("Successfully positioned for polar alignment")
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
 
             setattr(self, '_stop_video_stream', True)
 
         except Exception as e:
-            self.log(f"Error in Polar Align positionning: {e}", level="error")
+            self.log(f"Error in Polar Align positioning: {e}", level="error")
             setattr(self, '_stop_video_stream', True)
 
     def run_start_calibration(self):

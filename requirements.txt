@@ -24,4 +24,6 @@ pytz
 
 pillow
 
+pyserial
+
 cx_Freeze

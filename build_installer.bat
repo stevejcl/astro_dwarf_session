@@ -3,30 +3,30 @@ echo Building Astro Dwarf Scheduler Installer...
 echo.
 
 echo Step 1: Building GUI executable...
-python setupUI.py build
+python setupUI.py build_exe --build-exe "build\setupUI"
 if errorlevel 1 (
     echo Error building GUI executable
     exit /b 1
 )
 
 echo Step 2: Building BLE executable...
-python setupBLE.py build
+python setupBLE.py build_exe --build-exe "build\setupBLE"
 if errorlevel 1 (
     echo Error building BLE executable
     exit /b 1
 )
 
 echo Step 3: Organizing files...
-if exist "build\exe.win-amd64-3.12\extern" rmdir /s /q "build\exe.win-amd64-3.12\extern"
-move "build\exe.win-amd64-3.11" "build\exe.win-amd64-3.12\extern"
+if exist "build\setupBLE\extern" rmdir /s /q "build\setupBLE\extern"
+move "build\setupBLE" "build\setupUI\extern"
 if errorlevel 1 (
     echo Error moving BLE executable
     exit /b 1
 )
 
 echo Step 4: Creating symbolic links...
-mklink "build\exe.win-amd64-3.12\extern\config.py" "..\config.py"
-mklink "build\exe.win-amd64-3.12\extern\config.ini" "..\config.ini"
+mklink "build\setupUI\extern\config.py" "..\config.py"
+mklink "build\setupUI\extern\config.ini" "..\config.ini"
 
 echo Step 5: Building installer with Inno Setup...
 "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" AstroDwarfScheduler.iss

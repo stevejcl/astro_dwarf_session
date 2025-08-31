@@ -175,7 +175,8 @@ def update_process_status(program, status, result=None, message=None, nb_try=Non
     if nb_try is not None:
         command['nb_try'] = nb_try
     if dwarf_id is not None:
-        command['dwarf'] = "D" + config_to_dwarf_id_str(dwarf_id)
+        dwarf_id_str = config_to_dwarf_id_str(dwarf_id)
+        command['dwarf'] = "D" + (dwarf_id_str if dwarf_id_str is not None else "2")
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if status == "pending":
         command['starting_date'] = current_datetime
@@ -546,7 +547,14 @@ def update_get_config_data(IPDwarf=None):
                 print(f"ID: {new_id}")
                 print(f"Name: {name}")
 
-                config_py.update_config_data( 'dwarf_id', new_id)
+                # Fix for dwarf_id inconsistency between Bluetooth and IP connections:
+                # - Device returns actual ID (2=Dwarf II, 3=Dwarf III)
+                # - Config stores offset ID (1=Dwarf II, 2=Dwarf III)
+                # - Bluetooth correctly sends offset, IP was storing actual
+                
+                # Convert actual device ID to config offset (stored as actual - 1)
+                config_id = str(int(new_id) - 1)
+                config_py.update_config_data( 'dwarf_id', config_id)
 
                 return {'id': new_id, 'name': name}
             else:

@@ -1,21 +1,76 @@
-name: Build Executable
+name: Build Executables
 
 on:
   workflow_dispatch:
+  #push:
+  #  branches: [ main ]
+  #pull_request:
+  #  branches: [ main ]
+
+# Global environment variables
+env:
+  PYTHON_VERSION: '3.12'
+  BUILD_TYPE: release
+
+# Concurrency to cancel previous runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build_UI_mac:
-    runs-on: macos-latest  
-    
+  # Shared setup job to validate requirements and prepare common artifacts
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-  
-      - name: Set up Python 3.12
+
+      - name: Validate requirements files
+        run: |
+          if [ ! -f requirements.txt ]; then
+            echo "requirements.txt not found"
+            exit 1
+          fi
+          if [ ! -f requirements-local.txt ]; then
+            echo "requirements-local.txt not found"
+            exit 1
+          fi
+
+      - name: Get version from CHANGELOG.md
+        id: get_version
+        run: |
+          RAW_VERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)
+          if [[ $RAW_VERSION =~ ^[0-9]+\.[0-9]+$ ]]; then
+            FORMATTED_VERSION="${RAW_VERSION}.0"
+          else
+            FORMATTED_VERSION="${RAW_VERSION}"
+          fi
+          echo "version=${FORMATTED_VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${FORMATTED_VERSION}"
+  build_UI_mac:
+    runs-on: macos-latest
+    needs: setup
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-  
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
@@ -32,44 +87,58 @@ jobs:
             fi
           done
 
-      - name: Build macOS .app bundle with setupUI_mac.py
+      - name: Build macOS GUI .app bundle
         run: |
+          echo "Building GUI application..."
           python setupUI_mac.py py2app
           if [ $? -ne 0 ]; then
-            echo "setupUI_mac.py build failed"
+            echo "::error::setupUI_mac.py build failed"
             exit 1
           fi
 
       - name: Create DMG from .app bundle
         run: |
+          echo "Creating DMG package..."
           # Create temporary directory for DMG contents
           mkdir -p dmg_temp
           cp -R dist/AstroDwarfScheduler.app dmg_temp/
-          
+
           hdiutil create -volname "AstroDwarfScheduler" \
             -srcfolder dmg_temp \
             -ov -format UDZO AstroDwarfScheduler-GUI-mac.dmg
-          
+
           # Clean up temp directory
           rm -rf dmg_temp
-  
-      - name: Upload DMG artifact
+
+      - name: Upload GUI DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI-mac
           path: AstroDwarfScheduler-GUI-mac.dmg
+          retention-days: 0
 
   build_console_mac:
-    runs-on: macos-latest  
+    runs-on: macos-latest
+    needs: setup
+    timeout-minutes: 30
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-  
-      - name: Set up Python 3.12
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-  
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
@@ -93,105 +162,170 @@ jobs:
             echo "setupCMD_mac.py build failed"
             exit 1
           fi
-          
+
       - name: Create DMG from .app bundle
         run: |
           # Create temporary directory for DMG contents
           mkdir -p dmg_temp
           cp -R dist/AstroDwarfSchedulerConsole.app dmg_temp/
-          
+
           hdiutil create -volname "AstroDwarfSchedulerConsole" \
             -srcfolder dmg_temp \
             -ov -format UDZO AstroDwarfScheduler-Console-mac.dmg
-          
+
           # Clean up temp directory
           rm -rf dmg_temp
-    
+
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console-mac
           path: AstroDwarfScheduler-Console-mac.dmg
+          retention-days: 0
 
   build_UI_win:
     runs-on: windows-latest
+    needs: setup
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout code
+      - name: Checkout main branch
         uses: actions/checkout@v4
+        with:
+          ref: main
 
-      - name: Set up Python3.12
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            ~\AppData\Local\cx_Freeze\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
 
       - name: Build the executable with setupUI.py
         run: |
-          python setupUI.py build
+          python setupUI.py build_exe --build-exe "build\setupUI"
         continue-on-error: true
-        
-      - name: Create tar.gz archive
-        run: |
-          tar -czf AstroDwarfScheduler-GUI-win.tar.gz -C build/exe.win-amd64-3.12 .
 
-      - name: Upload zipped GUI executable
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build\setupBLE"
+        continue-on-error: true
+
+      - name: Move and rename to extern
+        run: |
+          powershell Move-Item -Path build\setupBLE -Destination build\setupUI\extern
+
+      - name: Create symbolic links
+        run: |
+           cmd /c mklink .\build\setupUI\extern\config.py ..\config.py
+           cmd /c mklink .\build\setupUI\extern\config.ini ..\config.ini
+
+      - name: Compress with ZIP
+        run: |
+          Compress-Archive -Path "build\setupUI\*" -DestinationPath "AstroDwarfScheduler-GUI-win.zip" -Force
+
+      - name: Upload GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI-win
-          path: AstroDwarfScheduler-GUI-win.tar.gz
+          path: AstroDwarfScheduler-GUI-win.zip
+          retention-days: 0
 
   build_console_win:
     runs-on: windows-latest
+    needs: setup
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            ~\AppData\Local\cx_Freeze\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
 
       - name: Build the executable with setupCMD.py
         run: |
-          python setupCMD.py build
+          python setupCMD.py build_exe --build-exe "build\setupCMD"
         continue-on-error: true
 
-      - name: Create tar.gz archive
+      - name: Build the executable with setupBLE.py
         run: |
-          tar -czf AstroDwarfScheduler-Console-win.tar.gz -C build/exe.win-amd64-3.12 .
+          python setupBLE.py build_exe --build-exe "build\setupBLE"
+        continue-on-error: true
 
-      - name: Upload zipped Console executable
+      - name: Move and rename to extern
+        run: |
+          powershell Move-Item -Path build\setupBLE -Destination build\setupCMD\extern
+
+      - name: Create symbolic links
+        run: |
+          cmd /c mklink .\build\setupCMD\extern\config.py ..\config.py
+          cmd /c mklink .\build\setupCMD\extern\config.ini ..\config.ini
+
+      - name: Compress with ZIP
+        run: |
+          Compress-Archive -Path "build\setupCMD\*" -DestinationPath "AstroDwarfScheduler-Console-win.zip" -Force
+
+      - name: Upload Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console-win
-          path: AstroDwarfScheduler-Console-win.tar.gz
+          path: AstroDwarfScheduler-Console-win.zip
+          retention-days: 0
 
   build_UI_linux:
     runs-on: ubuntu-latest
-    
+    needs: setup
+    timeout-minutes: 30
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install system dependencies
         run: |
@@ -201,46 +335,72 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
-          python -m pip install --break-system-packages -r requirements.txt
-          python -m pip install --break-system-packages -r requirements-local.txt --target .
-          python -m pip install --break-system-packages cx_Freeze
+          python -m pip install --user -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install --user cx_Freeze
 
       - name: Build the executable with setupUI.py
         run: |
-          python setupUI.py build
+          python setupUI.py build_exe --build-exe "build/setupUI"
         continue-on-error: true
-                    
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build/setupBLE"
+        continue-on-error: true
+
+      - name: Move and rename to extern
+        run: |
+          mv build/setupBLE build/setupUI/extern
+
+      - name: Create symbolic links
+        run: |
+          rm -f build/setupUI/config.py build/setupUI/config.ini
+          ln -s build/setupUI/extern/config.py ../config.py
+          ln -s build/setupUI/extern/config.ini ../config.ini
+
       - name: Create start scripts
         run: |
           # Create GUI launcher script
-          cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh << 'EOF'
+          cat > build/setupUI/astro-dwarf-scheduler-gui.sh << 'EOF'
           #!/bin/bash
           cd "$(dirname "$0")"
           ./astro_dwarf_session_UI
           EOF
-          chmod +x build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-gui.sh
-          
+          chmod +x build/setupUI/astro-dwarf-scheduler-gui.sh
+
       - name: Create tar.gz archive
         run: |
-          tar -czf AstroDwarfScheduler-GUI-linux.tar.gz -C build/exe.linux-x86_64-3.12 .
+          tar -czf AstroDwarfScheduler-GUI-linux.tar.gz -C build/setupUI .
 
       - name: Upload Linux GUI executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-GUI-linux
           path: AstroDwarfScheduler-GUI-linux.tar.gz
+          retention-days: 0
 
   build_console_linux:
     runs-on: ubuntu-latest
+    needs: setup
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install system dependencies
         run: |
@@ -250,58 +410,97 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
-          python -m pip install --break-system-packages -r requirements.txt
-          python -m pip install --break-system-packages -r requirements-local.txt --target .
-          python -m pip install --break-system-packages cx_Freeze
+          python -m pip install --user -r requirements.txt
+          python -m pip install -r requirements-local.txt --target .
+          python -m pip install --user cx_Freeze
 
       - name: Build the executable with setupCMD.py
         run: |
-          python setupCMD.py build
+          python setupCMD.py build_exe --build-exe "build/setupCMD"
         continue-on-error: true
-                    
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build/setupBLE"
+        continue-on-error: true
+
       - name: Create start scripts
         run: |
           # Create Console launcher script
-          cat > build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh << 'EOF'
+          cat > build/setupCMD/astro-dwarf-scheduler-console.sh << 'EOF'
           #!/bin/bash
           cd "$(dirname "$0")"
           ./astro_dwarf_scheduler
           EOF
-          chmod +x build/exe.linux-x86_64-3.12/astro-dwarf-scheduler-console.sh
-          
+          chmod +x build/setupCMD/astro-dwarf-scheduler-console.sh
+
+      - name: Move and rename to extern
+        run: |
+          mv build/setupBLE build/setupCMD/extern
+
+      - name: Create symbolic links
+        run: |
+          rm -f build/setupCMD/config.py build/setupCMD/config.ini
+          ln -s build/setupCMD/extern/config.py ../config.py
+          ln -s build/setupCMD/extern/config.ini ../config.ini
+
       - name: Create tar.gz archive
         run: |
-          tar -czf AstroDwarfScheduler-Console-linux.tar.gz -C build/exe.linux-x86_64-3.12 .
+          tar -czf AstroDwarfScheduler-Console-linux.tar.gz -C build/setupCMD .
 
       - name: Upload Linux Console executable
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Console-linux
           path: AstroDwarfScheduler-Console-linux.tar.gz
+          retention-days: 0
 
   build_installer_win:
     runs-on: windows-latest
     needs: [build_UI_win, build_console_win]
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python3.12
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            ~\AppData\Local\cx_Freeze\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-local.txt --target .
-          python -m pip install cx_Freeze
 
       - name: Build the executable with setupUI.py
         run: |
-          python setupUI.py build
+          python setupUI.py build_exe --build-exe "build\setupUI"
+
+      - name: Build the executable with setupBLE.py
+        run: |
+          python setupBLE.py build_exe --build-exe "build\setupBLE"
+
+      - name: Move and rename to extern
+        run: |
+          powershell Move-Item -Path .\build\setupBLE -Destination .\build\setupUI\extern
+
+      - name: Create symbolic links
+        run: |
+          cmd /c mklink .\build\setupUI\extern\config.py ..\config.py
+          cmd /c mklink .\build\setupUI\extern\config.ini ..\config.ini
 
       - name: Install Inno Setup
         run: |
@@ -311,21 +510,43 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" AstroDwarfScheduler.iss
 
+      - name: Verify installer was created
+        run: |
+          if (!(Test-Path "installer\AstroDwarfScheduler-Setup-win.exe")) {
+            Write-Error "Installer not found at expected location"
+            exit 1
+          }
+
+      - name: Zip Windows installer
+        run: |
+          Compress-Archive -Path 'installer\AstroDwarfScheduler-Setup-win.exe' -DestinationPath 'installer\AstroDwarfScheduler-Setup-win.zip' -Force
+
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
           name: AstroDwarfScheduler-Installer-win
           path: installer\AstroDwarfScheduler-Setup-win.exe
+          retention-days: 0
+
+      - name: Upload Installer ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer-win-zip
+          path: installer\AstroDwarfScheduler-Setup-win.zip
+          retention-days: 0
 
   release:
     runs-on: ubuntu-latest
-
     needs: [build_UI_mac, build_console_mac, build_UI_win, build_console_win, build_UI_linux, build_console_linux, build_installer_win]
+    permissions:
+      contents: write
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Download all artifacts
       - name: Download UI MAC executable artifact
         uses: actions/download-artifact@v4
         with:
@@ -351,6 +572,11 @@ jobs:
         with:
           name: AstroDwarfScheduler-Installer-win
 
+      - name: Download Windows Installer ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AstroDwarfScheduler-Installer-win-zip
+
       - name: Download GUI Linux executable artifact
         uses: actions/download-artifact@v4
         with:
@@ -365,25 +591,95 @@ jobs:
         id: get_version
         run: |
           RAW_VERSION=$(grep -oP '(?<=## \[)[^]]*' CHANGELOG.md | head -n 1)
-          # Ensure version has at least 3 parts (x.y.z format)
           if [[ $RAW_VERSION =~ ^[0-9]+\.[0-9]+$ ]]; then
             FORMATTED_VERSION="${RAW_VERSION}.0"
           else
             FORMATTED_VERSION="${RAW_VERSION}"
           fi
           echo "RVERSION=${FORMATTED_VERSION}" >> $GITHUB_ENV
+          echo "RVERSION=${FORMATTED_VERSION}" >> $GITHUB_OUTPUT
           echo "Extracted version: ${FORMATTED_VERSION}"
 
-      - name: Check for files
-        id: checkfiles
-        run: ls /home/runner/work/astro_dwarf_session/astro_dwarf_session/
+      - name: Validate downloaded artifacts
+        run: |
+          echo "Checking for required artifacts..."
+          required_files=(
+            "AstroDwarfScheduler-GUI-mac.dmg"
+            "AstroDwarfScheduler-Console-mac.dmg"
+            "AstroDwarfScheduler-GUI-win.zip"
+            "AstroDwarfScheduler-Console-win.zip"
+            "AstroDwarfScheduler-Setup-win.exe"
+            "AstroDwarfScheduler-Setup-win.zip"
+            "AstroDwarfScheduler-GUI-linux.tar.gz"
+            "AstroDwarfScheduler-Console-linux.tar.gz"
+          )
 
-      - name: Release with ncipollo/release-action
+          missing_files=()
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              missing_files+=("$file")
+            fi
+          done
+
+          if [[ ${#missing_files[@]} -gt 0 ]]; then
+            echo "::error::Missing required artifacts: ${missing_files[*]}"
+            exit 1
+          fi
+
+          echo "All artifacts found successfully"
+
+      - name: List all files
+        run: |
+          echo "Files in workspace:"
+          ls -la /home/runner/work/astro_dwarf_session/astro_dwarf_session/
+
+      - name: Create version tag
+        env:
+          VERSION: ${{ steps.get_version.outputs.RVERSION }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags --force
+
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} exists. Deleting and recreating at current commit..."
+            git tag -d "v${VERSION}" || true
+            git push --delete origin "v${VERSION}" || true
+          fi
+
+          git tag "v${VERSION}" "${GITHUB_SHA}"
+          git push origin "v${VERSION}"
+          echo "Successfully created and pushed tag v${VERSION}"
+
+      - name: Create GitHub Release
         id: release
         uses: ncipollo/release-action@v1
         with:
           artifacts: AstroDwarfScheduler*
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
-          skipIfReleaseExists: true
-          tag: v${{ env.RVERSION }}
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          tag: v${{ steps.get_version.outputs.RVERSION }}
+          name: "Release v${{ steps.get_version.outputs.RVERSION }}"
+          body: |
+            ## Astro Dwarf Scheduler v${{ steps.get_version.outputs.RVERSION }}
+
+            This release includes builds for multiple platforms:
+
+            ### Downloads
+            - **macOS GUI**: `AstroDwarfScheduler-GUI-mac.dmg`
+            - **macOS Console**: `AstroDwarfScheduler-Console-mac.dmg`
+            - **Windows GUI**: `AstroDwarfScheduler-GUI-win.zip`
+            - **Windows Console**: `AstroDwarfScheduler-Console-win.zip`
+            - **Windows Installer**: `AstroDwarfScheduler-Setup-win.exe`
+            - **Windows Installer (ZIP)**: `AstroDwarfScheduler-Setup-win.zip`
+            - **Linux GUI**: `AstroDwarfScheduler-GUI-linux.tar.gz`
+            - **Linux Console**: `AstroDwarfScheduler-Console-linux.tar.gz`
+
+            ### Installation Instructions
+            - **macOS**: Open the .dmg file and drag the app to Applications
+            - **Windows**: Use the installer or extract the ZIP file
+            - **Linux**: Extract the tar.gz and run the included scripts

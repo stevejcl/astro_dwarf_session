@@ -1,5 +1,5 @@
 #define MyAppName "Astro Dwarf Session"
-#define MyAppVersion "1.7.0"
+#define MyAppVersion "1.7.1"
 #define MyAppPublisher "ASD"
 #define MyAppURL "https://github.com/styelz/astro_dwarf_session"
 #define MyAppExeName "astro_dwarf_session_UI.exe"
@@ -18,7 +18,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 ; Use relative path for GitHub Actions - license file will be in build output
-LicenseFile=build\exe.win-amd64-3.12\frozen_application_license.txt
+LicenseFile=build\setupUI\frozen_application_license.txt
 PrivilegesRequired=lowest
 SolidCompression=yes
 WizardStyle=modern
@@ -37,7 +37,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "build\exe.win-amd64-3.12\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "build\setupUI\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

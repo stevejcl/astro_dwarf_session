@@ -200,16 +200,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~\AppData\Local\pip\Cache
-            ~\AppData\Local\cx_Freeze\Cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
@@ -221,7 +211,7 @@ jobs:
           python setupUI.py build_exe --build-exe "build\setupUI"
         continue-on-error: true
 
-      - name: Set up Python 3.11 for BLE
+      - name: Set up Python ${{ env.PYTHON_VERSION_BLE }} for BLE
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION_BLE }}
@@ -271,16 +261,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~\AppData\Local\pip\Cache
-            ~\AppData\Local\cx_Freeze\Cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
@@ -292,7 +272,7 @@ jobs:
           python setupCMD.py build_exe --build-exe "build\setupCMD"
         continue-on-error: true
 
-      - name: Set up Python 3.11 for BLE
+      - name: Set up Python ${{ env.PYTHON_VERSION_BLE }} for BLE
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION_BLE }}
@@ -342,14 +322,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install system dependencies
         run: |
           sudo apt update
@@ -367,7 +339,7 @@ jobs:
           python setupUI.py build_exe --build-exe "build/setupUI"
         continue-on-error: true
 
-      - name: Set up Python 3.11 for BLE
+      - name: Set up Python ${{ env.PYTHON_VERSION_BLE }} for BLE
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION_BLE }}
@@ -429,14 +401,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install system dependencies
         run: |
           sudo apt update
@@ -454,7 +418,7 @@ jobs:
           python setupCMD.py build_exe --build-exe "build/setupCMD"
         continue-on-error: true
 
-      - name: Set up Python 3.11 for BLE
+      - name: Set up Python ${{ env.PYTHON_VERSION_BLE }} for BLE
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION_BLE }}
@@ -516,16 +480,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~\AppData\Local\pip\Cache
-            ~\AppData\Local\cx_Freeze\Cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
@@ -536,12 +490,17 @@ jobs:
         run: |
           python setupUI.py build_exe --build-exe "build\setupUI"
 
+      - name: Set up Python ${{ env.PYTHON_VERSION_BLE }} for BLE
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_BLE }}
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip --root-user-action=ignore
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-local.txt --target .
-          
+
       - name: Build the executable with setupBLE.py
         run: |
           python setupBLE.py build_exe --build-exe "build\setupBLE"

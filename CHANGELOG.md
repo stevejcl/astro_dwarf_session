@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.1] - 2025-08-31
+
+### Bug Fixes
+- **Fixed dwarf_id inconsistency between Bluetooth and IP connections**: Device returns actual ID (2=Dwarf II, 3=Dwarf III) while config stores offset ID (1=Dwarf II, 2=Dwarf III). IP connection now properly converts actual device ID to offset before storing, ensuring consistent behavior across all connection methods.
+- **Fixed config corruption on Bluetooth connection failure**: IP and ID values are no longer set to None when Bluetooth connection fails. Added proper null checks and validation to prevent config file corruption.
+- **Improved Bluetooth connection error handling**: Enhanced error handling in `connect_ble_dwarf_win` and `connect_ble_dwarf` functions to only update config with valid values and prevent None values from being stored.
+
+### Documentation
+- **Updated README.md**: Added technical documentation about dwarf_id handling and configuration issues in the Troubleshooting section.
+
 ## [1.7.0] - 2025-08-26
 
 ### Many changes and additions on evolution branch

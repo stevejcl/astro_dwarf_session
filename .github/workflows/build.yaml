@@ -10,6 +10,7 @@ on:
 # Global environment variables
 env:
   PYTHON_VERSION: '3.12'
+  PYTHON_VERSION_BLE: '3.11'
   BUILD_TYPE: release
 
 # Concurrency to cancel previous runs
@@ -220,6 +221,11 @@ jobs:
           python setupUI.py build_exe --build-exe "build\setupUI"
         continue-on-error: true
 
+      - name: Set up Python 3.11 for BLE
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_BLE }}
+
       - name: Build the executable with setupBLE.py
         run: |
           python setupBLE.py build_exe --build-exe "build\setupBLE"
@@ -279,6 +285,11 @@ jobs:
         run: |
           python setupCMD.py build_exe --build-exe "build\setupCMD"
         continue-on-error: true
+
+      - name: Set up Python 3.11 for BLE
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_BLE }}
 
       - name: Build the executable with setupBLE.py
         run: |
@@ -343,6 +354,11 @@ jobs:
         run: |
           python setupUI.py build_exe --build-exe "build/setupUI"
         continue-on-error: true
+
+      - name: Set up Python 3.11 for BLE
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_BLE }}
 
       - name: Build the executable with setupBLE.py
         run: |
@@ -418,6 +434,11 @@ jobs:
         run: |
           python setupCMD.py build_exe --build-exe "build/setupCMD"
         continue-on-error: true
+
+      - name: Set up Python 3.11 for BLE
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_BLE }}
 
       - name: Build the executable with setupBLE.py
         run: |

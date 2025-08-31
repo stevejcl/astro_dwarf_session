@@ -407,10 +407,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 if data_config.get("dwarf_id"):
                     dwarf_id = data_config['dwarf_id']
 
+                dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
+
                 # wait between actions and time actions
                 wait_time += 10 + 60
-                wait_time += 90 if config_to_dwarf_id_str(dwarf_id) == "3" else 0
+                wait_time += 90 if dwarf_id_int == 3 else 0
                 wait_time += int(settings_vars.get("wait_before", 0))
+                wait_time += int(settings_vars.get("wait_after", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
             if settings_vars.get("goto_solar", False) or settings_vars.get("goto_manual", False):
                 wait_time += 30
@@ -735,9 +738,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=16)
         self.eq_button.grid(row=0, column=4, padx=2, sticky="sew")
 
-        # Hidden until dwarf_python_api is updated to include power down functionality
+        # Power Down button (enabled if API supports power down functionality)
         self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
-        self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")  # Hidden until API is updated
+        self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")
 
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)
@@ -1082,18 +1085,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
             finally:    
                 setattr(self, '_stop_video_stream', True)
 
-    def run_start_polar_position(self):
-        try:
-            dwarf_id = "2"
+            dwarf_id = 2
             data_config = config_py.get_config_data()
-            if data_config["dwarf_id"]:
+            if data_config.get("dwarf_id"):
                 dwarf_id = data_config['dwarf_id']
+
+            dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
             dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
             attempt = 0
             result = False
-            self.log("Starting Polar Align positioning...")
+            self.log("Starting Polar Alignment positioning...")
 
             while not result and attempt < 1:
                 setattr(self, '_stop_video_stream', False)

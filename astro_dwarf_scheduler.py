@@ -522,8 +522,9 @@ def start_STA_connection(CheckDwarfId = False):
         if result and CheckDwarfId:
             update_dwarf_data = update_get_config_data(dwarf_ip)
 
+             # check if the dwarf_id is the same as the config
             if update_dwarf_data is not None and update_dwarf_data.get('id') != dwarf_id:
-                log.success(f'Updated Dwarf Type to dwarf {update_dwarf_data["id"]}')
+                log.success(f'Updated Dwarf Type to dwarf {config_to_dwarf_id_str(update_dwarf_data["id"])}')
     return result
 
 def get_default_params_config(IP):
@@ -541,22 +542,16 @@ def update_get_config_data(IPDwarf=None):
             # Check if the response has data
             if response.status_code == 200 and 'data' in response.json():
                 data = response.json().get('data')
-                new_id = data.get('id') 
-                name = data.get('name')
+                id_from_device = data.get('id') 
+                name_from_device = data.get('name')
                 
-                print(f"ID: {new_id}")
-                print(f"Name: {name}")
-
-                # Fix for dwarf_id inconsistency between Bluetooth and IP connections:
-                # - Device returns actual ID (2=Dwarf II, 3=Dwarf III)
-                # - Config stores offset ID (1=Dwarf II, 2=Dwarf III)
-                # - Bluetooth correctly sends offset, IP was storing actual
+                print(f"ID: {id_from_device}")
+                print(f"Name: {name_from_device}")
                 
-                # Convert actual device ID to config offset (stored as actual - 1)
-                config_id = str(int(new_id) - 1)
-                config_py.update_config_data( 'dwarf_id', config_id)
-
-                return {'id': new_id, 'name': name}
+                # Force the dwarf_id in config.py to match the device connected
+                # This overrides the value set from settings.py
+                config_py.update_config_data( 'dwarf_id', id_from_device)
+                return {'id': id_from_device, 'name': name_from_device}
             else:
                 print("update_get_config_data : No data found in the response.")
                 return None

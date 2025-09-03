@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.2] - 2025-09-03
+
+### Bug Fixes
+- **Fixed GUI widget destruction errors**: Resolved "bad window path name" errors in session_info_label by adding robust widget existence checking and graceful error handling.
+- **Fixed tab change event errors**: Resolved "expected integer but got" errors in tab navigation by improving tab index validation and type conversion handling.
+- **Improved application stability**: Added comprehensive exception handling for Tkinter widget operations including AttributeError, TypeError, and IndexError in addition to TclError.
+
+### Improvements
+- **Enhanced widget lifecycle management**: GUI operations now fail gracefully without crashing the application when widgets are destroyed.
+
 ## [1.7.1] - 2025-08-31
 
 ### Bug Fixes

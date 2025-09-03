@@ -119,14 +119,12 @@ def update_config_py_dwarf_id(device_type):
     try:
         import os
         config_py_path = 'config.py'
-        # Determine DWARF_ID value
+        # Determine DWARF_ID value (config.py values are offset by -1)
         if device_type == 'Dwarf II':
-            dwarf_id_val = 1
+            dwarf_id_val = 1  # Config value for Dwarf II (actual device ID is 2)
         else:
-            dwarf_id_val = 2
-        if DWARF_IP_CURRENT:
-            print("DWARF_IP already set, don't change DWARF_ID")
-        elif os.path.exists(config_py_path):
+            dwarf_id_val = 2  # Config value for Dwarf 3 (actual device ID is 3)
+        if os.path.exists(config_py_path):
             # Read the current config.py content
             with open(config_py_path, 'r') as f:
                 lines = f.readlines()
@@ -153,10 +151,7 @@ def update_config_py_dwarf_ip(new_ip):
     try:
         import os
         config_py_path = 'config.py'
-        if DWARF_IP_CURRENT:
-            print("DWARF_IP already set, don't change it")
-        
-        elif os.path.exists(config_py_path):
+        if os.path.exists(config_py_path):
             # Read the current config.py content
             with open(config_py_path, 'r') as f:
                 lines = f.readlines()

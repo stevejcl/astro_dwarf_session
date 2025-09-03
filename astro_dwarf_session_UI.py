@@ -11,14 +11,14 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown
+from dwarf_python_api.lib.dwarf_utils import read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, stop_polar_align, motor_action, perform_powerdown
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
 import dwarf_python_api.get_config_data as config_py
 # The config value for dwarf_id is offset by -1 (stored as one less than the actual ID).
 # the value return by get_config_data must be used with these functions
-from dwarf_python_api.get_config_data import config_to_dwarf_id_str, config_to_dwarf_id_int
+from dwarf_python_api.get_config_data import config_to_dwarf_id_int
 
 import logging
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
@@ -327,10 +327,32 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         # Bind tab change event to refresh file lists
         def on_tab_changed(event):
-            tab = event.widget.tab(event.widget.index('current'))['text']
-            if tab == 'Session Overview':
-                if self.overview_refresh:
-                    self.overview_refresh()
+            try:
+                # Get current tab index more safely
+                current_index = event.widget.index('current')
+                
+                # Handle various invalid index cases
+                if current_index == '' or current_index is None:
+                    return
+                    
+                # Convert to integer if it's a string number
+                if isinstance(current_index, str):
+                    if current_index.isdigit():
+                        current_index = int(current_index)
+                    else:
+                        return  # Skip if not a valid numeric string
+                
+                # Get tab info safely
+                tab_info = event.widget.tab(current_index)
+                if tab_info and 'text' in tab_info:
+                    tab = tab_info['text']
+                    if tab == 'Session Overview':
+                        if self.overview_refresh:
+                            self.overview_refresh()
+            except (tk.TclError, ValueError, TypeError, IndexError) as e:
+                # Handle cases where tab index is invalid or widget is destroyed
+                print(f"Error in on_tab_changed: {e}")
+                pass
 
         self.tab_control.bind('<<NotebookTabChanged>>', on_tab_changed)
 
@@ -1098,15 +1120,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
             result = False
             self.log("Starting Polar Alignment positioning...")
 
+            setattr(self, '_stop_video_stream', False)
+
             while not result and attempt < 1:
-                setattr(self, '_stop_video_stream', False)
-                self.start_video_preview()
                 attempt += 1
                 # Rotation Motor Resetting
                 result = motor_action(5)
                 if result:
                     # Pitch Motor Resetting
                     result = motor_action(6)
+
+                self.start_video_preview()
+
                 if result and dwarf_id_int == 3:
                     # Rotation Motor positioning D3
                     result = motor_action(9)
@@ -1236,6 +1261,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
         # Only update session_info_label if we're running in a GUI context
         has_gui = hasattr(self, 'session_info_label') and self.session_info_label is not None
         
+        # Additional check to ensure the widget still exists
+        if has_gui:
+            try:
+                # Test if the widget still exists by accessing its properties
+                self.session_info_label.winfo_exists()
+            except (tk.TclError, AttributeError):
+                # Widget has been destroyed, disable GUI updates
+                has_gui = False
+        
         if self.scheduler_running and self.session_running:
             # Show the session info label
             if has_gui:
@@ -1277,18 +1311,38 @@ class AstroDwarfSchedulerApp(tk.Tk):
                         total_runtime_str = str(total_runtime_td).split('.')[0]
                         self.last_text=f"Session runtime: {this_session_runtime_str} / {estimated_runtime} - Total runtime: {total_runtime_str}"
                         if has_gui:
-                            self.session_info_label.config(text=self.last_text, fg="#26447A")
+                            try:
+                                self.session_info_label.config(text=self.last_text, fg="#26447A")
+                            except tk.TclError as e:
+                                print(f"Error updating session_info_label: {e}")
+                                has_gui = False
 
                     except Exception as e:
                         if has_gui:
-                            self.session_info_label.config(text=f"Error reading next session. {e}\n{traceback.format_exc()}")
+                            try:
+                                self.session_info_label.config(text=f"Error reading next session. {e}\n{traceback.format_exc()}")
+                            except tk.TclError as e:
+                                print(f"Error updating session_info_label: {e}")
+                                has_gui = False
             else:
                 if has_gui:
-                    self.session_info_label.config(text="No session directory found - Check configuration",fg="red")
+                    try:
+                        self.session_info_label.config(text="No session directory found - Check configuration",fg="red")
+                    except tk.TclError as e:
+                        print(f"Error updating session_info_label: {e}")
+                        has_gui = False
         else:
             # Show a helpful placeholder when scheduler is not running
             if has_gui:
-                self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))
+                try:
+                    # Check if widget still exists and is valid before packing
+                    if (hasattr(self, 'session_info_label') and 
+                        self.session_info_label is not None and 
+                        self.session_info_label.winfo_exists()):
+                        self.session_info_label.pack(side="left", anchor="w", padx=(20, 0))
+                except (tk.TclError, AttributeError) as e:
+                    print(f"Error packing session_info_label: {e}")
+                    has_gui = False  # Disable further GUI operations
             
             # Check if there are any sessions in ToDo to provide useful information
             todo_dir = LIST_ASTRO_DIR["TODO_DIR"]
@@ -1322,28 +1376,44 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
                     if show_countdown and self.scheduler_running:
                         if has_gui:
-                            self.session_info_label.config(
-                                text=f"Up next: {scheduled_target} - {countdown_str} at {scheduled_date} {scheduled_time}",
-                                fg="#0078d7"
-                            )
+                            try:
+                                self.session_info_label.config(
+                                    text=f"Up next: {scheduled_target} - {countdown_str} at {scheduled_date} {scheduled_time}",
+                                    fg="#0078d7"
+                                )
+                            except tk.TclError as e:
+                                print(f"Error updating session_info_label: {e}")
+                                has_gui = False
                     else:
                         if has_gui:
-                            self.session_info_label.config(
-                                text=f"Ready to start - {len(todo_files)} session(s) waiting. Click 'Start Scheduler' to begin.",
-                                fg="green"
-                            )                    
+                            try:
+                                self.session_info_label.config(
+                                    text=f"Ready to start - {len(todo_files)} session(s) waiting. Click 'Start Scheduler' to begin.",
+                                    fg="green"
+                                )
+                            except tk.TclError as e:
+                                print(f"Error updating session_info_label: {e}")
+                                has_gui = False
                 else:
                     if has_gui:
-                        self.session_info_label.config(
-                            text="No sessions scheduled - Create sessions in 'Create Session' tab to get started.",
-                            fg="purple"
-                        )
+                        try:
+                            self.session_info_label.config(
+                                text="No sessions scheduled - Create sessions in 'Create Session' tab to get started.",
+                                fg="purple"
+                            )
+                        except tk.TclError as e:
+                            print(f"Error updating session_info_label: {e}")
+                            has_gui = False
             else:
                 if has_gui:
-                    self.session_info_label.config(
-                        text="Session directory not found - Check your configuration settings.",
-                        fg="red"
-                    )
+                    try:
+                        self.session_info_label.config(
+                            text="Session directory not found - Check your configuration settings.",
+                            fg="red"
+                        )
+                    except tk.TclError as e:
+                        print(f"Error updating session_info_label: {e}")
+                        has_gui = False
 
             if self.last_text != "":
                 self.log(self.last_text)

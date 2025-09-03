@@ -7,15 +7,11 @@
 *.tmp
 /build
 *.bak
-/myenv3
+/myenv*
 config.lock
 /Astro_Sessions
 /Devices_Sessions
 *.pyd
-/myenv12
-/myenv311
-/myenv312
-/myenvUbuntu
 /old_test
 /doc
 /.vscode

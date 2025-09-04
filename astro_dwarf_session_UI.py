@@ -863,10 +863,16 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.bluetooth_connected = False
             self.result = start_connection(False, self.use_web.get())
             if self.result:
-                self.log("Bluetooth connected successfully.")
+                self.log(f"Bluetooth connected successfully.")
                 self.bluetooth_connected = True
                 # Enable the start scheduler button
                 self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
+                # Update the Settings Tab IP address with dwarf_ip and save config.ini
+                data_config = config_py.get_config_data()
+                dwarf_ip = data_config['ip']
+                if dwarf_ip and 'dwarf_ip' in self.config_vars:
+                    self.config_vars['dwarf_ip'].set(dwarf_ip)
+                    settings.save_settings(self.config_vars, show_message=False)                
             else:
                 self.log("Bluetooth connection failed.")
         except Exception as e:

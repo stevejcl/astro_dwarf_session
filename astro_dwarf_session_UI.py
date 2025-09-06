@@ -300,23 +300,29 @@ class AstroDwarfSchedulerApp(tk.Tk):
         def on_camera_type_change(camera_type_display):
             from tabs import create_session
             create_session.update_exposure_gain_dropdowns_from_camera_type(camera_type_display, self.settings_vars)
+            # Only update defaults if camera type actually changed
+            # This will be called by settings tab when camera type is changed by user
         
         # Store the callback for reuse during refresh
         self.camera_type_change_callback = on_camera_type_change
         
-        settings.create_settings_tab(self.tab_settings, self.config_vars, on_camera_type_change)
+        settings.create_settings_tab(self.tab_settings, self.config_vars, on_camera_type_change, 
+                                   update_create_session_callback=self.update_create_session_defaults)
+        
         # Store refresh functions for tabs
         self.overview_refresh = None
         self.edit_sessions_refresh = None
+        
         # Setup overview tab and capture refresh
         def set_overview_refresh(refresh_func):
             self.overview_refresh = refresh_func
         overview_session.overview_session_tab(self.tab_overview_session, set_overview_refresh)
+        
         # Add the tab's content and capture the refresh function
         self.refresh_results = result_session.result_session_tab(self.tab_result_session)
         create_session.create_session_tab(self.tab_create_session, self.settings_vars, self.config_vars)
-        # Patch create_load_session_tab to capture refresh
-
+        
+        # Setup edit sessions tab
         from tabs import edit_sessions
         def edit_sessions_tab_wrapper():
             from astro_dwarf_scheduler import LIST_ASTRO_DIR
@@ -352,12 +358,20 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     if tab == 'Session Overview':
                         if self.overview_refresh:
                             self.overview_refresh()
+                    # Removed automatic Create Session update on tab change
+                    # Only update when settings are actually changed
             except (tk.TclError, ValueError, TypeError, IndexError) as e:
                 # Handle cases where tab index is invalid or widget is destroyed
                 print(f"Error in on_tab_changed: {e}")
                 pass
 
-        self.tab_control.bind('<<NotebookTabChanged>>', on_tab_changed)
+        self.tab_control.bind("<<NotebookTabChanged>>", on_tab_changed)
+        
+    def update_create_session_defaults(self):
+        """Update Create Session tab defaults from current config - only call when settings change"""
+        if hasattr(self, 'settings_vars'):
+            from tabs import create_session
+            create_session.update_exposure_gain_fields(self.settings_vars)
 
     def reset_total_runtime(self):
         self.total_session_runtime = 0
@@ -544,6 +558,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.entry_button_frame.grid_remove()
             setup_new_config(CONFIG_DEFAULT)
             self.show_current_config(CONFIG_DEFAULT)
+            
+            # Refresh the settings tab to reload default settings from config.ini
+            # Only if the settings tab has been initialized
+            if hasattr(self, 'config_vars') and hasattr(self, 'camera_type_change_callback'):
+                from tabs import settings
+                settings.refresh_settings_tab(self.tab_settings, self.config_vars, self.camera_type_change_callback, 
+                                             update_create_session_callback=self.update_create_session_defaults)
 
     def on_combobox_change(self, event):
         global LIST_ASTRO_DIR
@@ -554,7 +575,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
         
         # Refresh the settings tab with the new config's settings
         from tabs import settings
-        settings.refresh_settings_tab(self.tab_settings, self.config_vars, self.camera_type_change_callback)
+        settings.refresh_settings_tab(self.tab_settings, self.config_vars, self.camera_type_change_callback,
+                                     update_create_session_callback=self.update_create_session_defaults)
 
     def add_config(self):
         """Add a new configuration to the Listbox."""

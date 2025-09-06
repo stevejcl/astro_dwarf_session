@@ -60,10 +60,16 @@ def create_form_fields(scrollable_frame, settings_vars, config_vars):
     # Exposure
     exposure_var = tk.StringVar()
     exposure_dropdown = ttk.Combobox(scrollable_frame, textvariable=exposure_var)
+    
+    # Load config to get default values
+    config = load_from_config()
+    
+    # Try to get exposure from config_vars first, then fall back to config file
     if config_vars.get("exposure") is not None and config_vars["exposure"].get():
         exposure_var.set(config_vars["exposure"].get())
     else:
-        exposure_var.set("30")
+        config_exposure = config.get("CONFIG", "exposure", fallback="30")
+        exposure_var.set(config_exposure)
 
     settings_vars["exposure"] = exposure_var
     settings_vars["exposure_dropdown"] = exposure_dropdown  # Store dropdown reference
@@ -73,15 +79,20 @@ def create_form_fields(scrollable_frame, settings_vars, config_vars):
     # Gain
     gain_var = tk.StringVar()
     gain_dropdown = ttk.Combobox(scrollable_frame, textvariable=gain_var)
+    
+    # Try to get gain from config_vars first, then fall back to config file
     if config_vars.get("gain") is not None and config_vars["gain"].get():
         gain_var.set(config_vars["gain"].get())
+    else:
+        config_gain = config.get("CONFIG", "gain", fallback="90")
+        gain_var.set(config_gain)
+        
     settings_vars["gain"] = gain_var
     settings_vars["gain_dropdown"] = gain_dropdown  # Store dropdown reference
     add_row(row, "Gain", gain_dropdown)
     row += 1
 
-    # Populate dropdown values based on device type from config
-    config = load_from_config()
+    # Get device type for dropdown population
     device_type = config.get("CONFIG", "device_type", fallback="Dwarf II")
     
     # Create dummy ircut dropdown since update_options expects it

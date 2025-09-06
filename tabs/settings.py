@@ -10,6 +10,10 @@ from timezonefinder import TimezoneFinder
 from geopy.exc import GeocoderInsufficientPrivileges
 from astro_dwarf_scheduler import BASE_DIR
 
+# Import for exposure and gain dropdown values
+from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains, allowed_exposuresD3, allowed_gainsD3
+from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposuresD3, allowed_wide_gainsD3
+
 import sys
 import os
 
@@ -22,6 +26,31 @@ except ImportError:
     DWARF_IP = "192.168.88.1"  # Default fallback value
 
 CONFIG_INI_FILE = 'config.ini'
+
+def update_exposure_gain_options(device_type, exposure_dropdown, gain_dropdown):
+    """Update the exposure and gain options based on the selected device type."""    
+    # Helper function to get available names
+    def get_available_names(instance):
+        return [entry["name"] for entry in instance.values]
+    
+    if device_type == "Dwarf II":
+        available_exposure_names = get_available_names(allowed_exposures)
+        available_gain_names = get_available_names(allowed_gains)
+        exposure_dropdown['values'] = list(reversed(available_exposure_names))
+        gain_dropdown['values'] = available_gain_names
+    elif device_type == "Dwarf 3 Tele Lens":
+        available_exposure_namesD3 = get_available_names(allowed_exposuresD3)
+        available_gain_namesD3 = get_available_names(allowed_gainsD3)
+        exposure_dropdown['values'] = list(reversed(available_exposure_namesD3))
+        gain_dropdown['values'] = available_gain_namesD3
+    elif device_type == "Dwarf 3 Wide Lens":
+        available_wide_exposure_namesD3 = get_available_names(allowed_wide_exposuresD3)
+        available_wide_gains_namesD3 = get_available_names(allowed_wide_gainsD3)
+        exposure_dropdown['values'] = list(reversed(available_wide_exposure_namesD3))
+        gain_dropdown['values'] = available_wide_gains_namesD3
+    else:
+        exposure_dropdown['values'] = []
+        gain_dropdown['values'] = []
 
 def get_config_ini_file():
     """Get the appropriate INI file for the current configuration"""
@@ -187,7 +216,7 @@ def update_config_py_dwarf_ip(new_ip):
         print(f"Error updating config.py: {e}")
 
 # Create the settings tab
-def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback=None):
+def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback=None, update_create_session_callback=None):
 
     config = load_config()
     # --- Modern scrollable frame setup ---
@@ -282,6 +311,10 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
     def update_ircut_options(selected_camera_type):
         nonlocal ircut_combo, ircut_var
         update_ircut_dropdown(selected_camera_type, ircut_combo, ircut_var, settings_vars)
+        
+        # Also update exposure and gain dropdowns when device type changes
+        if 'exposure_dropdown' in settings_vars and 'gain_dropdown' in settings_vars:
+            update_exposure_gain_options(selected_camera_type, settings_vars['exposure_dropdown'], settings_vars['gain_dropdown'])
 
     for field, key in settings_fields:
         index = key.find("http")
@@ -371,6 +404,40 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                             camera_type_change_callback(bound_var.get())
                     return handler
                 combo.bind('<<ComboboxSelected>>', make_camera_type_handler(var))
+            elif key == "exposure":
+                # Exposure dropdown with device-specific options
+                # Determine the device type from config
+                device_type_val = config.get('device_type', '')
+                if device_type_val not in camera_type_display:
+                    # Fallback to camera_type mapping if device_type is not valid
+                    camera_type_val = config.get('camera_type', 'Tele Camera')
+                    device_type_val = camera_type_reverse_map.get(camera_type_val, camera_type_display[0])
+                
+                # Create exposure dropdown
+                current_val = config.get(key, '30')  # Default to "30"
+                var = tk.StringVar(value=current_val)
+                combo = ttk.Combobox(scrollable_frame, textvariable=var, state="readonly")
+                settings_vars[key] = var
+                settings_vars['exposure_dropdown'] = combo  # Store dropdown reference
+                combo.grid(row=grid_row, column=1, sticky='ew', padx=(0,14), pady=4)
+                scrollable_frame.grid_columnconfigure(1, weight=1)
+            elif key == "gain":
+                # Gain dropdown with device-specific options  
+                # Determine the device type from config
+                device_type_val = config.get('device_type', '')
+                if device_type_val not in camera_type_display:
+                    # Fallback to camera_type mapping if device_type is not valid
+                    camera_type_val = config.get('camera_type', 'Tele Camera')
+                    device_type_val = camera_type_reverse_map.get(camera_type_val, camera_type_display[0])
+                
+                # Create gain dropdown
+                current_val = config.get(key, '22')  # Default to "22"
+                var = tk.StringVar(value=current_val)
+                combo = ttk.Combobox(scrollable_frame, textvariable=var, state="readonly")
+                settings_vars[key] = var
+                settings_vars['gain_dropdown'] = combo  # Store dropdown reference
+                combo.grid(row=grid_row, column=1, sticky='ew', padx=(0,14), pady=4)
+                scrollable_frame.grid_columnconfigure(1, weight=1)
             else:
                 var = tk.StringVar(value=config.get(key, ''))
                 entry = tk.Entry(scrollable_frame, textvariable=var)
@@ -390,15 +457,27 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
             help_Label.grid(row=grid_row, column=1, sticky='w', padx=(0,14), pady=4)
         grid_row += 1
 
+    # Populate exposure and gain dropdowns with device-specific values
+    if 'exposure_dropdown' in settings_vars and 'gain_dropdown' in settings_vars:
+        # Get current device type
+        device_type_val = config.get('device_type', '')
+        if device_type_val not in camera_type_display:
+            # Fallback to camera_type mapping if device_type is not valid
+            camera_type_val = config.get('camera_type', 'Tele Camera')
+            device_type_val = camera_type_reverse_map.get(camera_type_val, camera_type_display[0])
+        
+        # Update dropdown values
+        update_exposure_gain_options(device_type_val, settings_vars['exposure_dropdown'], settings_vars['gain_dropdown'])
+
     # Auto-save info label at the bottom (light grey)
     autosave_label = tk.Label(scrollable_frame, text="Updates are saved automatically.", fg="#555555", font=("Arial", 11, "italic"))
     autosave_label.grid(row=grid_row, column=0, columnspan=2, pady=20, padx=10, sticky='ew')
 
     def on_tab_focus_out(event):
-        save_settings(settings_vars, show_message=False)
+        save_settings(settings_vars, show_message=False, update_create_session_callback=update_create_session_callback)
 
     def on_app_close():
-        save_settings(settings_vars, show_message=False)
+        save_settings(settings_vars, show_message=False, update_create_session_callback=update_create_session_callback)
         if hasattr(tab_settings, 'winfo_toplevel'):
             tab_settings.winfo_toplevel().destroy()
 
@@ -413,9 +492,14 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
         except Exception:
             pass
 
-def save_settings(settings_vars, show_message=True):
+def save_settings(settings_vars, show_message=True, update_create_session_callback=None):
     config_data = {}
     device_type_display_name = None
+    settings_changed = False
+    
+    # Track if any Create Session relevant settings changed
+    create_session_relevant_keys = ['exposure', 'gain', 'count', 'device_type', 'camera_type']
+    
     for key, var in settings_vars.items():
         if key == "ircut" and '_ircut_value_map' in settings_vars:
             display_val = var.get()
@@ -430,14 +514,26 @@ def save_settings(settings_vars, show_message=True):
             value_map = settings_vars['_camera_type_value_map']
             config_data[key] = str(value_map.get(display_val, 'Tele Camera'))
             device_type_display_name = display_val  # Save the display name for config.ini
-        elif key.startswith('_'):
+        elif key.startswith('_') or key.endswith('_dropdown'):
             continue
         else:
             config_data[key] = var.get()
+            
+        # Check if this key affects Create Session defaults
+        if key in create_session_relevant_keys or (key == 'camera_type' and device_type_display_name is not None):
+            settings_changed = True
+            
     # Save the display name of camera_type as device_type in config.ini
     if device_type_display_name is not None:
         config_data['device_type'] = device_type_display_name
+        settings_changed = True
+        
     save_config(config_data)
+    
+    # Trigger Create Session update if relevant settings changed
+    if settings_changed and update_create_session_callback:
+        update_create_session_callback()
+        
     if show_message:
         messagebox.showinfo("Settings", "Configuration saved successfully!")
 
@@ -465,11 +561,11 @@ def update_ircut_dropdown(camera_type_display_val, ircut_combo, ircut_var, setti
             ircut_var.set(display_options[0])
     settings_vars['_ircut_value_map'] = value_map
 
-def refresh_settings_tab(tab_settings, config_vars, camera_type_change_callback=None):
+def refresh_settings_tab(tab_settings, config_vars, camera_type_change_callback=None, update_create_session_callback=None):
     """Refresh the settings tab with new configuration data"""
     # Clear the existing tab
     for widget in tab_settings.winfo_children():
         widget.destroy()
     
     # Recreate the settings tab with fresh data and callback
-    create_settings_tab(tab_settings, config_vars, camera_type_change_callback)
+    create_settings_tab(tab_settings, config_vars, camera_type_change_callback, update_create_session_callback)

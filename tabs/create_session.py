@@ -1104,7 +1104,12 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
 
 def load_from_config():
     """Load the camera type from config.ini file"""
-    config_file = 'config.ini'
+    try:
+        from astro_dwarf_scheduler import get_current_config_ini_file
+        config_file = get_current_config_ini_file()
+    except ImportError:
+        config_file = 'config.ini'
+    
     config = configparser.ConfigParser()
     if os.path.exists(config_file):
         config.read(config_file)

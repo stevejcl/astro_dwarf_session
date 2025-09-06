@@ -23,6 +23,14 @@ except ImportError:
 
 CONFIG_INI_FILE = 'config.ini'
 
+def get_config_ini_file():
+    """Get the appropriate INI file for the current configuration"""
+    try:
+        from astro_dwarf_scheduler import get_current_config_ini_file
+        return get_current_config_ini_file()
+    except ImportError:
+        return CONFIG_INI_FILE
+
 def get_lat_long_and_timezone(address, agent = 1):
     try:
         # Initialize the geolocator with Nominatim
@@ -84,7 +92,7 @@ def open_link(url):
 # Load and save configuration settings from config.ini
 def load_config():
     config = configparser.ConfigParser()
-    config_ini_path = CONFIG_INI_FILE
+    config_ini_path = get_config_ini_file()
     
     config.read(config_ini_path)
     config_data = config['CONFIG'] if 'CONFIG' in config else {}
@@ -96,7 +104,7 @@ def load_config():
 def save_config(config_data):
     # Read the existing config file to preserve all sections
     config = configparser.ConfigParser()
-    config_ini_path = CONFIG_INI_FILE
+    config_ini_path = get_config_ini_file()
     config.read(config_ini_path)
     # Update only the CONFIG section with new values
     if 'CONFIG' not in config:
@@ -292,9 +300,17 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                 combo.grid(row=grid_row, column=1, sticky='ew', padx=(0,14), pady=4)
                 scrollable_frame.grid_columnconfigure(1, weight=1)
             elif key == "ircut":
-                # IR Cut dropdown with dynamic options            
-                camera_type_val = config.get('camera_type', 'Tele Camera')
-                camera_type_display_val = camera_type_reverse_map.get(camera_type_val, camera_type_display[0]) if 'camera_type_reverse_map' in locals() else 'Dwarf II'
+                # IR Cut dropdown with dynamic options
+                # Determine the correct device type from config
+                device_type_val = config.get('device_type', '')
+                if device_type_val in camera_type_display:
+                    camera_type_display_val = device_type_val
+                else:
+                    # Fallback to camera_type mapping if device_type is not valid
+                    camera_type_val = config.get('camera_type', 'Tele Camera')
+                    camera_type_display_val = camera_type_reverse_map.get(camera_type_val, camera_type_display[0])
+                
+                # Set up IR Cut options based on device type
                 display_options = ["D2: IRCut", "D2: IRPass"] if camera_type_display_val == "Dwarf II" else ["D3: VIS Filter", "D3: Astro Filter", "D3: DUAL Band"]
                 value_map = {"D2: IRCut": 0, "D2: IRPass": 1, "D3: VIS Filter": 0, "D3: Astro Filter": 1, "D3: DUAL Band": 2}
                 current_val = str(config.get(key, ''))
@@ -448,3 +464,12 @@ def update_ircut_dropdown(camera_type_display_val, ircut_combo, ircut_var, setti
         if current_val not in display_options:
             ircut_var.set(display_options[0])
     settings_vars['_ircut_value_map'] = value_map
+
+def refresh_settings_tab(tab_settings, config_vars, camera_type_change_callback=None):
+    """Refresh the settings tab with new configuration data"""
+    # Clear the existing tab
+    for widget in tab_settings.winfo_children():
+        widget.destroy()
+    
+    # Recreate the settings tab with fresh data and callback
+    create_settings_tab(tab_settings, config_vars, camera_type_change_callback)

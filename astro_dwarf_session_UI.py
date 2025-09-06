@@ -301,6 +301,9 @@ class AstroDwarfSchedulerApp(tk.Tk):
             from tabs import create_session
             create_session.update_exposure_gain_dropdowns_from_camera_type(camera_type_display, self.settings_vars)
         
+        # Store the callback for reuse during refresh
+        self.camera_type_change_callback = on_camera_type_change
+        
         settings.create_settings_tab(self.tab_settings, self.config_vars, on_camera_type_change)
         # Store refresh functions for tabs
         self.overview_refresh = None
@@ -530,17 +533,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.config_combobox.set(CONFIG_DEFAULT)  # Always set CONFIG_DEFAULT as selected initially
             self.combobox_label.grid(row=0, column=1, sticky="w", padx=5)
             self.config_combobox.grid(row=0, column=2, sticky="w", padx=5)
-            self.entry_label.grid(row=0, column=3, sticky="w", padx=5)
-            self.config_entry.grid(row=0, column=4, sticky="w", padx=5)
-            self.add_button.grid(row=0, column=5, sticky="w", padx=5)
+            self.entry_label.grid(row=1, column=1, sticky="w", padx=5)
+            self.entry_button_frame.grid(row=1, column=2, sticky="w", padx=(5, 0))
             self.show_current_config(CONFIG_DEFAULT)
         else:
             self.config_combobox.set("")
             self.combobox_label.grid_remove()
             self.config_combobox.grid_remove()
             self.entry_label.grid_remove()
-            self.config_entry.grid_remove()
-            self.add_button.grid_remove()
+            self.entry_button_frame.grid_remove()
             setup_new_config(CONFIG_DEFAULT)
             self.show_current_config(CONFIG_DEFAULT)
 
@@ -550,6 +551,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
         print(f"Selected Configuration: {selected_value}")
         setup_new_config(selected_value)
         self.show_current_config(selected_value)
+        
+        # Refresh the settings tab with the new config's settings
+        from tabs import settings
+        settings.refresh_settings_tab(self.tab_settings, self.config_vars, self.camera_type_change_callback)
 
     def add_config(self):
         """Add a new configuration to the Listbox."""
@@ -654,7 +659,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         # --- Video Preview Frame (top right) ---
         preview_frame = tk.Frame(self.tab_main, bd=1, relief="solid")
-        preview_frame.place(relx=1.0, x=-20, y=85, anchor="ne", width=220, height=124, bordermode="outside")  # Top right, moved down by 50px
+        preview_frame.place(relx=1.0, x=-15, y=25, anchor="ne", width=320, height=180, bordermode="outside")  # 16:9 aspect ratio (320:180)
         preview_frame.pack_propagate(False)
         self.video_canvas = tk.Label(preview_frame, text="No video stream.")
         self.video_canvas.pack(fill="both", expand=True)
@@ -663,7 +668,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         # Checkbox for "Multiple" and related widgets in a grid for alignment
         multiple_frame = tk.Frame(self.tab_main)
-        multiple_frame.pack(anchor="w", padx=10, pady=5, fill="x")
+        multiple_frame.pack(anchor="w", padx=10, pady=5, fill="none")
+        multiple_frame.config(width=500)  # Limit width to prevent overlap with video preview
 
         self.multiple_var = tk.BooleanVar(value=False)
         self.multiple_checkbox = tk.Checkbutton(multiple_frame, text="Multiple", variable=self.multiple_var, command=self.toggle_multiple)
@@ -677,16 +683,20 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.config_combobox.grid(row=0, column=2, sticky="w", padx=(0, 8), pady=2)
 
         self.entry_label = tk.Label(multiple_frame, text="New Config:")
-        self.entry_label.grid(row=0, column=3, sticky="e", padx=(0, 4), pady=2)
-        self.config_entry = tk.Entry(multiple_frame, width=20)
-        self.config_entry.grid(row=0, column=4, sticky="w", padx=(0, 8), pady=2)
-        self.add_button = tk.Button(multiple_frame, text="Add Config", command=self.add_config)
-        self.add_button.grid(row=0, column=5, sticky="w", padx=(0, 0), pady=2)
+        self.entry_label.grid(row=1, column=1, sticky="e", padx=(0, 4), pady=2)
+        
+        # Create a sub-frame to hold entry and button together
+        self.entry_button_frame = tk.Frame(multiple_frame)
+        self.entry_button_frame.grid(row=1, column=2, sticky="w", padx=(0, 0), pady=2)
+        
+        self.config_entry = tk.Entry(self.entry_button_frame, width=20)
+        self.config_entry.pack(side="left", padx=(0, 2))
+        self.add_button = tk.Button(self.entry_button_frame, text="Add", command=self.add_config)
+        self.add_button.pack(side="left", padx=(2, 0))
 
         # Make columns expand as needed
-        for col in range(6):
+        for col in range(3):
             multiple_frame.grid_columnconfigure(col, weight=0)
-        multiple_frame.grid_columnconfigure(2, weight=1)  # Make combobox column expand if needed
 
         # Initialize with widgets hidden (non-multiple mode)
         self.toggle_multiple()

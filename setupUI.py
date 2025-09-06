@@ -16,7 +16,7 @@ base = 'Win32GUI' if sys.platform == 'win32' else None
 # Setup function
 setup(
     name="Astro Dwarf Scheduler",
-    version="1.7.2",
+    version="1.7.3",
     description="Dwarf Astro Scheduler",
     options=dict(build_exe=buildOptions),
     executables=[

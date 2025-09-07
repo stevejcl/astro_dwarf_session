@@ -35,6 +35,9 @@ import dwarf_python_api.lib.my_logger as log
 # Directories
 CONFIG_DEFAULT = "Default"
 
+# Centralized default values
+DEFAULT_DEVICE_TYPE = "Dwarf 3 Tele Lens"
+
 BASE_DIR = os.path.abspath(".")
 DEVICES_DIR = os.path.join(BASE_DIR, "Devices_Sessions")
 SESSIONS_DIR =  os.path.join(BASE_DIR, 'Astro_Sessions')
@@ -172,7 +175,7 @@ def setup_new_config(config_name):
                         'stellarium_ip': '',
                         'stellarium_port': '',
                         'camera_type': 'Tele Camera',
-                        'device_type': 'Dwarf 3 Tele Lens'
+                        'device_type': DEFAULT_DEVICE_TYPE
                     }
                     for key, value in defaults.items():
                         config.set('CONFIG', key, value)

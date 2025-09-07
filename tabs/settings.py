@@ -559,7 +559,6 @@ def update_ircut_dropdown(camera_type_display_val, ircut_combo, ircut_var, setti
         current_val = ircut_var.get()
         if current_val not in display_options:
             ircut_var.set(display_options[0])
-    # settings_vars['_ircut_value_map'] = value_map  # Removed duplicate assignment
 
 def refresh_settings_tab(tab_settings, config_vars, camera_type_change_callback=None, update_create_session_callback=None):
     """Refresh the settings tab with new configuration data"""

@@ -545,10 +545,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
             devices = load_configuration()  # Call the function to load devices
             self.config_combobox["values"] = devices
             self.config_combobox.set(CONFIG_DEFAULT)  # Always set CONFIG_DEFAULT as selected initially
-            self.combobox_label.grid(row=0, column=1, sticky="w", padx=5)
-            self.config_combobox.grid(row=0, column=2, sticky="w", padx=5)
-            self.entry_label.grid(row=1, column=1, sticky="w", padx=5)
-            self.entry_button_frame.grid(row=1, column=2, sticky="w", padx=(5, 0))
+            # Use variables for row indices to make layout flexible
+            row_config = 0
+            row_entry = 1
+    
+            self.combobox_label.grid(row=row_config, column=1, sticky="w", padx=5)
+            self.config_combobox.grid(row=row_config, column=2, sticky="w", padx=5)
+            self.entry_label.grid(row=row_entry, column=1, sticky="w", padx=5)
+            self.entry_button_frame.grid(row=row_entry, column=2, sticky="w", padx=(5, 0))
             self.show_current_config(CONFIG_DEFAULT)
         else:
             self.config_combobox.set("")

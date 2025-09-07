@@ -1149,20 +1149,26 @@ def update_exposure_gain_fields(settings_vars):
         # Use the camera type change function to update dropdowns
         update_exposure_gain_dropdowns_from_camera_type(device_type, settings_vars)
         
-        # Update exposure from config.ini
+        # Update exposure from config.ini only if it's different
         if "exposure" in settings_vars:
             config_exposure = config.get("CONFIG", "exposure", fallback="30")
-            settings_vars["exposure"].set(config_exposure)
+            current_exposure = settings_vars["exposure"].get()
+            if current_exposure != config_exposure:
+                settings_vars["exposure"].set(config_exposure)
         
-        # Update gain from config.ini
+        # Update gain from config.ini only if it's different
         if "gain" in settings_vars:
             config_gain = config.get("CONFIG", "gain", fallback="90")
-            settings_vars["gain"].set(config_gain)
+            current_gain = settings_vars["gain"].get()
+            if current_gain != config_gain:
+                settings_vars["gain"].set(config_gain)
 
-        # Update count from config.ini
+        # Update count from config.ini only if it's different
         if "count" in settings_vars:
             config_count = config.get("CONFIG", "count", fallback="1")
-            settings_vars["count"].set(config_count)
+            current_count = settings_vars["count"].get()
+            if current_count != config_count:
+                settings_vars["count"].set(config_count)
 
     except Exception as e:
         print(f"[ERROR] Failed to update exposure/gain from config.ini: {e}")

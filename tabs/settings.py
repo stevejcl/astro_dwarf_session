@@ -497,6 +497,12 @@ def save_settings(settings_vars, show_message=True, update_create_session_callba
     device_type_display_name = None
     settings_changed = False
     
+    # Load current config to compare with new values
+    try:
+        current_config = load_config()
+    except:
+        current_config = {}
+    
     # Track if any Create Session relevant settings changed
     create_session_relevant_keys = ['exposure', 'gain', 'count', 'device_type', 'camera_type']
     
@@ -504,29 +510,52 @@ def save_settings(settings_vars, show_message=True, update_create_session_callba
         if key == "ircut" and '_ircut_value_map' in settings_vars:
             display_val = var.get()
             value_map = settings_vars['_ircut_value_map']
-            config_data[key] = str(value_map.get(display_val, 0))
+            new_value = str(value_map.get(display_val, 0))
+            config_data[key] = new_value
+            # Check if this value actually changed
+            if key in create_session_relevant_keys:
+                old_value = current_config.get(key, "")
+                if str(old_value) != new_value:
+                    settings_changed = True
         elif key == "binning" and '_binning_value_map' in settings_vars:
             display_val = var.get()
             value_map = settings_vars['_binning_value_map']
-            config_data[key] = str(value_map.get(display_val, 0))
+            new_value = str(value_map.get(display_val, 0))
+            config_data[key] = new_value
+            # Check if this value actually changed
+            if key in create_session_relevant_keys:
+                old_value = current_config.get(key, "")
+                if str(old_value) != new_value:
+                    settings_changed = True
         elif key == "camera_type" and '_camera_type_value_map' in settings_vars:
             display_val = var.get()
             value_map = settings_vars['_camera_type_value_map']
-            config_data[key] = str(value_map.get(display_val, 'Tele Camera'))
+            new_value = str(value_map.get(display_val, 'Tele Camera'))
+            config_data[key] = new_value
             device_type_display_name = display_val  # Save the display name for config.ini
+            # Check if camera_type actually changed
+            old_value = current_config.get(key, "")
+            if str(old_value) != new_value:
+                settings_changed = True
         elif key.startswith('_') or key.endswith('_dropdown'):
             continue
         else:
-            config_data[key] = var.get()
-            
-        # Check if this key affects Create Session defaults
-        if key in create_session_relevant_keys or (key == 'camera_type' and device_type_display_name is not None):
-            settings_changed = True
+            new_value = var.get()
+            config_data[key] = new_value
+            # Check if this value actually changed
+            if key in create_session_relevant_keys:
+                old_value = current_config.get(key, "")
+                if str(old_value) != new_value:
+                    settings_changed = True
             
     # Save the display name of camera_type as device_type in config.ini
     if device_type_display_name is not None:
-        config_data['device_type'] = device_type_display_name
-        settings_changed = True
+        new_device_type = device_type_display_name
+        config_data['device_type'] = new_device_type
+        # Check if device_type actually changed
+        old_device_type = current_config.get('device_type', "")
+        if str(old_device_type) != new_device_type:
+            settings_changed = True
         
     save_config(config_data)
     

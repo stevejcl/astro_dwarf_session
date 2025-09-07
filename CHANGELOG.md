@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.7.3] - 2025-09-07
+
+### New Features
+- **Config-specific settings management**: Each device configuration now maintains separate INI files (config.ini, config_Test.ini, etc.) with independent settings for each device type.
+- **Enhanced exposure and gain controls**: Settings tab now uses device-specific dropdown menus matching Create Session tab restrictions, preventing invalid value selection.
+- **Device-type aware restrictions**: Exposure and gain options automatically update based on selected device type (Dwarf II, Dwarf 3 Tele Lens, Dwarf 3 Wide Lens).
+
+### Improvements
+- **Optimized settings synchronization**: Create Session tab defaults now update only when relevant settings actually change, improving performance and user experience.
+- **Enhanced IR Cut filter management**: Filter options dynamically update based on device type selection with proper value mapping.
+- **Improved initialization order**: Fixed tab initialization sequence to ensure all tabs are properly populated on application startup.
+
+### Bug Fixes
+- **Fixed empty tabs on startup**: Resolved issue where Sessions Overview, Results Session, Create Session, and Edit Sessions tabs appeared empty until settings were modified.
+- **Fixed settings tab dropdown population**: Exposure and gain dropdowns now properly populate with device-appropriate values on initial load.
+- **Fixed config file pollution**: Prevented dropdown references from being saved to configuration files, maintaining clean INI file structure.
+
+### Technical Improvements
+- **Enhanced callback system**: Implemented targeted update mechanisms for cross-tab communication with proper change detection.
+- **Improved dropdown value management**: Added automatic population of device-specific exposure/gain values with proper fallback handling.
+- **Better error handling**: Enhanced tab initialization with robust error handling and graceful degradation.
+
 ## [1.7.2] - 2025-09-03
 
 ### Bug Fixes

@@ -35,6 +35,9 @@ import dwarf_python_api.lib.my_logger as log
 # Directories
 CONFIG_DEFAULT = "Default"
 
+# Centralized default values
+DEFAULT_DEVICE_TYPE = "Dwarf 3 Tele Lens"
+
 BASE_DIR = os.path.abspath(".")
 DEVICES_DIR = os.path.join(BASE_DIR, "Devices_Sessions")
 SESSIONS_DIR =  os.path.join(BASE_DIR, 'Astro_Sessions')
@@ -59,8 +62,27 @@ LIST_ASTRO_DIR = {
 
 import requests
 
+# Global variable to track current config name
+CURRENT_CONFIG_NAME = CONFIG_DEFAULT
+
+def get_current_config_name():
+    """Get the currently active configuration name"""
+    global CURRENT_CONFIG_NAME
+    return CURRENT_CONFIG_NAME
+
+def get_current_config_ini_file():
+    """Get the INI file path for the current configuration"""
+    config_name = get_current_config_name()
+    if config_name == CONFIG_DEFAULT:
+        return 'config.ini'
+    else:
+        return f'config_{config_name}.ini'
+
 def setup_new_config(config_name):
-    global LIST_ASTRO_DIR
+    global LIST_ASTRO_DIR, CURRENT_CONFIG_NAME
+    
+    # Set the current config name
+    CURRENT_CONFIG_NAME = config_name
 
     if config_name == CONFIG_DEFAULT:
         config_py.set_config_data(
@@ -83,6 +105,7 @@ def setup_new_config(config_name):
         new_config_file = f"config_{config_name}.py"
         new_config_file_tmp = f"config_{config_name}.tmp"
         new_lock_file = f"config_{config_name}.lock"
+        new_ini_file = f"config_{config_name}.ini"
 
         # Update CONFIG variables using the set_config_data function
         config_py.set_config_data(
@@ -93,6 +116,8 @@ def setup_new_config(config_name):
         )
 
         config_filemname = os.path.join(BASE_DIR, new_config_file)
+        ini_filename = os.path.join(BASE_DIR, new_ini_file)
+        
         if not os.path.exists(config_filemname):
 
             try:
@@ -119,6 +144,47 @@ def setup_new_config(config_name):
                 # Add BASE_DIR to the log file path
                 new_log_file = os.path.join(BASE_DIR, new_log_filename)
                 config_py.update_config_data( "LOG_FILE", new_log_file, True)
+
+        # Create or copy the INI file for this config
+        if not os.path.exists(ini_filename):
+            try:
+                # Copy the original config.ini if it doesn't exist for this config
+                if os.path.exists('config.ini'):
+                    shutil.copy('config.ini', new_ini_file)
+                    print(f"'config.ini' successfully copied to '{new_ini_file}'.")
+                else:
+                    # Create a default ini file if config.ini doesn't exist
+                    import configparser
+                    config = configparser.ConfigParser()
+                    config.add_section('CONFIG')
+                    # Set default values
+                    defaults = {
+                        'longitude': '',
+                        'latitude': '',
+                        'timezone': 'Europe/Paris',
+                        'ble_psd': 'DWARF_12345678',
+                        'ble_sta_ssid': '',
+                        'ble_sta_pwd': '',
+                        'exposure': '15',
+                        'gain': '100',
+                        'ircut': '0',
+                        'binning': '0',
+                        'count': '20',
+                        'address': '',
+                        'dwarf_ip': '',
+                        'stellarium_ip': '',
+                        'stellarium_port': '',
+                        'camera_type': 'Tele Camera',
+                        'device_type': DEFAULT_DEVICE_TYPE
+                    }
+                    for key, value in defaults.items():
+                        config.set('CONFIG', key, value)
+                    
+                    with open(new_ini_file, 'w') as configfile:
+                        config.write(configfile)
+                    print(f"Default '{new_ini_file}' created.")
+            except Exception as e:
+                print(f"An error occurred creating INI file: {e}")
 
         config_dir = os.path.join(DEVICES_DIR, config_name)
         SESSIONS_DIR = os.path.join(config_dir, 'Astro_Sessions')

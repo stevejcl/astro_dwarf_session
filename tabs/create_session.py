@@ -60,10 +60,16 @@ def create_form_fields(scrollable_frame, settings_vars, config_vars):
     # Exposure
     exposure_var = tk.StringVar()
     exposure_dropdown = ttk.Combobox(scrollable_frame, textvariable=exposure_var)
+    
+    # Load config to get default values
+    config = load_from_config()
+    
+    # Try to get exposure from config_vars first, then fall back to config file
     if config_vars.get("exposure") is not None and config_vars["exposure"].get():
         exposure_var.set(config_vars["exposure"].get())
     else:
-        exposure_var.set("30")
+        config_exposure = config.get("CONFIG", "exposure", fallback="30")
+        exposure_var.set(config_exposure)
 
     settings_vars["exposure"] = exposure_var
     settings_vars["exposure_dropdown"] = exposure_dropdown  # Store dropdown reference
@@ -73,15 +79,20 @@ def create_form_fields(scrollable_frame, settings_vars, config_vars):
     # Gain
     gain_var = tk.StringVar()
     gain_dropdown = ttk.Combobox(scrollable_frame, textvariable=gain_var)
+    
+    # Try to get gain from config_vars first, then fall back to config file
     if config_vars.get("gain") is not None and config_vars["gain"].get():
         gain_var.set(config_vars["gain"].get())
+    else:
+        config_gain = config.get("CONFIG", "gain", fallback="90")
+        gain_var.set(config_gain)
+        
     settings_vars["gain"] = gain_var
     settings_vars["gain_dropdown"] = gain_dropdown  # Store dropdown reference
     add_row(row, "Gain", gain_dropdown)
     row += 1
 
-    # Populate dropdown values based on device type from config
-    config = load_from_config()
+    # Get device type for dropdown population
     device_type = config.get("CONFIG", "device_type", fallback="Dwarf II")
     
     # Create dummy ircut dropdown since update_options expects it
@@ -1104,7 +1115,12 @@ def create_session_tab(tab_create_session, settings_vars, config_vars):
 
 def load_from_config():
     """Load the camera type from config.ini file"""
-    config_file = 'config.ini'
+    try:
+        from astro_dwarf_scheduler import get_current_config_ini_file
+        config_file = get_current_config_ini_file()
+    except ImportError:
+        config_file = 'config.ini'
+    
     config = configparser.ConfigParser()
     if os.path.exists(config_file):
         config.read(config_file)
@@ -1133,20 +1149,26 @@ def update_exposure_gain_fields(settings_vars):
         # Use the camera type change function to update dropdowns
         update_exposure_gain_dropdowns_from_camera_type(device_type, settings_vars)
         
-        # Update exposure from config.ini
+        # Update exposure from config.ini only if it's different
         if "exposure" in settings_vars:
             config_exposure = config.get("CONFIG", "exposure", fallback="30")
-            settings_vars["exposure"].set(config_exposure)
+            current_exposure = settings_vars["exposure"].get()
+            if current_exposure != config_exposure:
+                settings_vars["exposure"].set(config_exposure)
         
-        # Update gain from config.ini
+        # Update gain from config.ini only if it's different
         if "gain" in settings_vars:
             config_gain = config.get("CONFIG", "gain", fallback="90")
-            settings_vars["gain"].set(config_gain)
+            current_gain = settings_vars["gain"].get()
+            if current_gain != config_gain:
+                settings_vars["gain"].set(config_gain)
 
-        # Update count from config.ini
+        # Update count from config.ini only if it's different
         if "count" in settings_vars:
             config_count = config.get("CONFIG", "count", fallback="1")
-            settings_vars["count"].set(config_count)
+            current_count = settings_vars["count"].get()
+            if current_count != config_count:
+                settings_vars["count"].set(config_count)
 
     except Exception as e:
         print(f"[ERROR] Failed to update exposure/gain from config.ini: {e}")

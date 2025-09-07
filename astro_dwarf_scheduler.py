@@ -128,10 +128,10 @@ def setup_new_config(config_name):
 
             # get Original LOG_FILE
             data_config = config_py.get_config_data("config.py")
-            if data_config['log_file'] == "False":
+            if data_config['LOG_FILE'] == "False":
                 log_file = None
             else: 
-                log_file = "astro_session.log" if data_config['log_file'] == "" else data_config['log_file']
+                log_file = "astro_session.log" if data_config['LOG_FILE'] == "" else data_config['LOG_FILE']
 
             if log_file is not None:
                 # Extract just the filename without path for processing
@@ -140,7 +140,7 @@ def setup_new_config(config_name):
                 new_log_filename = f"{name}_{config_name}.{ext}"
                 # Add BASE_DIR to the log file path
                 new_log_file = os.path.join(BASE_DIR, new_log_filename)
-                config_py.update_config_data( "log_file", new_log_file, True)
+                config_py.update_config_data( "LOG_FILE", new_log_file, True)
 
         # Create or copy the INI file for this config
         if not os.path.exists(ini_filename):

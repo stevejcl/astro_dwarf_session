@@ -256,6 +256,12 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 
         self.title("Astro Dwarf Scheduler")
         self.geometry("810x800")
+        
+        # Set window icon
+        try:
+            self.iconbitmap("Install/astro_dwarf_session_UI.ico")
+        except Exception as e:
+            logging.warning(f"Could not load icon: {e}")
 
         # Set up window close protocol to properly clean up video stream
         self.protocol("WM_DELETE_WINDOW", self.quit_method)

@@ -267,10 +267,10 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
         ("Stellarium IP", "stellarium_ip"),
         ("Stellarium Port", "stellarium_port"),
         ("Help", "The following values are the default values use in the Create Session Tabs"),
-        ("Exposure", "exposure"),
-        ("Gain", "gain"),
         ("IR Cut", "ircut"),
         ("Binning", "binning"),
+        ("Exposure", "exposure"),
+        ("Gain", "gain"),
         ("Count", "count")
     ]
 
@@ -282,11 +282,11 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
     camera_type_display = [opt[0] for opt in camera_type_options]
     camera_type_value_map = {opt[0]: opt[1] for opt in camera_type_options}
     camera_type_reverse_map = {opt[1]: opt[0] for opt in camera_type_options}
-    # Find the index of Gain row to insert Camera Type after it
-    gain_row_index = next((i for i, (field, key) in enumerate(settings_fields) if key == "gain"), None)
-    # Insert Camera Type row after Gain
-    if gain_row_index is not None:
-        settings_fields.insert(gain_row_index + 1, ("Camera Type", "camera_type"))
+    # Find the index of IR Cut row to insert Camera Type before it, ensuring Camera Type appears first to control IR Cut options
+    ircut_row_index = next((i for i, (field, key) in enumerate(settings_fields) if key == "ircut"), None)
+    # Insert Camera Type row before IR Cut for proper ordering of dependent dropdowns
+    if ircut_row_index is not None:
+        settings_fields.insert(ircut_row_index, ("Camera Type", "camera_type"))
 
     # Add location button at the top, running in background
     def find_location_in_background():
@@ -398,10 +398,52 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                 # Bind to update IR Cut options dynamically, using a closure to capture the correct var
                 def make_camera_type_handler(bound_var):
                     def handler(event):
-                        update_ircut_options(bound_var.get())
+                        selected_device_type = bound_var.get()
+                        update_ircut_options(selected_device_type)
+                        
+                        # Reset exposure and gain to valid dropdown values for the selected device type
+                        if 'exposure' in settings_vars and 'gain' in settings_vars:
+                            # Helper function to get available names
+                            def get_available_names(instance):
+                                return [entry["name"] for entry in instance.values]
+                                
+                            # Get valid dropdown values for each device type
+                            if selected_device_type == "Dwarf II":
+                                available_exposure_names = get_available_names(allowed_exposures)
+                                available_gain_names = get_available_names(allowed_gains)
+                                # Set to a reasonable default that exists in the dropdown
+                                default_exposure = "15" if "15" in available_exposure_names else available_exposure_names[0] if available_exposure_names else "15"
+                                default_gain = "100" if "100" in available_gain_names else available_gain_names[0] if available_gain_names else "100"
+                            elif selected_device_type == "Dwarf 3 Tele Lens":
+                                available_exposure_namesD3 = get_available_names(allowed_exposuresD3)
+                                available_gain_namesD3 = get_available_names(allowed_gainsD3)
+                                # Set to a reasonable default that exists in the dropdown
+                                default_exposure = "30" if "30" in available_exposure_namesD3 else available_exposure_namesD3[0] if available_exposure_namesD3 else "30"
+                                default_gain = "60" if "60" in available_gain_namesD3 else available_gain_namesD3[0] if available_gain_namesD3 else "60"
+                            elif selected_device_type == "Dwarf 3 Wide Lens":
+                                available_wide_exposure_namesD3 = get_available_names(allowed_wide_exposuresD3)
+                                available_wide_gains_namesD3 = get_available_names(allowed_wide_gainsD3)
+                                # Set to a reasonable default that exists in the dropdown
+                                default_exposure = "0.4" if "0.4" in available_wide_exposure_namesD3 else available_wide_exposure_namesD3[0] if available_wide_exposure_namesD3 else "0.4"
+                                default_gain = "100" if "100" in available_wide_gains_namesD3 else available_wide_gains_namesD3[0] if available_wide_gains_namesD3 else "100"
+                            else:
+                                # Fallback to Dwarf II values
+                                available_exposure_names = get_available_names(allowed_exposures)
+                                available_gain_names = get_available_names(allowed_gains)
+                                default_exposure = "15" if "15" in available_exposure_names else available_exposure_names[0] if available_exposure_names else "15"
+                                default_gain = "100" if "100" in available_gain_names else available_gain_names[0] if available_gain_names else "100"
+
+                            # Update the exposure and gain fields
+                            settings_vars['exposure'].set(default_exposure)
+                            settings_vars['gain'].set(default_gain)
+                            
+                            # Also update the dropdown values for the exposure and gain fields
+                            if 'exposure_dropdown' in settings_vars and 'gain_dropdown' in settings_vars:
+                                update_exposure_gain_options(selected_device_type, settings_vars['exposure_dropdown'], settings_vars['gain_dropdown'])
+                        
                         # Call the callback if provided to update create session tab
                         if camera_type_change_callback:
-                            camera_type_change_callback(bound_var.get())
+                            camera_type_change_callback(selected_device_type)
                     return handler
                 combo.bind('<<ComboboxSelected>>', make_camera_type_handler(var))
             elif key == "exposure":

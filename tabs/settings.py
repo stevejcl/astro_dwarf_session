@@ -282,9 +282,9 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
     camera_type_display = [opt[0] for opt in camera_type_options]
     camera_type_value_map = {opt[0]: opt[1] for opt in camera_type_options}
     camera_type_reverse_map = {opt[1]: opt[0] for opt in camera_type_options}
-    # Find the index of IR Cut row to insert Camera Type before it
+    # Find the index of IR Cut row to insert Camera Type before it, ensuring Camera Type appears first to control IR Cut options
     ircut_row_index = next((i for i, (field, key) in enumerate(settings_fields) if key == "ircut"), None)
-    # Insert Camera Type row before IR Cut
+    # Insert Camera Type row before IR Cut for proper ordering of dependent dropdowns
     if ircut_row_index is not None:
         settings_fields.insert(ircut_row_index, ("Camera Type", "camera_type"))
 

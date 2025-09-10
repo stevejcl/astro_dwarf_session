@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.7.4] - 2025-09-10
+
+### New Features
+- **Custom application icon**: Application window now displays the custom Astro Dwarf Scheduler icon instead of the default feather icon in the title bar.
+
+### Improvements
+- **Enhanced camera type change validation**: When camera type is changed in settings tab, exposure and gain values are now validated against actual dropdown lists and automatically set to valid values that exist in the dropdown options.
+- **Smart default value selection**: Improved camera type change handler to use intelligent fallback logic - if preferred default values don't exist in dropdown lists, automatically selects the first available valid option.
+- **Dynamic dropdown synchronization**: Camera type changes now properly update both the field values AND the dropdown option lists simultaneously for consistent user experience.
+
+### Bug Fixes
+- **Fixed invalid dropdown values**: Resolved issue where camera type changes could set exposure and gain to values that don't exist in the device-specific dropdown lists.
+- **Fixed dropdown option updates**: Camera type changes now properly refresh the exposure and gain dropdown options to match the selected device type.
+
+### Technical Improvements
+- **Enhanced value validation**: Added comprehensive validation to ensure exposure and gain values always correspond to valid dropdown options for each device type.
+- **Improved error handling**: Added graceful fallback for icon loading with proper exception handling to prevent application crashes if icon file is missing.
+
 ## [1.7.3] - 2025-09-07
 
 ### New Features

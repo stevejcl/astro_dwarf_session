@@ -7,6 +7,8 @@ import json
 import signal
 import logging
 import traceback
+import webbrowser
+import requests
 import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
@@ -190,11 +192,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def start_video_preview(self):
         try:
             from PIL import Image, ImageTk
-            import requests
         except ImportError:
-            self.video_canvas.config(text="Install Pillow and requests for video preview.")
+            self.video_canvas.config(text="Install Pillow for video preview.")
             return
 
+        # Prevent starting multiple video worker threads
+        if hasattr(self, '_video_worker_running') and self._video_worker_running:
+            return
+            
         dwarf_ip = "127.0.0.1"
         data_config = config_py.get_config_data()
         if data_config["ip"]:
@@ -202,13 +207,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.video_stream_url = f"http://{dwarf_ip}:8092/mainstream"
 
         def video_stream_worker():
+            self._video_worker_running = True
             print("Starting video stream worker")
             while not getattr(self, '_stop_video_stream', False):
                 try:
+                    # Show attempting to connect status
+                    self.after(0, lambda: self.video_canvas.config(image='', text="Attempting to connect..."))
                     #print(f"Connecting to video stream on IP: {dwarf_ip}...")
                     stream = requests.get(self.video_stream_url, stream=True, timeout=60)
                     bytes_data = b""
                     last_update = 0
+                    # Show connected status
+                    self.after(0, lambda: self.video_canvas.config(text="Connected - streaming video"))
                     for chunk in stream.iter_content(chunk_size=1024):
                         bytes_data += chunk
                         # Look for JPEG start and end markers
@@ -218,7 +228,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                             jpg = bytes_data[a:b+2]
                             bytes_data = bytes_data[b+2:]
                             try:
-                                image = Image.open(io.BytesIO(jpg)).resize((220, 124))
+                                image = Image.open(io.BytesIO(jpg)).resize((320, 180)) # Resize to fit the preview frame
                                 photo = ImageTk.PhotoImage(image)
                                 now = time.time()
                                 # Limit update rate to avoid overwhelming the UI
@@ -231,24 +241,83 @@ class AstroDwarfSchedulerApp(tk.Tk):
                                 pass
                         if getattr(self, '_stop_video_stream', False):
                             print("Stopping video stream worker")
-                            self.after(0, lambda: self.video_canvas.config(image='', text="No video stream."))
+                            self.after(0, lambda: self.video_canvas.config(image='', text="Video stream is off"))
                             break
                     # If we got here, stream ended or stopped, retry after short delay
                 except requests.exceptions.RequestException as e:
-                    # Handle network-related errors
-                    self.video_canvas.config(image='', text="No video stream.")
+                    # Handle network-related errors - only show "off" if stream was actually stopped
+                    if getattr(self, '_stop_video_stream', False):
+                        self.after(0, lambda: self.video_canvas.config(image='', text="Video stream is off"))
+                    # If not stopped, the retry logic below will handle the status
                 except Exception as e:
-                    # Handle any other unexpected errors
-                    self.video_canvas.config(image='', text="Video stream error.")
+                    # Handle any other unexpected errors - only show "off" if stream was actually stopped 
+                    if getattr(self, '_stop_video_stream', False):
+                        self.after(0, lambda: self.video_canvas.config(image='', text="Video stream is off"))
+                    # If not stopped, the retry logic below will handle the status
 
-                # Wait before retrying connection
+                # Show retry status if still trying to connect (but not immediately stopped)
+                if not getattr(self, '_stop_video_stream', False):
+                    # Show connection failed first
+                    self.after(0, lambda: self.video_canvas.config(text="Connection failed"))
+                    
+                    # Wait 2 seconds before showing retry message
+                    time.sleep(2)
+                    
+                    # Check again if we should still retry (user might have stopped stream during the 2 second wait)
+                    if not getattr(self, '_stop_video_stream', False):
+                        self.after(0, lambda: self.video_canvas.config(text="Retrying connection..."))
+                
+                # Wait additional time before retrying connection
                 time.sleep(3)
+            
+            # Mark worker as stopped when exiting
+            self._video_worker_running = False
+            print("Video stream worker stopped")
 
         threading.Thread(target=video_stream_worker, daemon=True).start()
 
     def update_video_canvas(self, photo):
         self.video_canvas.config(image=photo)
         self._video_photo = photo  # Keep a reference to avoid garbage collection
+        
+    def toggle_video_stream(self, event=None):
+        """Toggle video stream on/off when canvas is single-clicked (with delay to avoid double-click conflict)."""
+        # Cancel any existing single-click timer
+        if hasattr(self, '_single_click_timer') and self._single_click_timer:
+            self.after_cancel(self._single_click_timer)
+        
+        # Set a timer for the single-click action (250ms delay)
+        self._single_click_timer = self.after(250, self._perform_single_click)
+    
+    def _perform_single_click(self):
+        """Perform the actual single-click action after delay."""
+        if hasattr(self, '_stop_video_stream'):
+            if self._stop_video_stream:
+                # Turn video stream on
+                self._stop_video_stream = False
+                self.start_video_preview()
+                self.log("Video stream turned on")
+            else:
+                # Turn video stream off
+                self._stop_video_stream = True
+                self.video_canvas.config(image='', text="Video stream is off")
+                self.log("Video stream turned off")
+        
+    def open_video_stream_in_browser(self, event=None):
+        """Open the video stream URL in the default web browser when video canvas is double-clicked."""
+        # Cancel the single-click timer if a double-click occurs
+        if hasattr(self, '_single_click_timer') and self._single_click_timer:
+            self.after_cancel(self._single_click_timer)
+            self._single_click_timer = None
+            
+        if hasattr(self, 'video_stream_url') and self.video_stream_url:
+            try:
+                webbrowser.open(self.video_stream_url)
+                self.log(f"Opening video stream in browser: {self.video_stream_url}")
+            except Exception as e:
+                self.log(f"Error opening video stream in browser: {e}", level="error")
+        else:
+            self.log("Video stream URL not available", level="warning")
         
     def __init__(self):
         self.last_text = ""
@@ -275,6 +344,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.result = False
         self.stellarium_connection = None
         self.skip_time_checks = False
+        self._video_worker_running = False
+        self._single_click_timer = None
 
         # Create tabs
         self.tab_control = ttk.Notebook(self)
@@ -693,10 +764,16 @@ class AstroDwarfSchedulerApp(tk.Tk):
         preview_frame = tk.Frame(self.tab_main, bd=1, relief="solid")
         preview_frame.place(relx=1.0, x=-15, y=25, anchor="ne", width=320, height=180, bordermode="outside")  # 16:9 aspect ratio (320:180)
         preview_frame.pack_propagate(False)
-        self.video_canvas = tk.Label(preview_frame, text="No video stream.")
+        self.video_canvas = tk.Label(preview_frame, text="Video stream is off", bg="lightgray", fg="black")
         self.video_canvas.pack(fill="both", expand=True)
+        # Bind single click to toggle video stream and double click to open in browser
+        self.video_canvas.bind("<Button-1>", self.toggle_video_stream)
+        self.video_canvas.bind("<Double-Button-1>", self.open_video_stream_in_browser)
+        self.video_canvas.config(cursor="hand2")  # Change cursor to indicate clickable
+        # Add tooltip to indicate video canvas functionality
+        Tooltip(self.video_canvas, "Single click: Toggle video stream\nDouble click: Open stream in browser")
         self._stop_video_stream = True
-        self.start_video_preview()
+        # Video stream is now manually controlled by user clicks
 
         # Checkbox for "Multiple" and related widgets in a grid for alignment
         multiple_frame = tk.Frame(self.tab_main)

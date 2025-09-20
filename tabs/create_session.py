@@ -418,7 +418,7 @@ def refresh_stellarium_data(settings_vars, config_vars):
     stellarium_port = stellarium_port_var.get() if hasattr(stellarium_port_var, 'get') else stellarium_port_var
 
     stellarium_ip = stellarium_ip or "127.0.0.1"
-    stellarium_port = stellarium_port or 8095
+    stellarium_port = stellarium_port or 8090
 
     stellarium_connection = StellariumConnection(
         ip=stellarium_ip, 

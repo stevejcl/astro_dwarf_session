@@ -16,8 +16,8 @@ OPTIONS = {
     'plist': {
         'CFBundleName': 'AstroDwarfSchedulerConsole',
         'CFBundleDisplayName': 'Astro Dwarf Scheduler Console',
-        'CFBundleVersion': '1.7.4',
-        'CFBundleShortVersionString': '1.7.4',
+        'CFBundleVersion': '1.7.5',
+        'CFBundleShortVersionString': '1.7.5',
         'CFBundleIdentifier': 'com.astrodwarf.scheduler.console',
         'LSMinimumSystemVersion': '10.9',
     }
@@ -36,7 +36,7 @@ if os.path.exists('Astro_Sessions'):
 
 setup(
     name="AstroDwarfSchedulerConsole",
-    version="1.7.4",
+    version="1.7.5",
     description="Automatic Astro Session for the Dwarf - Console Version",
     author="Astro Dwarf Team",
     app=['astro_dwarf_scheduler.py'],

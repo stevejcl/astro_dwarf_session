@@ -2,7 +2,7 @@ import json
 from urllib import request
 
 class StellariumConnection:
-    def __init__(self, ip='127.0.0.1', port=8095):
+    def __init__(self, ip='127.0.0.1', port=8090):
         self.ip = ip
         self.port = port
 

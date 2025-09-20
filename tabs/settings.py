@@ -355,6 +355,7 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                 ircut_var = tk.StringVar(value=initial_display)
                 ircut_combo = ttk.Combobox(scrollable_frame, textvariable=ircut_var, values=display_options, state="readonly")
                 settings_vars[key] = ircut_var
+                settings_vars['ircut_dropdown'] = ircut_combo  # Store dropdown reference for enable/disable
                 ircut_combo.grid(row=grid_row, column=1, sticky='ew', padx=(0,14), pady=4)
                 scrollable_frame.grid_columnconfigure(1, weight=1)
                 settings_vars['_ircut_value_map'] = {disp: value_map[disp] for disp in display_options}
@@ -375,6 +376,7 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                 var = tk.StringVar(value=initial_display)
                 combo = ttk.Combobox(scrollable_frame, textvariable=var, values=binning_display_options, state="readonly")
                 settings_vars[key] = var
+                settings_vars['binning_dropdown'] = combo  # Store dropdown reference for enable/disable
                 combo.grid(row=grid_row, column=1, sticky='ew', padx=(0,14), pady=4)
                 scrollable_frame.grid_columnconfigure(1, weight=1)
                 if '_binning_value_map' not in settings_vars:
@@ -400,6 +402,25 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                     def handler(event):
                         selected_device_type = bound_var.get()
                         update_ircut_options(selected_device_type)
+                        
+                        # Handle Dwarf 3 Wide Lens special case - disable ircut and binning
+                        if selected_device_type == "Dwarf 3 Wide Lens":
+                            # Disable ircut and binning dropdowns
+                            if 'ircut_dropdown' in settings_vars:
+                                settings_vars['ircut_dropdown'].config(state="disabled")
+                                # Set ircut to first option
+                                if 'ircut' in settings_vars and '_ircut_value_map' in settings_vars:
+                                    # Get the first option from the current value map
+                                    first_option = list(settings_vars['_ircut_value_map'].keys())[0]
+                                    settings_vars['ircut'].set(first_option)
+                            if 'binning_dropdown' in settings_vars:
+                                settings_vars['binning_dropdown'].config(state="disabled")
+                        else:
+                            # Enable ircut and binning dropdowns for other device types
+                            if 'ircut_dropdown' in settings_vars:
+                                settings_vars['ircut_dropdown'].config(state="readonly")
+                            if 'binning_dropdown' in settings_vars:
+                                settings_vars['binning_dropdown'].config(state="readonly")
                         
                         # Reset exposure and gain to valid dropdown values for the selected device type
                         if 'exposure' in settings_vars and 'gain' in settings_vars:
@@ -510,6 +531,23 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
         
         # Update dropdown values
         update_exposure_gain_options(device_type_val, settings_vars['exposure_dropdown'], settings_vars['gain_dropdown'])
+
+    # Handle initial state for Dwarf 3 Wide Lens - disable ircut and binning if selected
+    initial_device_type = config.get('device_type', '')
+    if initial_device_type not in camera_type_display:
+        # Fallback to camera_type mapping if device_type is not valid
+        camera_type_val = config.get('camera_type', 'Tele Camera')
+        initial_device_type = camera_type_reverse_map.get(camera_type_val, camera_type_display[0])
+    
+    if initial_device_type == "Dwarf 3 Wide Lens":
+        # Disable ircut and binning dropdowns and set ircut to first option
+        if 'ircut_dropdown' in settings_vars:
+            settings_vars['ircut_dropdown'].config(state="disabled")
+            if 'ircut' in settings_vars and '_ircut_value_map' in settings_vars:
+                first_option = list(settings_vars['_ircut_value_map'].keys())[0]
+                settings_vars['ircut'].set(first_option)
+        if 'binning_dropdown' in settings_vars:
+            settings_vars['binning_dropdown'].config(state="disabled")
 
     # Auto-save info label at the bottom (light grey)
     autosave_label = tk.Label(scrollable_frame, text="Updates are saved automatically.", fg="#555555", font=("Arial", 11, "italic"))
@@ -625,11 +663,27 @@ def update_ircut_dropdown(camera_type_display_val, ircut_combo, ircut_var, setti
         options = d3_options
     display_options = [opt for opt, val in options]
     value_map = {opt: val for opt, val in options}
+    
+    # Update the value map in settings_vars
+    settings_vars['_ircut_value_map'] = value_map
+    
     if ircut_combo is not None and ircut_var is not None:
         ircut_combo['values'] = display_options
         current_val = ircut_var.get()
         if current_val not in display_options:
             ircut_var.set(display_options[0])
+    
+    # Handle special case for Dwarf 3 Wide Lens
+    if camera_type_display_val == "Dwarf 3 Wide Lens":
+        # Set to first option and disable
+        if 'ircut_dropdown' in settings_vars:
+            settings_vars['ircut_dropdown'].config(state="disabled")
+        if ircut_var is not None:
+            ircut_var.set(display_options[0])
+    else:
+        # Enable for other device types
+        if 'ircut_dropdown' in settings_vars:
+            settings_vars['ircut_dropdown'].config(state="readonly")
 
 def refresh_settings_tab(tab_settings, config_vars, camera_type_change_callback=None, update_create_session_callback=None):
     """Refresh the settings tab with new configuration data"""

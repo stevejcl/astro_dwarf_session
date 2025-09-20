@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.7.5] - 2025-09-19
+
+### New Features
+- **Auto Focus button**: Added dedicated Auto Focus button to the Main tab for quick access to autofocus functionality using the start_auto_focus function.
+- **Session stop choice dialog**: When stopping the scheduler, users can now choose between stopping just the scheduler or stopping the current session and scheduler together.
+- **Enhanced thread management**: Improved thread coordination with comprehensive monitoring of both stop_astro_photo and scheduler threads, including 150-second wait period after thread completion.
+
+### Improvements
+- **Camera-specific UI controls**: Dwarf 3 Wide Lens camera type now automatically disables IR Cut and Binning selection dropdowns and sets IR Cut to the first option for optimal device compatibility.
+- **Responsive session stopping**: Sessions now properly respond to stop events through enhanced stop_event parameter passing to session execution functions.
+- **Better scheduler control**: Stop scheduler button now properly returns to "Start Scheduler" state and becomes clickable after all threads have completed.
+
+### Bug Fixes
+- **Fixed scheduler button state**: Resolved issue where stop scheduler button remained unclickable after stopping, preventing users from restarting the scheduler.
+- **Fixed thread cleanup**: Enhanced thread monitoring to ensure both photo stopping and scheduler threads complete before proceeding with shutdown operations.
+- **Fixed dropdown state management**: Camera type changes now properly enable/disable related controls based on device capabilities.
+- **Binning and IRCut values were INT**: Quoted values in string test for binning and ircut NOTICE output values.
+
 ## [1.7.4] - 2025-09-10
 
 ### New Features

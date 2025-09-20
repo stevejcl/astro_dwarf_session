@@ -204,11 +204,11 @@ def start_dwarf_session(program, stop_event=None):
                 log.notice(f" To do => Astro Photo with these parameters")
                 log.notice(f"     exposure  => {exp_val}s")
                 log.notice(f"     gain  => {gain_val}")
-                log.notice(f"     binning => {'4k' if binning_val == 0 else '2k'}")
+                log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
                 if config_to_dwarf_id_str(dwarf_id) == "3":
-                    log.notice(f"     IR => {'VIS_FILTER' if IR_val == 0 else 'ASTRO_FILTER' if IR_val == 1 else 'DUAL_BAND'}")
+                    log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
                 else:
-                    log.notice(f"     IR  => {'IR_CUT' if IR_val== 0 else 'IR_PASS'}")
+                    log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
                 log.notice(f"     number of images  => {count_val}")
             else:
                 log.warning(f" Error in Settings => PHOTO : none settings found, task ignored!")
@@ -299,12 +299,12 @@ def start_dwarf_session(program, stop_event=None):
         if calibration:
             log.notice("Processing Calibration")
             log.notice("    Set Exposure to 1s")
-            continue_action = perform_update_camera_setting("exposure", "1", config_to_dwarf_id_str(dwarf_id))
+            continue_action = perform_update_camera_setting("exposure", "1", str(config_to_dwarf_id_str(dwarf_id)))
             if interrupted(): return
             verify_action(continue_action, "step_2")
             
             log.notice("    Set Gain to 80")
-            continue_action = perform_update_camera_setting("gain", "80", config_to_dwarf_id_str(dwarf_id))
+            continue_action = perform_update_camera_setting("gain", "80", str(config_to_dwarf_id_str(dwarf_id)))
             if interrupted(): return
             verify_action(continue_action, "step_3")
             if config_to_dwarf_id_str(dwarf_id) == "3":
@@ -386,11 +386,11 @@ def start_dwarf_session(program, stop_event=None):
         if take_photo:
             log.notice(f"Processing Astro Photo Session : {count_val} images")
             if exp_val:
-                continue_action = perform_update_camera_setting("exposure", exp_val, config_to_dwarf_id_str(dwarf_id))
+                continue_action = perform_update_camera_setting("exposure", exp_val, str(config_to_dwarf_id_str(dwarf_id)))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if gain_val:
-                continue_action = perform_update_camera_setting("gain", gain_val, config_to_dwarf_id_str(dwarf_id))
+                continue_action = perform_update_camera_setting("gain", gain_val, str(config_to_dwarf_id_str(dwarf_id)))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if IR_val:
@@ -433,11 +433,11 @@ def start_dwarf_session(program, stop_event=None):
         if take_widephoto:
             log.notice(f"Processing Astro Wide Photo Session : {wide_count_val} images")
             if wide_exp_val:
-                continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, config_to_dwarf_id_str(dwarf_id))
+                continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, str(config_to_dwarf_id_str(dwarf_id)))
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             if wide_gain_val:
-                continue_action = perform_update_camera_setting("wide_gain", wide_gain_val, config_to_dwarf_id_str(dwarf_id))
+                continue_action = perform_update_camera_setting("wide_gain", wide_gain_val, str(config_to_dwarf_id_str(dwarf_id)))
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             if wide_count_val:
@@ -519,7 +519,7 @@ def print_camera_data():
             # Extract specific fields for the matching entry
            index_value = matching_entry["index"]
 
-           camera_exposure = str(get_exposure_name_by_index(index_value,config_to_dwarf_id_str(dwarf_id)))
+           camera_exposure = str(get_exposure_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
            log.notice(f"the exposure is: {camera_exposure}")
         else:
            log.notice("the exposure has not been found")
@@ -535,7 +535,7 @@ def print_camera_data():
            index_value = matching_entry["index"]
 
 
-           camera_gain = str(get_gain_name_by_index(index_value,config_to_dwarf_id_str(dwarf_id)))
+           camera_gain = str(get_gain_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
            log.notice(f"the gain is: {camera_gain}")
         else:
            log.notice("the gain has not been found")
@@ -647,7 +647,7 @@ def print_wide_camera_data():
             # Extract specific fields for the matching entry
            index_value = matching_entry["index"]
 
-           camera_wide_exposure = str(get_wide_exposure_name_by_index(index_value,config_to_dwarf_id_str(dwarf_id)))
+           camera_wide_exposure = str(get_wide_exposure_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
            log.notice(f"the exposure is: {camera_wide_exposure}")
         else:
            log.notice("the exposure has not been found")
@@ -663,7 +663,7 @@ def print_wide_camera_data():
            index_value = matching_entry["index"]
 
 
-           camera_wide_gain = str(get_wide_gain_name_by_index(index_value,config_to_dwarf_id_str(dwarf_id)))
+           camera_wide_gain = str(get_wide_gain_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
            log.notice(f"the gain is: {camera_wide_gain}")
         else:
            log.notice("the gain has not been found")

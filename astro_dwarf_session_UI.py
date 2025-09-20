@@ -13,7 +13,7 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, stop_polar_align, motor_action, perform_powerdown
+from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_start_autofocus, read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
@@ -328,7 +328,27 @@ class AstroDwarfSchedulerApp(tk.Tk):
         
         # Set window icon
         try:
-            self.iconbitmap("Install/astro_dwarf_session_UI.ico")
+            # Try multiple possible icon locations for different deployment scenarios
+            icon_paths = [
+                "Install/astro_dwarf_session_UI.ico",  # Development/source directory
+                "astro_dwarf_session_UI.ico",  # Packaged application root
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "Install", "astro_dwarf_session_UI.ico"),  # Absolute path
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "astro_dwarf_session_UI.ico")  # Same directory as script
+            ]
+            
+            icon_loaded = False
+            for icon_path in icon_paths:
+                try:
+                    if os.path.exists(icon_path):
+                        self.iconbitmap(icon_path)
+                        icon_loaded = True
+                        break
+                except Exception:
+                    continue
+            
+            if not icon_loaded:
+                logging.warning("Could not load icon from any of the expected locations")
+                
         except Exception as e:
             logging.warning(f"Could not load icon: {e}")
 
@@ -752,6 +772,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.eq_button.config(state=other_state)
         self.polar_button.config(state=other_state)
         self.calibrate_button.config(state=other_state)
+        self.autofocus_button.config(state=other_state)
         self.powerdown_button.config(state=other_state)
 
     def create_main_tab(self):
@@ -860,8 +881,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
         scheduler_frame = tk.Frame(self.tab_main)
         scheduler_frame.pack(anchor="w", padx=10, pady=(10, 2), fill="x")
 
-        # Configure columns to expand equally (reduced to 5 columns since we merged start/stop buttons)
-        for i in range(5):
+        # Configure columns to expand equally (updated to 7 columns to include Auto Focus)
+        for i in range(7):
             scheduler_frame.grid_columnconfigure(i, weight=1)
 
         self.scheduler_button = tk.Button(scheduler_frame, text="Start Scheduler", command=self.toggle_scheduler, state=tk.DISABLED, width=16)
@@ -873,15 +894,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.calibrate_button = tk.Button(scheduler_frame, text="Calibrate", command=self.start_calibration, state=tk.DISABLED, width=16)
         self.calibrate_button.grid(row=0, column=2, padx=2, sticky="sew")
 
+        self.autofocus_button = tk.Button(scheduler_frame, text="Auto Focus", command=self.start_auto_focus_button, state=tk.DISABLED, width=16)
+        self.autofocus_button.grid(row=0, column=3, padx=2, sticky="sew")
+
         self.polar_button = tk.Button(scheduler_frame, text="Polar Position", command=self.start_polar_position, state=tk.DISABLED, width=16)
-        self.polar_button.grid(row=0, column=3, padx=2, sticky="sew")
+        self.polar_button.grid(row=0, column=4, padx=2, sticky="sew")
 
         self.eq_button = tk.Button(scheduler_frame, text="EQ Solving", command=self.start_eq_solving, state=tk.DISABLED, width=16)
-        self.eq_button.grid(row=0, column=4, padx=2, sticky="sew")
+        self.eq_button.grid(row=0, column=5, padx=2, sticky="sew")
 
         # Power Down button (enabled if API supports power down functionality)
         self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
-        self.powerdown_button.grid(row=0, column=5, padx=2, sticky="sew")
+        self.powerdown_button.grid(row=0, column=6, padx=2, sticky="sew")
 
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)
@@ -1026,16 +1050,51 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def stop_scheduler(self):
         self.stop_logHandler()  # Stop the logging handler
         if self.scheduler_running:
+
             self.scheduler_running = False
             self.scheduler_stop_event.set()
-            self.log("Scheduler is waiting for the process to stop.")
-            self.toggle_buttons(tk.NONE)    
+
             # Wait for thread to finish with timeout
-            self.verifyCountdown(10)  # Reduced timeout
+            self.verifyCountdown(150)  # Wait up to 150 seconds for scheduler to stop
+
+            # Also attempt to stop Astro Photo if running
+            self.log("Stopping Astro Photo if running...")
+            self.stop_astro_photo = threading.Thread(target=perform_stopAstroPhoto, daemon=True)
+            self.stop_astro_photo.start()
+            
+            # Wait for stop_astro_photo thread to stop, then wait additional 150 seconds
+            def wait_for_stop_photo_completion():
+                # Check if stop_astro_photo thread is still running
+                stop_photo_running = hasattr(self, 'stop_astro_photo') and self.stop_astro_photo.is_alive()
+                # Check if scheduler thread is still running
+                scheduler_running = hasattr(self, 'scheduler_thread') and self.scheduler_thread.is_alive()
+
+                def finalize_stop():
+                    self.log("Scheduler and Astro Photo have fully stopped.")
+                    self.toggle_buttons(tk.DISABLED)    
+                    # Only enable the scheduler button so user can start again
+                    self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
+                    self.enable_controls()
+                    self.scheduler_stopped = True
+                    # Update file counts when scheduler stops
+                    if hasattr(self, 'update_session_counts'):
+                        self.update_session_counts()
+
+                if stop_photo_running or scheduler_running:
+                    # Check again in 100ms if either thread is still running
+                    self.after(100, wait_for_stop_photo_completion)
+                else:
+                    # Both threads have stopped, we need to wait 150 seconds to ensure Astro Photo has fully stopped
+                    self.log("Astro Photo and scheduler threads have stopped, waiting additional 150 seconds to ensure complete stop...")
+                    self.after(150000, finalize_stop)  # Wait additional 150 seconds
+
+            # Start monitoring both threads
+            wait_for_stop_photo_completion()
+            self.toggle_buttons(tk.NONE)    
+                    
         else:
-            self.toggle_buttons(tk.DISABLED)    
-            self.log("Scheduler is stopping...")
-            #self.enable_controls()
+            self.toggle_buttons(tk.DISABLED)
+            self.log("Scheduler is stopped")
 
         # Hide session info when scheduler stops
         self.session_info_label.pack_forget()
@@ -1075,6 +1134,12 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.cal_thread = threading.Thread(target=self.run_start_calibration, daemon=True)
             self.cal_thread.start()
 
+    def start_auto_focus_button(self):
+        # Only start if not already running
+        if not hasattr(self, 'autofocus_thread') or not self.autofocus_thread.is_alive():
+            self.autofocus_thread = threading.Thread(target=self.start_auto_focus, daemon=True)
+            self.autofocus_thread.start()
+
     def start_powerdown(self):
         # Show confirmation dialog
         result = messagebox.askyesno(
@@ -1098,6 +1163,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
         '''
         if self.scheduler_stopped or not self.scheduler_running:
             self.log("Scheduler is stopping...")
+            # Only enable the scheduler button so user can start again
+            self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
             self.enable_controls()
         elif wait > 0:
             # Schedule the verifyCountdown to run again after 1 second
@@ -1109,6 +1176,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
             except:
                 pass
             self.scheduler_stopped = True
+            # Only enable the scheduler button so user can start again
+            self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
             self.enable_controls()
 
     def run_scheduler(self):
@@ -1177,6 +1246,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.scheduler_running = False
                 self.scheduler_stopped = True
                 self.toggle_buttons(tk.DISABLED)
+                # Only enable the scheduler button so user can start again
+                self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
                 self.enable_controls()
                 if hasattr(self, 'update_session_counts'):
                     self.update_session_counts()
@@ -1279,6 +1350,45 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
         except Exception as e:
             self.log(f"Error in Polar Align positioning: {e}", level="error")
+            setattr(self, '_stop_video_stream', True)
+
+    def start_auto_focus(self):
+        try:
+            self.log("Starting Auto Focus process...")
+            setattr(self, '_stop_video_stream', False)
+            self.start_video_preview()
+
+            continue_action = perform_time()
+            verify_action(continue_action, "step_0")
+
+            # Go Live
+            continue_action = perform_GoLive()
+            verify_action(continue_action, "step_1a")
+
+            wait_after = 5
+            wait_before = 5
+
+            continue_action = perform_stop_goto()
+            verify_action(continue_action, "step_6")
+            self.log(f"Waiting for {wait_before} seconds")
+            time.sleep(wait_before)
+
+            self.log("Starting Auto Focus")
+            self.log(f"Waiting for {wait_before} seconds")
+            time.sleep(wait_before)
+            continue_action = perform_start_autofocus()
+            verify_action(continue_action, "step_7")
+            self.log(f"Waiting for {wait_after} seconds")
+            time.sleep(wait_after)
+            continue_action = perform_stop_goto()
+            self.log(f"Waiting for {wait_after} seconds")
+            time.sleep(wait_after)
+            continue_action = perform_start_autofocus()
+
+            setattr(self, '_stop_video_stream', True)
+
+        except Exception as e:
+            self.log(f"Error in Auto Focus: {e}", level="error")
             setattr(self, '_stop_video_stream', True)
 
     def run_start_calibration(self):

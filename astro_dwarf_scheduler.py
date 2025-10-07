@@ -311,6 +311,7 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
     Returns:
         bool: True if any sessions were processed, False otherwise
     """
+    global LIST_ASTRO_DIR
     sessions_processed = False
     
     try:

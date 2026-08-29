@@ -2,6 +2,7 @@ import json
 import time
 
 from dwarf_python_api.lib.dwarf_utils import perform_GoLive
+from dwarf_python_api.lib.dwarf_utils import perform_enter_astro_mode
 from dwarf_python_api.lib.dwarf_utils import perform_calibration
 from dwarf_python_api.lib.dwarf_utils import perform_goto
 from dwarf_python_api.lib.dwarf_utils import perform_stop_goto
@@ -11,7 +12,11 @@ from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto, perform_waitRetryEndAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_update_camera_setting
-from dwarf_python_api.lib.dwarf_utils import perform_takeAstroWidePhoto
+# V3: exposure/gain in astro/DSO mode now go through CAMERA_PARAMS (module 15,
+# CMD_PARAM_SET_EXPOSURE/GAIN) instead of the old CAMERA_TELE commands used by
+# perform_update_camera_setting() - confirmed on real hardware (Mini + Dwarf 3).
+from dwarf_python_api.lib.dwarf_utils import perform_set_astro_exposure_by_name_v3
+from dwarf_python_api.lib.dwarf_utils import perform_set_astro_gain_v3
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto, perform_waitRetryEndAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_start_autofocus
 from dwarf_python_api.lib.dwarf_utils import start_polar_align
@@ -20,6 +25,10 @@ from dwarf_python_api.lib.dwarf_utils import perform_time
 from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_setting
 from dwarf_python_api.lib.dwarf_utils import perform_get_all_feature_camera_setting
 from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_wide_setting
+# V3: the live HTTP API is the only confirmed-reliable way to read back the
+# CURRENT exposure/gain/filter values in V3 - CMD_CAMERA_TELE_GET_ALL_PARAMS
+# (used by perform_get_all_camera_setting) does not respond on V3 hardware.
+from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
 from dwarf_python_api.lib.data_utils import get_exposure_name_by_index
 from dwarf_python_api.lib.data_utils import get_gain_name_by_index
 from dwarf_python_api.lib.data_wide_utils import get_wide_exposure_name_by_index
@@ -244,6 +253,15 @@ def start_dwarf_session(program, stop_event=None):
         continue_action = perform_GoLive()
         verify_action(continue_action, "step_1a")
 
+        # V3: switch the device into Astro/DSO shooting mode + Deep Sky
+        # technique (SWITCH_SHOOTING_MODE/ENTER_CAMERA/SWITCH_SHOOTING_TECH,
+        # confirmed on real hardware) - without this, CMD_ASTRO_START_GOTO_DSO
+        # and other astro commands fail (CODE_ASTRO_GOTO_FAILED / -11505)
+        # because the device is still in whatever mode it was last in.
+        log.notice("Entering Astro/DSO shooting mode")
+        continue_action = perform_enter_astro_mode()
+        verify_action(continue_action, "step_1a")
+
         # Auto Focus
         if auto_focus:
             wait_before = program.get('auto_focus', {}).get('wait_before', 0)
@@ -305,12 +323,12 @@ def start_dwarf_session(program, stop_event=None):
         if calibration:
             log.notice("Processing Calibration")
             log.notice("    Set Exposure to 1s")
-            continue_action = perform_update_camera_setting("exposure", "1", str(config_to_dwarf_id_str(dwarf_id)))
+            continue_action = perform_set_astro_exposure_by_name_v3("1", dwarf_id=str(config_to_dwarf_id_str(dwarf_id)))
             if interrupted(): return
             verify_action(continue_action, "step_2")
             
             log.notice("    Set Gain to 80")
-            continue_action = perform_update_camera_setting("gain", "80", str(config_to_dwarf_id_str(dwarf_id)))
+            continue_action = perform_set_astro_gain_v3(80)
             if interrupted(): return
             verify_action(continue_action, "step_3")
             if config_to_dwarf_id_str(dwarf_id) >= "3":
@@ -392,11 +410,11 @@ def start_dwarf_session(program, stop_event=None):
         if take_photo:
             log.notice(f"Processing Astro Photo Session : {count_val} images")
             if exp_val:
-                continue_action = perform_update_camera_setting("exposure", exp_val, str(config_to_dwarf_id_str(dwarf_id)))
+                continue_action = perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if gain_val:
-                continue_action = perform_update_camera_setting("gain", gain_val, str(config_to_dwarf_id_str(dwarf_id)))
+                continue_action = perform_set_astro_gain_v3(int(gain_val))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if IR_val:
@@ -412,9 +430,12 @@ def start_dwarf_session(program, stop_event=None):
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
 
-            # Test for Mini add one step seem error on exposure value  
+            # Test for Mini add one step seem error on exposure value
+            # TODO(steve): re-verify on hardware whether this extra call is still
+            # needed now that exposure goes through perform_set_astro_exposure_by_name_v3
+            # (the original workaround targeted a quirk of the old CAMERA_TELE path).
             if exp_val and config_to_dwarf_id_int(dwarf_id) >= 4:
-                continue_action = perform_update_camera_setting("exposure", exp_val, str(config_to_dwarf_id_str(dwarf_id)))
+                continue_action = perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             
@@ -455,11 +476,11 @@ def start_dwarf_session(program, stop_event=None):
 
             log.notice(f"Processing Astro Wide Photo Session : {wide_count_val} images")
             if wide_exp_val:
-                continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, str(config_to_dwarf_id_str(dwarf_id)))
+                continue_action = perform_set_astro_exposure_by_name_v3(wide_exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), camera="wide")
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             if wide_gain_val:
-                continue_action = perform_update_camera_setting("wide_gain", wide_gain_val, str(config_to_dwarf_id_str(dwarf_id)))
+                continue_action = perform_set_astro_gain_v3(int(wide_gain_val), camera="wide")
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             if wide_count_val:
@@ -467,9 +488,12 @@ def start_dwarf_session(program, stop_event=None):
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             
-            # Test for Mini add one step seem error on exposure value  
+            # Test for Mini add one step seem error on exposure value
+            # TODO(steve): re-verify on hardware whether this extra call is still
+            # needed now that wide exposure goes through perform_set_astro_exposure_by_name_v3
+            # (the original workaround targeted a quirk of the old CAMERA_WIDE path).
             if exp_val and dwarf_id == 4:
-                continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, str(config_to_dwarf_id_str(dwarf_id)))
+                continue_action = perform_set_astro_exposure_by_name_v3(wide_exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), camera="wide")
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
 
@@ -531,7 +555,12 @@ def print_camera_data():
     camera_format = False
     camera_count = False
 
-    result = perform_get_all_camera_setting()
+    # V3: CMD_CAMERA_TELE_GET_ALL_PARAMS (perform_get_all_camera_setting) does
+    # not respond on V3 hardware - use the live HTTP API instead, confirmed
+    # reliable for exposure/gain/filter (see MIGRATION_V3.md).
+    # modeId=2 (HTTP API numbering) = DSO/astro - not to be confused with
+    # mode=8 used by SWITCH_SHOOTING_MODE over the WebSocket connection.
+    http_result = perform_read_camera_params_http_v3(mode_id=2)
     result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
@@ -540,50 +569,34 @@ def print_camera_data():
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {config_to_dwarf_id_int(dwarf_id)}")
 
-    # ALL PARAMS
-    if isinstance(result, dict) and "all_params" in result:
-        # get Camera
-        target_id = 0
+    # ALL PARAMS (exposure/gain/IR filter) - via live HTTP API (V3)
+    if isinstance(http_result, dict) and http_result.get("cameras", {}).get(0):
+        tele_cam = http_result["cameras"][0]
 
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result["all_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-           auto_mode = matching_entry["auto_mode"]
-           log.notice(f"The exposition mode is: {'Manual' if auto_mode else 'Auto'}")
-           index_value = matching_entry["index"]
-
-           camera_exposure = str(get_exposure_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
-           log.notice(f"the exposure is: {camera_exposure}")
+        # get exposure
+        exposure_info = tele_cam.get("exposure")
+        if exposure_info:
+            auto_mode = exposure_info.get("mode")
+            log.notice(f"The exposition mode is: {'Manual' if auto_mode else 'Auto'}")
+            camera_exposure = exposure_info.get("name")
+            if camera_exposure is None:
+                # fallback: resolve name from the raw index ourselves
+                camera_exposure = str(get_exposure_name_by_index(exposure_info.get("value"), str(config_to_dwarf_id_str(dwarf_id))))
+            log.notice(f"the exposure is: {camera_exposure}")
         else:
-           log.notice("the exposure has not been found")
+            log.notice("the exposure has not been found")
 
-        # get Gain
-        target_id = 1
-
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result["all_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-           index_value = matching_entry["index"]
-
-
-           camera_gain = str(get_gain_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
-           log.notice(f"the gain is: {camera_gain}")
+        # get Gain (V3: gain is now a direct value, no index/table lookup needed)
+        gain_info = tele_cam.get("gain")
+        if gain_info:
+            camera_gain = str(gain_info.get("value"))
+            log.notice(f"the gain is: {camera_gain}")
         else:
-           log.notice("the gain has not been found")
+            log.notice("the gain has not been found")
 
         # get IR
-        target_id = 8
-
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result["all_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-            camera_IR = str(matching_entry["index"])
+        if "filterType" in tele_cam:
+            camera_IR = str(tele_cam["filterType"])
 
             if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "2":
                 log.notice("the IR value is: IRCut")
@@ -591,11 +604,15 @@ def print_camera_data():
                 log.notice("the IR value is: IRPass")
             if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "3":
                 log.notice("the IR value is: VIS FILTER")
-            if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "4":
-                log.notice("the IR value is: DARK FILTER")
-            if camera_IR == "1" and config_to_dwarf_id_str(dwarf_id) >= "3":
+            if camera_IR == "1" and config_to_dwarf_id_str(dwarf_id) == "3":
                 log.notice("the IR value is: ASTRO FILTER")
-            if camera_IR == "2" and config_to_dwarf_id_str(dwarf_id) >= "3":
+            if camera_IR == "2" and config_to_dwarf_id_str(dwarf_id) == "3":
+                log.notice("the IR value is: DUAL BAND")
+            if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "5":
+                log.notice("the IR value is: DARK FILTER")
+            if camera_IR == "1" and config_to_dwarf_id_str(dwarf_id) == "5":
+                log.notice("the IR value is: ASTRO FILTER")
+            if camera_IR == "2" and config_to_dwarf_id_str(dwarf_id) == "5":
                 log.notice("the IR value is: DUAL BAND")
         else:
            log.notice("the IRfilter has not been found")
@@ -663,7 +680,9 @@ def print_wide_camera_data():
     camera_wide_gain = False
     camera_count = False
 
-    result = perform_get_all_camera_wide_setting()
+    # V3: CMD_CAMERA_WIDE_GET_ALL_PARAMS (perform_get_all_camera_wide_setting)
+    # does not respond on V3 hardware - use the live HTTP API instead.
+    http_result = perform_read_camera_params_http_v3(mode_id=2)
     result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
@@ -672,36 +691,24 @@ def print_wide_camera_data():
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {config_to_dwarf_id_int(dwarf_id)}")
 
-    # ALL PARAMS
-    if isinstance(result, dict) and "all_params" in result:
-        # get Camera
-        target_id = 0
+    # ALL PARAMS (exposure/gain) - via live HTTP API (V3), cameraId=1 (wide)
+    if isinstance(http_result, dict) and http_result.get("cameras", {}).get(1):
+        wide_cam = http_result["cameras"][1]
 
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result["all_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-           index_value = matching_entry["index"]
-
-           camera_wide_exposure = str(get_wide_exposure_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
-           log.notice(f"the exposure is: {camera_wide_exposure}")
+        exposure_info = wide_cam.get("exposure")
+        if exposure_info:
+            camera_wide_exposure = exposure_info.get("name")
+            if camera_wide_exposure is None:
+                camera_wide_exposure = str(get_wide_exposure_name_by_index(exposure_info.get("value"), str(config_to_dwarf_id_str(dwarf_id))))
+            log.notice(f"the exposure is: {camera_wide_exposure}")
         else:
            log.notice("the exposure has not been found")
 
-        # get Gain
-        target_id = 1
-
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result["all_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-           index_value = matching_entry["index"]
-
-
-           camera_wide_gain = str(get_wide_gain_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
-           log.notice(f"the gain is: {camera_wide_gain}")
+        # V3: gain is now a direct value, no index/table lookup needed
+        gain_info = wide_cam.get("gain")
+        if gain_info:
+            camera_wide_gain = str(gain_info.get("value"))
+            log.notice(f"the gain is: {camera_wide_gain}")
         else:
            log.notice("the gain has not been found")
 

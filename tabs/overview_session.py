@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import tkinter as tk
+from datetime import datetime
 
 from astro_dwarf_scheduler import LIST_ASTRO_DIR_DEFAULT
 
@@ -90,8 +91,16 @@ def populate_json_list(json_listbox):
                     # Add file metadata to the list
                     all_files.append((uuid, fname, datetime_str, dirpath, label, info['color'], info['font']))
 
+    def parse_dt(s): 
+        try:
+            return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+        except:
+            return None  # Invalid or missing date
+
     # Sort files by UUID first, then by datetime
-    all_files.sort(key=lambda x: (x[0] == '', x[0], x[2] == '', x[2]))
+#    all_files.sort(key=lambda x: (x[0] == '', x[0], x[2] == '', x[2]))
+    # Sort files by datetime first , then by UUID
+    all_files.sort(key=lambda x: (parse_dt(x[2]) is None, parse_dt(x[2]), x[0]))
 
     # Insert sorted files into the listbox
     json_listbox.file_origin_map = {}

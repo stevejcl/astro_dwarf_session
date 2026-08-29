@@ -9,10 +9,10 @@ from dwarf_python_api.lib.dwarf_utils import perform_goto_stellar
 from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
 from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroPhoto
-from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto
+from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto, perform_waitRetryEndAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_update_camera_setting
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroWidePhoto
-from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto
+from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto, perform_waitRetryEndAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_start_autofocus
 from dwarf_python_api.lib.dwarf_utils import start_polar_align
 from dwarf_python_api.lib.dwarf_utils import perform_time
@@ -94,15 +94,19 @@ STEP_DESCRIPTIONS = {
     "step_13": "Setup Astro Wide Photo Parameters",
     "step_14": "Starting Astro wide photo Session",
     "step_15": "Wait End of Astro wide photo Session",
+    "step_16": "Stop Tele and Wide Astro photo Session",
 }
 
-def try_attemps (function, function_succeed_message, max_attempts = 3):
+def try_attemps (function, function_succeed_message, max_attempts = 3, interrupted=lambda: False):
     # Try to perform the action up to 3 times by default
     attempts = 0
     continue_action = False
 
     # Try to perform the action up to 3 times
     while attempts < max_attempts:
+        if interrupted():  # Check before attempting
+            return False
+
         continue_action = function()  # action to test
 
         if continue_action:
@@ -207,6 +211,8 @@ def start_dwarf_session(program, stop_event=None):
                 log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
                 if config_to_dwarf_id_str(dwarf_id) == "3":
                     log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
+                elif config_to_dwarf_id_str(dwarf_id) == "4":
+                    log.notice(f"     IR => {'DARK' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
                 else:
                     log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
                 log.notice(f"     number of images  => {count_val}")
@@ -307,7 +313,7 @@ def start_dwarf_session(program, stop_event=None):
             continue_action = perform_update_camera_setting("gain", "80", str(config_to_dwarf_id_str(dwarf_id)))
             if interrupted(): return
             verify_action(continue_action, "step_3")
-            if config_to_dwarf_id_str(dwarf_id) == "3":
+            if config_to_dwarf_id_str(dwarf_id) >= "3":
                 log.notice("    Set IR to Astro Filter")
             else:
                 log.notice("    Set IR to IR_PASS")
@@ -405,6 +411,12 @@ def start_dwarf_session(program, stop_event=None):
                 continue_action = perform_update_camera_setting("count", count_val)
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
+
+            # Test for Mini add one step seem error on exposure value  
+            if exp_val and config_to_dwarf_id_int(dwarf_id) >= 4:
+                continue_action = perform_update_camera_setting("exposure", exp_val, str(config_to_dwarf_id_str(dwarf_id)))
+                if interrupted(): return
+                verify_action(continue_action, "step_10")
             
             time.sleep(5)
             if interrupted(): return
@@ -425,12 +437,22 @@ def start_dwarf_session(program, stop_event=None):
             
             time.sleep(2)
             if interrupted(): return
-            continue_action = try_attemps(perform_waitEndAstroPhoto, "Astro photo session completed", 5)
-            if interrupted(): return
-            verify_action(continue_action, "step_12")
+            try:
+                continue_action = perform_waitEndAstroPhoto()
+                if interrupted(): return
+                verify_action(continue_action, "step_12")
+            except Exception as e:
+                continue_action = try_attemps(perform_waitRetryEndAstroPhoto, "Astro photo session completed", 5, interrupted=interrupted)
+                if interrupted(): return
+                verify_action(continue_action, "step_12")
 
         # Wide Photo
         if take_widephoto:
+            if take_photo:
+                # need Go Live again in this case
+                continue_action = perform_GoLive()
+                verify_action(continue_action, "step_1a")
+
             log.notice(f"Processing Astro Wide Photo Session : {wide_count_val} images")
             if wide_exp_val:
                 continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, str(config_to_dwarf_id_str(dwarf_id)))
@@ -445,6 +467,12 @@ def start_dwarf_session(program, stop_event=None):
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             
+            # Test for Mini add one step seem error on exposure value  
+            if exp_val and dwarf_id == 4:
+                continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, str(config_to_dwarf_id_str(dwarf_id)))
+                if interrupted(): return
+                verify_action(continue_action, "step_10")
+
             time.sleep(5)
             if interrupted(): return
             print_wide_camera_data()
@@ -464,9 +492,14 @@ def start_dwarf_session(program, stop_event=None):
             
             time.sleep(2)
             if interrupted(): return
-            continue_action = try_attemps(perform_waitEndAstroWidePhoto, "Wide photo session completed", 5)
-            if interrupted(): return
-            verify_action(continue_action, "step_15")
+            try:
+                continue_action = perform_waitEndAstroWidePhoto()
+                if interrupted(): return
+                verify_action(continue_action, "step_15")
+            except Exception as e:
+                continue_action = try_attemps(perform_waitRetryEndAstroWidePhoto, "Wide Astro photo session completed", 5, interrupted=interrupted)
+                if interrupted(): return
+                verify_action(continue_action, "step_15")
 
     except Exception as e:
         line_number = e.__traceback__.tb_lineno if e.__traceback__ else "unknown"
@@ -517,6 +550,8 @@ def print_camera_data():
 
         if matching_entry:
             # Extract specific fields for the matching entry
+           auto_mode = matching_entry["auto_mode"]
+           log.notice(f"The exposition mode is: {'Manual' if auto_mode else 'Auto'}")
            index_value = matching_entry["index"]
 
            camera_exposure = str(get_exposure_name_by_index(index_value, str(config_to_dwarf_id_str(dwarf_id))))
@@ -556,9 +591,11 @@ def print_camera_data():
                 log.notice("the IR value is: IRPass")
             if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "3":
                 log.notice("the IR value is: VIS FILTER")
-            if camera_IR == "1" and config_to_dwarf_id_str(dwarf_id) == "3":
+            if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "4":
+                log.notice("the IR value is: DARK FILTER")
+            if camera_IR == "1" and config_to_dwarf_id_str(dwarf_id) >= "3":
                 log.notice("the IR value is: ASTRO FILTER")
-            if camera_IR == "2" and config_to_dwarf_id_str(dwarf_id) == "3":
+            if camera_IR == "2" and config_to_dwarf_id_str(dwarf_id) >= "3":
                 log.notice("the IR value is: DUAL BAND")
         else:
            log.notice("the IRfilter has not been found")

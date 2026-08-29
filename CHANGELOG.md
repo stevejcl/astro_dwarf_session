@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.7.6] - 2025-10-15
+
+### Improvements
+    Add Support for Dwarf Mini
+    Add UI controls (Reboot, Toggle Lights, Stop Session)
+    Improve scheduler JSON sorting to handle missing or malformed datetimes.
+    Harden session flow and retries: add retry wait-end functions, make try_attemps interruption-aware, adjust exposure/IR handling for different devices
+
+### Bug
+    Due to new V3 API from Dwarflab, this version is not working anymore!
+
 ## [1.7.5] - 2025-09-19
 
 ### New Features

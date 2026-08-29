@@ -281,22 +281,29 @@ last_hourly_log = {}  # Dictionary to track the last hourly log time for each fi
 # Helper to get JSON files sorted by date and time
 def get_json_files_sorted(directory):
     files_with_datetime = []
+
     for fname in os.listdir(directory):
         if fname.endswith('.json'):
             fpath = os.path.join(directory, fname)
+            dt = None  # Default: no datetime
             try:
                 with open(fpath, 'r') as f:
                     data = json.load(f)
                 id_command = data.get('command', {}).get('id_command', {})
                 date_str = id_command.get('date', '')
                 time_str = id_command.get('time', '')
-                # Combine date and time for sorting
-                datetime_str = f"{date_str} {time_str}"
+                if date_str and time_str:
+                    datetime_str = f"{date_str} {time_str}"
+                    dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
             except Exception:
-                datetime_str = ''
-            files_with_datetime.append((datetime_str, fname))
-    files_with_datetime.sort(key=lambda x: (x[0] == '', x[0]))
-    return [fname for datetime_str, fname in files_with_datetime]
+                pass  # Skip file if error or malformed datetime
+
+            files_with_datetime.append((dt, fname))
+
+    # Sort by datetime, placing None values at the end
+    files_with_datetime.sort(key=lambda x: (x[0] is None, x[0]))
+    return [fname for dt, fname in files_with_datetime]
+
 
 # Main function to check and execute the commands
 def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_checks=False):

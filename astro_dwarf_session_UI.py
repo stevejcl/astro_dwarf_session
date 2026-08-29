@@ -13,7 +13,9 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
-from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_start_autofocus, read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown
+from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_start_autofocus, read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown, perform_reboot
+from dwarf_python_api.lib.dwarf_utils import perform_getstatus, perform_powerOpenRGB, perform_powerCloseRGB, perform_powerIndOn, perform_powerIndOff
+from dwarf_python_api.lib.websockets_utils import get_client_status
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
@@ -547,7 +549,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
                 # wait between actions and time actions
                 wait_time += 10 + 60
-                wait_time += 90 if dwarf_id_int == 3 else 0
+                wait_time += 90 if dwarf_id_int >= 3 else 0
                 wait_time += int(settings_vars.get("wait_before", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
                 wait_time += int(settings_vars.get("wait_after", 0))
@@ -772,8 +774,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.eq_button.config(state=other_state)
         self.polar_button.config(state=other_state)
         self.calibrate_button.config(state=other_state)
-        self.autofocus_button.config(state=other_state)
+        self.autofocus_button.config(state=other_state)	
         self.powerdown_button.config(state=other_state)
+        self.reboot_button.config(state=other_state)
+        self.toggle_lights_button.config(state=other_state)
+        self.stop_session_button.config(state=other_state)
 
     def create_main_tab(self):
         self.log_text = None
@@ -796,7 +801,26 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self._stop_video_stream = True
         # Video stream is now manually controlled by user clicks
 
-        # Checkbox for "Multiple" and related widgets in a grid for alignment
+        # --- Video Control Buttons (left of video frame) ---
+        video_button_frame = tk.Frame(self.tab_main)
+        video_button_frame.place(relx=1.0, x=-340, y=25, anchor="ne")  # Centered vertically to preview
+
+        # Toggle Lights Button
+        self.toggle_lights_button = tk.Button(video_button_frame, text="💡 Toggle Lights",
+                                             state=tk.DISABLED, command=self.toggle_lights, width=16)
+        self.toggle_lights_button.pack(fill="x", pady=(0, 130))
+ 
+        # Stop Session Button (initially hidden)
+        self.stop_session_button = tk.Button(video_button_frame, text="⛔ Stop Session", fg="white", bg="red",
+                                             state=tk.DISABLED, command=self.run_stop_astro_photo, width=16)
+
+        self.stop_session_button.pack(fill="x")
+
+        # Optional tooltips
+        Tooltip(self.stop_session_button, "Stop the current session")
+        Tooltip(self.toggle_lights_button, "Toggle lights on/off")
+        
+       # Checkbox for "Multiple" and related widgets in a grid for alignment
         multiple_frame = tk.Frame(self.tab_main)
         multiple_frame.pack(anchor="w", padx=10, pady=5, fill="none")
         multiple_frame.config(width=500)  # Limit width to prevent overlap with video preview
@@ -907,6 +931,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.powerdown_button = tk.Button(scheduler_frame, text="Power Down", command=self.start_powerdown, state=tk.DISABLED, width=16)
         self.powerdown_button.grid(row=0, column=6, padx=2, sticky="sew")
 
+        # Reboot button (enabled if API supports reboot functionality)
+        self.reboot_button = tk.Button(scheduler_frame, text="Reboot", command=self.start_reboot, state=tk.DISABLED, width=16)
+        self.reboot_button.grid(row=0, column=6, padx=2, sticky="sew")
+
+        self.status_powerlight = None
+        self.status_rgblight = None
+
         # Log text area with vertical scrollbar
         emoji_font = ("Segoe UI Emoji", 10)
         log_frame = tk.Frame(self.tab_main)
@@ -1006,15 +1037,33 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.bluetooth_connected = False
             self.result = start_connection(False, self.use_web.get())
             if self.result:
-                self.log(f"Bluetooth connected successfully.")
                 self.bluetooth_connected = True
                 # Enable the start scheduler button
                 self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
                 # Update the Settings Tab IP address with dwarf_ip and save config.ini
                 data_config = config_py.get_config_data()
                 dwarf_ip = data_config['ip']
+                dwarf_id = data_config['dwarf_id']
+                dwarfName = "Dwarf II"
+                DWARF_NAME_MAP = {
+                  2: "Dwarf II",
+                  3: "Dwarf3",
+                  5: "Dwarf Mini",
+                }
+                DWARF_TYPE_DEVICE = {
+                  2: "Dwarf II",
+                  3: "Dwarf 3 Tele Lens",
+                  5: "Dwarf Mini Tele Lens",
+                }
+                dwarfName = DWARF_NAME_MAP.get(config_to_dwarf_id_int(dwarf_id), "Unknown Dwarf")
+                typeDevice = DWARF_TYPE_DEVICE.get(config_to_dwarf_id_int(dwarf_id), "Unknown Dwarf")
+                self.log(f"Bluetooth connected successfully. {dwarfName} @{dwarf_ip}")
+                save_settings = False
                 if dwarf_ip and 'dwarf_ip' in self.config_vars:
                     self.config_vars['dwarf_ip'].set(dwarf_ip)
+                if typeDevice and 'device_ud' in self.config_vars:
+                    self.config_vars['device_ud'].set(typeDevice)
+                if save_settings:
                     settings.save_settings(self.config_vars, show_message=False)                
             else:
                 self.log("Bluetooth connection failed.")
@@ -1058,12 +1107,10 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.verifyCountdown(150)  # Wait up to 150 seconds for scheduler to stop
 
             # Also attempt to stop Astro Photo if running
-            self.log("Stopping Astro Photo if running...")
-            self.stop_astro_photo = threading.Thread(target=perform_stopAstroPhoto, daemon=True)
-            self.stop_astro_photo.start()
+            self.run_stop_astro_photo(False)
             
             # Wait for stop_astro_photo thread to stop, then wait additional 150 seconds
-            def wait_for_stop_photo_completion():
+            def wait_for_stop_scheduler_completion():
                 # Check if stop_astro_photo thread is still running
                 stop_photo_running = hasattr(self, 'stop_astro_photo') and self.stop_astro_photo.is_alive()
                 # Check if scheduler thread is still running
@@ -1082,14 +1129,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
                 if stop_photo_running or scheduler_running:
                     # Check again in 100ms if either thread is still running
-                    self.after(100, wait_for_stop_photo_completion)
+                    self.after(100, wait_for_stop_scheduler_completion)
                 else:
                     # Both threads have stopped, we need to wait 150 seconds to ensure Astro Photo has fully stopped
                     self.log("Astro Photo and scheduler threads have stopped, waiting additional 150 seconds to ensure complete stop...")
                     self.after(150000, finalize_stop)  # Wait additional 150 seconds
 
             # Start monitoring both threads
-            wait_for_stop_photo_completion()
+            wait_for_stop_scheduler_completion()
             self.toggle_buttons(tk.NONE)    
                     
         else:
@@ -1156,6 +1203,72 @@ class AstroDwarfSchedulerApp(tk.Tk):
         else:
             # User clicked "No" or closed dialog - do nothing
             self.log("Power down cancelled by user.")
+
+    def start_reboot(self):
+        # Show confirmation dialog
+        result = messagebox.askyesno(
+            "Confirm Power Down", 
+            "Are you sure you want to reboot the Dwarf?",
+            icon="warning"
+        )
+        
+        if result:  # User clicked "Yes"
+            # Only start if not already running and user confirmed
+            if not hasattr(self, 'reboot_thread') or not self.reboot_thread.is_alive():
+                self.reboot_thread = threading.Thread(target=self.run_start_reboot, daemon=True)
+                self.reboot_thread.start()
+        else:
+            # User clicked "No" or closed dialog - do nothing
+            self.log("Reboot cancelled by user.")
+
+    def run_stop_astro_photo(self, confirm = True):
+        if confirm : 
+            # Show confirmation dialog
+            result = messagebox.askyesno(
+                "Confirm Stopping Astro Photo Session", 
+                "Are you sure you want to stop the Astro Session.",
+                icon="warning"
+            )
+        
+        if not confirm or result:  # User clicked "Yes" or Not necessary
+            # Only start if not already running and user confirmed
+            if not hasattr(self, 'stop_astro_photo') or not self.stop_astro_photo.is_alive():
+                self.stop_astro_photo = threading.Thread(target=perform_stopAstroPhoto, daemon=True)
+
+            self.stop_astro_photo.start()
+
+            # Wait for stop_astro_photo thread to stop, then wait additional 150 seconds
+            def wait_for_stop_photo_completion():
+                # Check if stop_astro_photo thread is still running
+                stop_photo_running = hasattr(self, 'stop_astro_photo') and self.stop_astro_photo.is_alive()
+
+                def finalize_stop():
+                    self.log("Astro Photo have fully stopped.")
+                    self.toggle_buttons(tk.DISABLED)    
+                    # Only enable the scheduler button so user can start again
+                    self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
+                    self.enable_controls()
+
+                if stop_photo_running:
+                    # Check again in 100ms if either thread is still running
+                    self.after(100, wait_for_stop_photo_completion)
+            wait_for_stop_photo_completion()
+
+        else:
+            # User clicked "No" or closed dialog - do nothing
+            self.log("Stopping Astro Photos session cancelled by user.")
+
+    def toggle_lights(self):
+        # Only start if not already running
+        if not hasattr(self, 'toogle_lights_thread') or not self.toogle_lights_thread.is_alive():
+            self.toogle_lights_thread = threading.Thread(target=self.run_toogle_lights, daemon=True)
+            self.toogle_lights_thread.start()
+
+    def start_auto_focus_button(self):
+        # Only start if not already running
+        if not hasattr(self, 'autofocus_thread') or not self.autofocus_thread.is_alive():
+            self.autofocus_thread = threading.Thread(target=self.start_auto_focus, daemon=True)
+            self.autofocus_thread.start()
 
     def verifyCountdown(self, wait):
         '''
@@ -1328,13 +1441,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
                 self.start_video_preview()
 
-                if result and dwarf_id_int == 3:
+                if result and dwarf_id_int >= 3:
                     # Rotation Motor positioning D3
                     result = motor_action(9)
                 elif result:
                     # Rotation Motor positioning
                     result = motor_action(2)
-                if result and dwarf_id_int == 3:
+                if result and dwarf_id_int >= 3:
                     # Pitch Motor positioning D3
                     result = motor_action(7)
                 elif result:
@@ -1423,13 +1536,59 @@ class AstroDwarfSchedulerApp(tk.Tk):
             time.sleep(wait_after)
             continue_action = perform_stop_goto()
             self.log(f"Waiting for {wait_after} seconds")
-            time.sleep(wait_after)
-            continue_action = perform_calibration()
 
             setattr(self, '_stop_video_stream', True)
 
         except Exception as e:
             self.log(f"Error in Calibration: {e}", level="error")
+            setattr(self, '_stop_video_stream', True)
+
+    def run_stop_astrophotos(self):
+        try:
+            self.log("Stopping Astro Photo Session...")
+            setattr(self, '_stop_video_stream', False)
+            self.start_video_preview()
+
+            wait_after = 5
+            wait_before = 5
+
+            self.log(f"Waiting for {wait_before} seconds")
+            time.sleep(wait_before)
+
+            continue_action = perform_stopAstroPhoto()
+            verify_action(continue_action, "step_16")
+
+            self.log(f"Waiting for {wait_after} seconds")
+            time.sleep(wait_after)
+
+            setattr(self, '_stop_video_stream', True)
+
+        except Exception as e:
+            self.log(f"Error in Stop AstroPhoto: {e}", level="error")
+            setattr(self, '_stop_video_stream', True)
+
+    def run_toogle_lights(self):
+        try:
+            self.log("Starting toogle lights process...")
+            # get Status
+            dwarf_status = get_client_status()
+            self.status_powerlight = (
+                dwarf_status.get("fullStatus", {}).get("PowerIndicatorDwarf", False)
+            )
+            self.status_rgblight = (
+                dwarf_status.get("fullStatus", {}).get("RgbIndicatorDwarf", False)
+            )
+            if self.status_rgblight:
+                perform_powerCloseRGB()
+            else:
+                perform_powerOpenRGB()
+            if self.status_powerlight:
+                perform_powerIndOff()
+            else:
+                perform_powerIndOn()
+            
+        except Exception as e:
+            self.log(f"Error in Power Down: {e}", level="error")
             setattr(self, '_stop_video_stream', True)
 
     def run_start_powerdown(self):
@@ -1442,6 +1601,21 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.toggle_scheduler()            
             threading.Thread(target=delayed_toggle, daemon=True).start()
             perform_powerdown()
+            
+        except Exception as e:
+            self.log(f"Error in Power Down: {e}", level="error")
+            setattr(self, '_stop_video_stream', True)
+
+    def run_start_reboot(self):
+        try:
+            self.log("Starting Reboot process...")
+            self.toggle_buttons(tk.NONE)
+            # Run toggle_scheduler in background with 5 second delay
+            def delayed_toggle():
+                time.sleep(5)
+                self.toggle_scheduler()            
+            threading.Thread(target=delayed_toggle, daemon=True).start()
+            perform_reboot()
             
         except Exception as e:
             self.log(f"Error in Power Down: {e}", level="error")

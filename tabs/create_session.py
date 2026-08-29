@@ -12,6 +12,8 @@ from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
 from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains, allowed_exposuresD3, allowed_gainsD3
 from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposuresD3, allowed_wide_gainsD3
+from dwarf_python_api.lib.data_utils import allowed_exposuresMini
+from dwarf_python_api.lib.data_wide_utils import allowed_wide_gainsMini
 import uuid
 import threading
 from astro_dwarf_scheduler import BASE_DIR
@@ -167,7 +169,9 @@ def update_exposure_gain_dropdowns_from_camera_type(camera_type_display, setting
             device_type_map = {
                 "Dwarf II": "Dwarf II",
                 "Dwarf 3 Tele Lens": "Dwarf 3 Tele Lens", 
-                "Dwarf 3 Wide Lens": "Dwarf 3 Wide Lens"
+                "Dwarf 3 Wide Lens": "Dwarf 3 Wide Lens",
+                "Dwarf Mini Tele Lens": "Dwarf Mini Tele Lens", 
+                "Dwarf Mini Wide Lens": "Dwarf Mini Wide Lens"
             }
             
             device_type = device_type_map.get(camera_type_display, "Dwarf II")
@@ -1203,6 +1207,18 @@ def update_options(device_type, exposure_dropdown, gain_dropdown, ircut_dropdown
         available_wide_gains_namesD3 = get_available_names(allowed_wide_gainsD3)
         exposure_dropdown['values'] = list(reversed(available_wide_exposure_namesD3))
         gain_dropdown['values'] = available_wide_gains_namesD3
+        ircut_dropdown['values'] = []
+    elif device_type == "Dwarf Mini Tele Lens":
+        available_exposure_namesMini = get_available_names(allowed_exposuresMini)
+        available_gain_namesMini = get_available_names(allowed_gainsD3)
+        exposure_dropdown['values'] = list(reversed(available_exposure_namesMini))
+        gain_dropdown['values'] = available_gain_namesMini
+        ircut_dropdown['values'] = ["Mini: DARK Filter", "Mini: Astro Filter", "Mini: DUAL Band"]
+    elif device_type == "Dwarf Mini Wide Lens":
+        available_wide_exposure_namesMini = get_available_names(allowed_wide_exposuresD3)
+        available_wide_gains_namesMini = get_available_names(allowed_wide_gainsMini)
+        exposure_dropdown['values'] = list(reversed(available_wide_exposure_namesMini))
+        gain_dropdown['values'] = available_wide_gains_namesMini
         ircut_dropdown['values'] = []
     else:
         exposure_dropdown['values'] = []

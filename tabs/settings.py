@@ -13,6 +13,8 @@ from astro_dwarf_scheduler import BASE_DIR
 # Import for exposure and gain dropdown values
 from dwarf_python_api.lib.data_utils import allowed_exposures, allowed_gains, allowed_exposuresD3, allowed_gainsD3
 from dwarf_python_api.lib.data_wide_utils import allowed_wide_exposuresD3, allowed_wide_gainsD3
+from dwarf_python_api.lib.data_utils import allowed_exposuresMini
+from dwarf_python_api.lib.data_wide_utils import allowed_wide_gainsMini
 
 import sys
 import os
@@ -48,6 +50,16 @@ def update_exposure_gain_options(device_type, exposure_dropdown, gain_dropdown):
         available_wide_gains_namesD3 = get_available_names(allowed_wide_gainsD3)
         exposure_dropdown['values'] = list(reversed(available_wide_exposure_namesD3))
         gain_dropdown['values'] = available_wide_gains_namesD3
+    elif device_type == "Dwarf Mini Tele Lens":
+        available_exposure_namesMini = get_available_names(allowed_exposuresMini)
+        available_gain_namesMini = get_available_names(allowed_gainsD3)
+        exposure_dropdown['values'] = list(reversed(available_exposure_namesMini))
+        gain_dropdown['values'] = available_gain_namesMini
+    elif device_type == "Dwarf Mini Wide Lens":
+        available_wide_exposure_namesMini = get_available_names(allowed_wide_exposuresD3)
+        available_wide_gains_namesMini = get_available_names(allowed_wide_gainsMini)
+        exposure_dropdown['values'] = list(reversed(available_wide_exposure_namesMini))
+        gain_dropdown['values'] = available_wide_gains_namesMini
     else:
         exposure_dropdown['values'] = []
         gain_dropdown['values'] = []
@@ -159,6 +171,8 @@ def update_config_py_dwarf_id(device_type):
         # Determine DWARF_ID value (config.py values are offset by -1)
         if device_type == 'Dwarf II':
             dwarf_id_val = 1  # Config value for Dwarf II (actual device ID is 2)
+        elif device_type == 'Dwarf Mini Tele Lens' or device_type == 'Dwarf Mini Wide Lens':
+            dwarf_id_val = 4  # Config value for Dwarf Mini (actual device ID is 4)
         else:
             dwarf_id_val = 2  # Config value for Dwarf 3 (actual device ID is 3)
         if os.path.exists(config_py_path):
@@ -277,7 +291,9 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
     camera_type_options = [
         ("Dwarf II", "Tele Camera"),
         ("Dwarf 3 Tele Lens", "Tele Camera"),
-        ("Dwarf 3 Wide Lens", "Wide-Angle Camera")
+        ("Dwarf 3 Wide Lens", "Wide-Angle Camera"),
+        ("Dwarf Mini Tele Lens", "Tele Camera"),
+        ("Dwarf Mini Wide Lens", "Wide-Angle Camera")
     ]
     camera_type_display = [opt[0] for opt in camera_type_options]
     camera_type_value_map = {opt[0]: opt[1] for opt in camera_type_options}
@@ -344,8 +360,14 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                     camera_type_display_val = camera_type_reverse_map.get(camera_type_val, camera_type_display[0])
                 
                 # Set up IR Cut options based on device type
-                display_options = ["D2: IRCut", "D2: IRPass"] if camera_type_display_val == "Dwarf II" else ["D3: VIS Filter", "D3: Astro Filter", "D3: DUAL Band"]
-                value_map = {"D2: IRCut": 0, "D2: IRPass": 1, "D3: VIS Filter": 0, "D3: Astro Filter": 1, "D3: DUAL Band": 2}
+                display_options = []
+                if camera_type_display_val == "Dwarf II":
+                    display_options = ["D2: IRCut", "D2: IRPass"]
+                elif camera_type_display_val == 'Dwarf Mini Tele Lens':
+                    display_options = ["Mini: Dark Filter", "Mini: Astro Filter", "Mini: DUAL Band"]
+                else:
+                    display_options = ["D3: VIS Filter", "D3: Astro Filter", "D3: DUAL Band"]
+                value_map = {"D2: IRCut": 0, "D2: IRPass": 1, "D3: VIS Filter": 0, "D3: Astro Filter": 1, "D3: DUAL Band": 2, "Mini: Dark Filter": 0, "Mini: Astro Filter": 1, "Mini: DUAL Band": 2}
                 current_val = str(config.get(key, ''))
                 initial_display = display_options[0]
                 for disp in display_options:
@@ -404,7 +426,7 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                         update_ircut_options(selected_device_type)
                         
                         # Handle Dwarf 3 Wide Lens special case - disable ircut and binning
-                        if selected_device_type == "Dwarf 3 Wide Lens":
+                        if selected_device_type == "Dwarf 3 Wide Lens" or selected_device_type == "Dwarf Mini Wide Lens":
                             # Disable ircut and binning dropdowns
                             if 'ircut_dropdown' in settings_vars:
                                 settings_vars['ircut_dropdown'].config(state="disabled")
@@ -447,6 +469,18 @@ def create_settings_tab(tab_settings, settings_vars, camera_type_change_callback
                                 # Set to a reasonable default that exists in the dropdown
                                 default_exposure = "0.4" if "0.4" in available_wide_exposure_namesD3 else available_wide_exposure_namesD3[0] if available_wide_exposure_namesD3 else "0.4"
                                 default_gain = "100" if "100" in available_wide_gains_namesD3 else available_wide_gains_namesD3[0] if available_wide_gains_namesD3 else "100"
+                            elif selected_device_type == "Dwarf Mini Tele Lens":
+                                available_exposure_namesMini = get_available_names(allowed_exposuresMini)
+                                available_gain_namesD3 = get_available_names(allowed_gainsD3)
+                                # Set to a reasonable default that exists in the dropdown
+                                default_exposure = "30" if "30" in available_exposure_namesMini else available_exposure_namesMini[0] if available_exposure_namesMini else "30"
+                                default_gain = "60" if "60" in available_gain_namesD3 else available_gain_namesD3[0] if available_gain_namesD3 else "60"
+                            elif selected_device_type == "Dwarf Mini Wide Lens":
+                                available_wide_exposure_namesD3 = get_available_names(allowed_wide_exposuresD3)
+                                available_wide_gains_namesMini = get_available_names(allowed_wide_gainsMini)
+                                # Set to a reasonable default that exists in the dropdown
+                                default_exposure = "0.4" if "0.4" in available_wide_exposure_namesD3 else available_wide_exposure_namesD3[0] if available_wide_exposure_namesD3 else "0.4"
+                                default_gain = "100" if "100" in available_wide_gains_namesMini else available_wide_gains_namesMini[0] if available_wide_gains_namesMini else "100"
                             else:
                                 # Fallback to Dwarf II values
                                 available_exposure_names = get_available_names(allowed_exposures)
@@ -657,8 +691,15 @@ def update_ircut_dropdown(camera_type_display_val, ircut_combo, ircut_var, setti
         ("D3: ASTRO", 1),
         ("D3: DUAL BAND", 2)
     ]
+    mini_options = [
+        ("Mini: DARK", 0),
+        ("Mini: ASTRO", 1),
+        ("Mini: DUAL BAND", 2)
+    ]
     if camera_type_display_val == "Dwarf II":
         options = d2_options
+    elif camera_type_display_val == "Dwarf Mini Tele Lens":
+        options = mini_options
     else:
         options = d3_options
     display_options = [opt for opt, val in options]
@@ -674,7 +715,7 @@ def update_ircut_dropdown(camera_type_display_val, ircut_combo, ircut_var, setti
             ircut_var.set(display_options[0])
     
     # Handle special case for Dwarf 3 Wide Lens
-    if camera_type_display_val == "Dwarf 3 Wide Lens":
+    if camera_type_display_val == "Dwarf 3 Wide Lens" or camera_type_display_val == "Dwarf Mini Wide Lens":
         # Set to first option and disable
         if 'ircut_dropdown' in settings_vars:
             settings_vars['ircut_dropdown'].config(state="disabled")

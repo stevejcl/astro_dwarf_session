@@ -220,7 +220,7 @@ def start_dwarf_session(program, stop_event=None):
                 log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
                 if config_to_dwarf_id_str(dwarf_id) == "3":
                     log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
-                elif config_to_dwarf_id_str(dwarf_id) == "4":
+                elif config_to_dwarf_id_str(dwarf_id) == "5":
                     log.notice(f"     IR => {'DARK' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
                 else:
                     log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
@@ -430,15 +430,6 @@ def start_dwarf_session(program, stop_event=None):
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
 
-            # Test for Mini add one step seem error on exposure value
-            # TODO(steve): re-verify on hardware whether this extra call is still
-            # needed now that exposure goes through perform_set_astro_exposure_by_name_v3
-            # (the original workaround targeted a quirk of the old CAMERA_TELE path).
-            if exp_val and config_to_dwarf_id_int(dwarf_id) >= 4:
-                continue_action = perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)))
-                if interrupted(): return
-                verify_action(continue_action, "step_10")
-            
             time.sleep(5)
             if interrupted(): return
             print_camera_data()
@@ -488,15 +479,6 @@ def start_dwarf_session(program, stop_event=None):
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             
-            # Test for Mini add one step seem error on exposure value
-            # TODO(steve): re-verify on hardware whether this extra call is still
-            # needed now that wide exposure goes through perform_set_astro_exposure_by_name_v3
-            # (the original workaround targeted a quirk of the old CAMERA_WIDE path).
-            if exp_val and dwarf_id == 4:
-                continue_action = perform_set_astro_exposure_by_name_v3(wide_exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), camera="wide")
-                if interrupted(): return
-                verify_action(continue_action, "step_10")
-
             time.sleep(5)
             if interrupted(): return
             print_wide_camera_data()

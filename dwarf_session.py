@@ -211,7 +211,7 @@ def start_dwarf_session(program, stop_event=None):
                 log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
                 if config_to_dwarf_id_str(dwarf_id) == "3":
                     log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
-                elif config_to_dwarf_id_str(dwarf_id) == "4":
+                elif config_to_dwarf_id_str(dwarf_id) == "5":
                     log.notice(f"     IR => {'DARK' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
                 else:
                     log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
@@ -413,7 +413,7 @@ def start_dwarf_session(program, stop_event=None):
                 verify_action(continue_action, "step_10")
 
             # Test for Mini add one step seem error on exposure value  
-            if exp_val and config_to_dwarf_id_int(dwarf_id) >= 4:
+            if exp_val and config_to_dwarf_id_int(dwarf_id) >= 5:
                 continue_action = perform_update_camera_setting("exposure", exp_val, str(config_to_dwarf_id_str(dwarf_id)))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
@@ -468,7 +468,7 @@ def start_dwarf_session(program, stop_event=None):
                 verify_action(continue_action, "step_13")
             
             # Test for Mini add one step seem error on exposure value  
-            if exp_val and dwarf_id == 4:
+            if exp_val and dwarf_id == 5:
                 continue_action = perform_update_camera_setting("wide_exposure", wide_exp_val, str(config_to_dwarf_id_str(dwarf_id)))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
@@ -591,7 +591,7 @@ def print_camera_data():
                 log.notice("the IR value is: IRPass")
             if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "3":
                 log.notice("the IR value is: VIS FILTER")
-            if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "4":
+            if camera_IR == "0" and config_to_dwarf_id_str(dwarf_id) == "5":
                 log.notice("the IR value is: DARK FILTER")
             if camera_IR == "1" and config_to_dwarf_id_str(dwarf_id) >= "3":
                 log.notice("the IR value is: ASTRO FILTER")

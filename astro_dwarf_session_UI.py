@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
 from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_start_autofocus, read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown, perform_reboot
-from dwarf_python_api.lib.dwarf_utils import perform_getstatus, perform_powerOpenRGB, perform_powerCloseRGB, perform_powerIndOn, perform_powerIndOff
+from dwarf_python_api.lib.dwarf_utils import perform_powerOpenRGB, perform_powerCloseRGB, perform_powerIndOn, perform_powerIndOff
 from dwarf_python_api.lib.websockets_utils import get_client_status
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 

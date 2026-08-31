@@ -12,6 +12,7 @@ from dwarf_session import start_dwarf_session
 
 from dwarf_python_api.lib.dwarf_utils import perform_time
 from dwarf_python_api.lib.dwarf_utils import perform_timezone
+from dwarf_python_api.lib.dwarf_utils import perform_set_location
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
 from dwarf_python_api.lib.dwarf_utils import save_bluetooth_config_from_ini_file
@@ -437,26 +438,23 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
 
                         # Capture actual camera settings used during the session
                         try:
-                            from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_setting
-                            camera_settings = perform_get_all_camera_setting()
-                            if camera_settings:
+                            from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
+                            # modeId=2 (HTTP API numbering) = DSO/astro
+                            camera_settings = perform_read_camera_params_http_v3(mode_id=2)
+                            tele_cam = camera_settings.get("cameras", {}).get(0) if isinstance(camera_settings, dict) else None
+                            if tele_cam:
                                 # Get the actual IR setting used
-                                if isinstance(camera_settings, dict):
-                                    ir_cut_value = camera_settings.get('ircut')
-                                else:
-                                    ir_cut_value = None
+                                ir_cut_value = tele_cam.get('filterType')
                                 if ir_cut_value is not None:
                                     # Convert numeric IR value to readable format
                                     ir_mapping = {0: 'Vis', 1: 'Astro Filter', 2: 'DUAL Band'}
                                     id_command['ir_actual'] = ir_mapping.get(ir_cut_value, f'Unknown({ir_cut_value})')
-                                
+
                                 # Store other actual settings used
-                                if isinstance(camera_settings, dict):
-                                    id_command['exposure_actual'] = camera_settings.get('exposure')
-                                    id_command['gain_actual'] = camera_settings.get('gain')
-                                else:
-                                    id_command['exposure_actual'] = camera_settings if isinstance(camera_settings, (int, float, str)) else None
-                                    id_command['gain_actual'] = camera_settings if isinstance(camera_settings, (int, float, str)) else None
+                                exposure_info = tele_cam.get('exposure') or {}
+                                gain_info = tele_cam.get('gain') or {}
+                                id_command['exposure_actual'] = exposure_info.get('name')
+                                id_command['gain_actual'] = gain_info.get('value')
                         except Exception as e:
                             log.warning(f"Could not capture actual camera settings: {e}")
                             # Fallback to planned settings from session data
@@ -577,6 +575,7 @@ def start_connection(startSTA = False, use_web_page = False):
        
         if result:
            perform_timezone()
+           perform_set_location()
     
     return result
 
@@ -596,6 +595,7 @@ def start_STA_connection(CheckDwarfId = False):
        
         if result:
             perform_timezone()
+            perform_set_location()
 
         if result and CheckDwarfId:
             update_dwarf_data = update_get_config_data(dwarf_ip)

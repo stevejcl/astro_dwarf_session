@@ -3,6 +3,11 @@ import time
 
 from dwarf_python_api.lib.dwarf_utils import perform_GoLive
 from dwarf_python_api.lib.dwarf_utils import perform_enter_astro_mode
+from dwarf_python_api.lib.dwarf_utils import perform_enter_shooting_mode
+from dwarf_python_api.lib.dwarf_utils import SHOOTING_MODE_SUN
+from dwarf_python_api.lib.dwarf_utils import SHOOTING_MODE_MOON
+from dwarf_python_api.lib.dwarf_utils import SHOOTING_MODE_PLANET
+from dwarf_python_api.lib.dwarf_utils import SHOOTING_TECH_DEEP_SKY
 from dwarf_python_api.lib.dwarf_utils import perform_calibration
 from dwarf_python_api.lib.dwarf_utils import perform_goto
 from dwarf_python_api.lib.dwarf_utils import perform_stop_goto
@@ -11,20 +16,17 @@ from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
 from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto, perform_waitRetryEndAstroPhoto
-from dwarf_python_api.lib.dwarf_utils import perform_update_camera_setting
-# V3: exposure/gain in astro/DSO mode now go through CAMERA_PARAMS (module 15,
-# CMD_PARAM_SET_EXPOSURE/GAIN) instead of the old CAMERA_TELE commands used by
-# perform_update_camera_setting() - confirmed on real hardware (Mini + Dwarf 3).
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_exposure_by_name_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_gain_v3
+from dwarf_python_api.lib.dwarf_utils import perform_set_ir_filter_v3
+from dwarf_python_api.lib.dwarf_utils import perform_set_astro_stack_count_v3
+from dwarf_python_api.lib.dwarf_utils import perform_set_astro_stack_binning_v3
+from dwarf_python_api.lib.dwarf_utils import perform_takeAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto, perform_waitRetryEndAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_start_autofocus
 from dwarf_python_api.lib.dwarf_utils import start_polar_align
 from dwarf_python_api.lib.dwarf_utils import perform_time
 
-from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_setting
-from dwarf_python_api.lib.dwarf_utils import perform_get_all_feature_camera_setting
-from dwarf_python_api.lib.dwarf_utils import perform_get_all_camera_wide_setting
 # V3: the live HTTP API is the only confirmed-reliable way to read back the
 # CURRENT exposure/gain/filter values in V3 - CMD_CAMERA_TELE_GET_ALL_PARAMS
 # (used by perform_get_all_camera_setting) does not respond on V3 hardware.
@@ -218,6 +220,7 @@ def start_dwarf_session(program, stop_event=None):
                 log.notice(f"     exposure  => {exp_val}s")
                 log.notice(f"     gain  => {gain_val}")
                 log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
+                log.notice(f"real binning => {binning_val}")
                 if config_to_dwarf_id_str(dwarf_id) == "3":
                     log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
                 elif config_to_dwarf_id_str(dwarf_id) == "5":
@@ -249,17 +252,43 @@ def start_dwarf_session(program, stop_event=None):
         continue_action = try_attemps(perform_time, "Init succeeded.")
         verify_action(continue_action, "step_0")
 
+        # V3: SET_LOCATION and CMD_GLOBAL_TASK_GET_DEVICE_STATE_INFO are
+        # now both sent automatically - location at the connection layer
+        # (astro_dwarf_scheduler.start_connection()/start_STA_connection(),
+        # alongside SET_TIME/SET_TIME_ZONE), device-state-info at the WS
+        # protocol layer (websockets_utils.send_message_init(), once per
+        # connection) - matching the official app's own behavior. No
+        # explicit calls needed here anymore.
+
         # Go Live
         continue_action = perform_GoLive()
         verify_action(continue_action, "step_1a")
 
-        # V3: switch the device into Astro/DSO shooting mode + Deep Sky
-        # technique (SWITCH_SHOOTING_MODE/ENTER_CAMERA/SWITCH_SHOOTING_TECH,
+        # V3: switch the device into the right shooting mode + technique
+        # (SWITCH_SHOOTING_MODE/ENTER_CAMERA/SWITCH_SHOOTING_TECH,
         # confirmed on real hardware) - without this, CMD_ASTRO_START_GOTO_DSO
         # and other astro commands fail (CODE_ASTRO_GOTO_FAILED / -11505)
         # because the device is still in whatever mode it was last in.
-        log.notice("Entering Astro/DSO shooting mode")
-        continue_action = perform_enter_astro_mode()
+        #
+        # Field-confirmed (Aug 2026): a solar-system target (Sun/Moon/
+        # planet) needs its own specific mode (8/9/10), NOT the DSO mode
+        # (2) used for everything else in this session (manual GOTO,
+        # calibration, EQ Solving) - entering DSO mode before a solar
+        # system GOTO would fail the same way DSO GOTO failed before this
+        # was fixed for DSO.
+        if goto_solar:
+            solar_target = (program.get('goto_solar', {}).get('target') or "").lower()
+            if solar_target == "sun":
+                solar_mode = SHOOTING_MODE_SUN
+            elif solar_target == "moon":
+                solar_mode = SHOOTING_MODE_MOON
+            else:
+                solar_mode = SHOOTING_MODE_PLANET
+            log.notice(f"Entering Solar shooting mode (mode={solar_mode}) for target: {solar_target}")
+            continue_action = perform_enter_shooting_mode(solar_mode, SHOOTING_TECH_DEEP_SKY)
+        else:
+            log.notice("Entering Astro/DSO shooting mode")
+            continue_action = perform_enter_astro_mode()
         verify_action(continue_action, "step_1a")
 
         # Auto Focus
@@ -298,6 +327,18 @@ def start_dwarf_session(program, stop_event=None):
 
         # EQ Solving - Fix: Execute when eq_solving is True
         if eq_solving:
+            # Field-confirmed (Aug 2026): EQ Solving needs an infinite
+            # autofocus done immediately before it, regardless of whether
+            # the "infinite_focus" step above already ran (it might be
+            # disabled independently in the program config, or have run
+            # too long before this point) - without it, EQ Solving fails.
+            if not infinite_focus:
+                log.notice("Processing infinite autofocus (forced before EQ Solving)")
+                continue_action = perform_start_autofocus(True)
+                if interrupted(): return
+                verify_action(continue_action, "step_1d")
+                time.sleep(5)
+
             continue_action = perform_stop_goto()
             if interrupted(): return
             verify_action(continue_action, "step_6")
@@ -335,12 +376,12 @@ def start_dwarf_session(program, stop_event=None):
                 log.notice("    Set IR to Astro Filter")
             else:
                 log.notice("    Set IR to IR_PASS")
-            continue_action = perform_update_camera_setting("IR", "1")
+            continue_action = perform_set_ir_filter_v3("1")
             if interrupted(): return
             verify_action(continue_action, "step_4")
             
             log.notice("    Set Binning to 4k")
-            continue_action = perform_update_camera_setting("binning", "0")
+            continue_action = perform_set_astro_stack_binning_v3(0)
             if interrupted(): return
             verify_action(continue_action, "step_5")
             
@@ -418,15 +459,15 @@ def start_dwarf_session(program, stop_event=None):
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if IR_val:
-                continue_action = perform_update_camera_setting("IR", IR_val)
+                continue_action = perform_set_ir_filter_v3(IR_val)
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if binning_val:
-                continue_action = perform_update_camera_setting("binning", binning_val)
+                continue_action = perform_set_astro_stack_binning_v3(int(binning_val))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if count_val:
-                continue_action = perform_update_camera_setting("count", count_val)
+                continue_action = perform_set_astro_stack_count_v3(int(count_val))
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
 
@@ -465,6 +506,18 @@ def start_dwarf_session(program, stop_event=None):
                 continue_action = perform_GoLive()
                 verify_action(continue_action, "step_1a")
 
+                # V3: GO LIVE alone does not keep the device in Astro/DSO
+                # mode - field-confirmed (Aug 2026): after a tele session,
+                # the wide session's exposure read back as a Normal/photo-
+                # mode-style name (e.g. "1/30") instead of the configured
+                # astro seconds value, meaning the device had silently
+                # dropped out of astro mode. Re-enter it explicitly before
+                # starting the wide phase, same as at the top of the
+                # session for tele.
+                log.notice("Entering Astro/DSO shooting mode (again, for wide)")
+                continue_action = perform_enter_astro_mode()
+                verify_action(continue_action, "step_1a")
+
             log.notice(f"Processing Astro Wide Photo Session : {wide_count_val} images")
             if wide_exp_val:
                 continue_action = perform_set_astro_exposure_by_name_v3(wide_exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), camera="wide")
@@ -475,7 +528,7 @@ def start_dwarf_session(program, stop_event=None):
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             if wide_count_val:
-                continue_action = perform_update_camera_setting("count", wide_count_val)
+                continue_action = perform_set_astro_stack_count_v3(int(wide_count_val), camera="wide")
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             
@@ -543,7 +596,7 @@ def print_camera_data():
     # modeId=2 (HTTP API numbering) = DSO/astro - not to be confused with
     # mode=8 used by SWITCH_SHOOTING_MODE over the WebSocket connection.
     http_result = perform_read_camera_params_http_v3(mode_id=2)
-    result_feature = perform_get_all_feature_camera_setting()
+    #result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
     data_config = config_py.get_config_data()
@@ -603,53 +656,41 @@ def print_camera_data():
        log.notice("the gain has not been found")
        log.notice("the IRfilter has not been found")
 
-    # ALL FEATURE PARAMS
-    if isinstance(result_feature, dict) and "all_feature_params" in result_feature:
-        # get binning
-        target_id = 0
-
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result_feature["all_feature_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-            camera_binning = str(matching_entry["index"])
-            if (camera_binning == "0"):
-                log.notice("the Binning value is 4k")
+    if isinstance(http_result, dict):
+        stack_settings = http_result.get("tech_settings", {}).get(15)
+        if stack_settings:
+            if "stackFormat" in stack_settings:
+                format_map = {2: "FITS", 3: "TIFF"}
+                value = stack_settings["stackFormat"]
+                log.notice(f"the image format value is: {format_map.get(value, value)}")
             else:
-                log.notice("the Binning value is 2k")
-        else:
-           log.notice("the Binning value has not been found")
+               log.notice("the image format value has not been found")
 
-        # get camera_format
-        target_id = 2
-
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result_feature["all_feature_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-            camera_format = str(matching_entry["index"])
-            if (camera_format == "0"):
-                log.notice("the image format value is: FITS")
+            if "stackBinning" in stack_settings:
+                # NOTE (Aug 2026): this HTTP read can lag behind the real
+                # applied value right after a write (field-confirmed: the
+                # actual capture correctly used the configured binning -
+                # verified via the captured file's own JSON metadata and
+                # resolution - even when this diagnostic print still
+                # showed the old value). Purely a display quirk, not a
+                # functional issue - see MIGRATION_V3.md.
+                binning_map = {0: "4k", 1:"2k"}
+                value = stack_settings["stackBinning"]
+                log.notice(f"the Binning value is {binning_map.get(value, value)}")
             else:
-                log.notice("the image format value is: TIFF")
+                log.notice("the Binning value has not been found")
         else:
-           log.notice("the image format value has not been found")
+            log.notice("the image format value has not been found")
+            log.notice("the Binning value has not been found")
 
-        # get camera_count
-        target_id = 1
-
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result_feature["all_feature_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-            camera_count = str(round(matching_entry["continue_value"]))
-
-            log.notice(f"the number of images for the session is: {camera_count}")
+        count_tele_settings = http_result.get("tech_settings", {}).get(0)
+        if count_tele_settings:
+            if "stackCount" in count_tele_settings:
+                value = count_tele_settings["stackCount"]
+                log.notice(f"the number of images for the session is: {value}")
         else:
            log.notice("the number of images for the session has not been found")
+
     else:
        log.notice("the Binning value has not been found")
        log.notice("the image format value has not been found")
@@ -665,7 +706,6 @@ def print_wide_camera_data():
     # V3: CMD_CAMERA_WIDE_GET_ALL_PARAMS (perform_get_all_camera_wide_setting)
     # does not respond on V3 hardware - use the live HTTP API instead.
     http_result = perform_read_camera_params_http_v3(mode_id=2)
-    result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
     data_config = config_py.get_config_data()
@@ -698,19 +738,12 @@ def print_wide_camera_data():
        log.notice("the exposure has not been found")
        log.notice("the gain has not been found")
 
-    # ALL FEATURE PARAMS
-    if isinstance(result_feature, dict) and "all_feature_params" in result_feature:
-        # get camera_count
-        target_id = 1
-
-        # Find the entry with the matching id
-        matching_entry = next((entry for entry in result_feature["all_feature_params"] if entry["id"] == target_id), None)
-
-        if matching_entry:
-            # Extract specific fields for the matching entry
-            camera_count = str(round(matching_entry["continue_value"]))
-
-            log.notice(f"the number of images for the session is: {camera_count}")
+    if isinstance(http_result, dict):
+        count_wide_settings = http_result.get("tech_settings", {}).get(1)
+        if count_wide_settings:
+            if "stackCount" in count_wide_settings:
+                value = count_wide_settings["stackCount"]
+                log.notice(f"the number of images for the session is: {value}")
         else:
            log.notice("the number of images for the session has not been found")
     else:

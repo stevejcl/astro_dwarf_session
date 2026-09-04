@@ -45,7 +45,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str, config_to_d
 
 import dwarf_python_api.lib.my_logger as log
 
-def select_solar_target (target):
+def select_solar_target (target, session=None):
    
     target_id = None
     result = False
@@ -79,7 +79,7 @@ def select_solar_target (target):
 
     if target_id:
         target_name = target.capitalize()
-        result = perform_goto_stellar(target_id, target_name)
+        result = perform_goto_stellar(target_id, target_name, session=session)
     else:
         log.error(f"The solar system object ({target}) is unknown")
     return result
@@ -135,19 +135,23 @@ def try_attemps (function, function_succeed_message, max_attempts = 3, interrupt
     return continue_action
 
 
-def start_dwarf_session(program, stop_event=None):
+def start_dwarf_session(program, stop_event=None, session=None):
     try:
         def interrupted():
             return stop_event is not None and stop_event.is_set()
-        
-        data_config = config_py.get_config_data()
-        dwarf_id = "2"  # Default Dwarf ID
-        if data_config["dwarf_id"]:
-            dwarf_id = data_config['dwarf_id']
 
-        dwarf_ip = ""
-        if data_config["ip"]:
-            dwarf_ip = data_config['ip']
+        if session is not None:
+            dwarf_id = session.config.dwarf_model_id or "2"
+            dwarf_ip = session.config.dwarf_ip or ""
+        else:
+            data_config = config_py.get_config_data()
+            dwarf_id = "2"  # Default Dwarf ID
+            if data_config["dwarf_id"]:
+                dwarf_id = data_config['dwarf_id']
+
+            dwarf_ip = ""
+            if data_config["ip"]:
+                dwarf_ip = data_config['ip']
 
         dump_json = json.dumps(program, indent=4)
 
@@ -249,7 +253,7 @@ def start_dwarf_session(program, stop_event=None):
 
         # Session initialization
         log.notice("######################")
-        continue_action = try_attemps(perform_time, "Init succeeded.")
+        continue_action = try_attemps(lambda: perform_time(session=session), "Init succeeded.")
         verify_action(continue_action, "step_0")
 
         # V3: SET_LOCATION and CMD_GLOBAL_TASK_GET_DEVICE_STATE_INFO are
@@ -261,7 +265,7 @@ def start_dwarf_session(program, stop_event=None):
         # explicit calls needed here anymore.
 
         # Go Live
-        continue_action = perform_GoLive()
+        continue_action = perform_GoLive(session=session)
         verify_action(continue_action, "step_1a")
 
         # V3: switch the device into the right shooting mode + technique
@@ -285,10 +289,10 @@ def start_dwarf_session(program, stop_event=None):
             else:
                 solar_mode = SHOOTING_MODE_PLANET
             log.notice(f"Entering Solar shooting mode (mode={solar_mode}) for target: {solar_target}")
-            continue_action = perform_enter_shooting_mode(solar_mode, SHOOTING_TECH_DEEP_SKY)
+            continue_action = perform_enter_shooting_mode(solar_mode, SHOOTING_TECH_DEEP_SKY, session=session)
         else:
             log.notice("Entering Astro/DSO shooting mode")
-            continue_action = perform_enter_astro_mode()
+            continue_action = perform_enter_astro_mode(session=session)
         verify_action(continue_action, "step_1a")
 
         # Auto Focus
@@ -299,7 +303,7 @@ def start_dwarf_session(program, stop_event=None):
             time.sleep(wait_before)
             if interrupted(): return
             log.notice("Processing automatic autofocus")
-            continue_action = perform_start_autofocus(False)
+            continue_action = perform_start_autofocus(False, session=session)
             if interrupted(): return
             verify_action(continue_action, "step_1c")
             wait_after = program.get('auto_focus', {}).get('wait_after', 0)
@@ -316,7 +320,7 @@ def start_dwarf_session(program, stop_event=None):
             time.sleep(wait_before)
             if interrupted(): return
             log.notice("Processing infinite autofocus")
-            continue_action = perform_start_autofocus(True)
+            continue_action = perform_start_autofocus(True, session=session)
             if interrupted(): return
             verify_action(continue_action, "step_1d")
             wait_after = program.get('infinite_focus', {}).get('wait_after', 0)
@@ -334,12 +338,12 @@ def start_dwarf_session(program, stop_event=None):
             # too long before this point) - without it, EQ Solving fails.
             if not infinite_focus:
                 log.notice("Processing infinite autofocus (forced before EQ Solving)")
-                continue_action = perform_start_autofocus(True)
+                continue_action = perform_start_autofocus(True, session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_1d")
                 time.sleep(5)
 
-            continue_action = perform_stop_goto()
+            continue_action = perform_stop_goto(session=session)
             if interrupted(): return
             verify_action(continue_action, "step_6")
             if interrupted(): return
@@ -351,7 +355,7 @@ def start_dwarf_session(program, stop_event=None):
             time.sleep(wait_before)
             if interrupted(): return
             log.notice("Processing EQ Solving")
-            continue_action = start_polar_align()
+            continue_action = start_polar_align(session=session)
             if interrupted(): return
             verify_action(continue_action, "step_1b")
             wait_after = program.get('eq_solving', {}).get('wait_after', 0)
@@ -364,33 +368,33 @@ def start_dwarf_session(program, stop_event=None):
         if calibration:
             log.notice("Processing Calibration")
             log.notice("    Set Exposure to 1s")
-            continue_action = perform_set_astro_exposure_by_name_v3("1", dwarf_id=str(config_to_dwarf_id_str(dwarf_id)))
+            continue_action = perform_set_astro_exposure_by_name_v3("1", dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), session=session)
             if interrupted(): return
             verify_action(continue_action, "step_2")
             
             log.notice("    Set Gain to 80")
-            continue_action = perform_set_astro_gain_v3(80)
+            continue_action = perform_set_astro_gain_v3(80, session=session)
             if interrupted(): return
             verify_action(continue_action, "step_3")
             if config_to_dwarf_id_str(dwarf_id) >= "3":
                 log.notice("    Set IR to Astro Filter")
             else:
                 log.notice("    Set IR to IR_PASS")
-            continue_action = perform_set_ir_filter_v3("1")
+            continue_action = perform_set_ir_filter_v3("1", session=session)
             if interrupted(): return
             verify_action(continue_action, "step_4")
             
             log.notice("    Set Binning to 4k")
-            continue_action = perform_set_astro_stack_binning_v3(0)
+            continue_action = perform_set_astro_stack_binning_v3(0, session=session)
             if interrupted(): return
             verify_action(continue_action, "step_5")
             
             time.sleep(5)
             if interrupted(): return
-            print_camera_data()
+            print_camera_data(session=session)
             if interrupted(): return
             
-            continue_action = perform_stop_goto()
+            continue_action = perform_stop_goto(session=session)
             if interrupted(): return
             verify_action(continue_action, "step_6")
             time.sleep(5)
@@ -402,7 +406,7 @@ def start_dwarf_session(program, stop_event=None):
             log.warning(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
             if interrupted(): return
-            continue_action = perform_calibration()
+            continue_action = perform_calibration(session=session)
             if interrupted(): return
             verify_action(continue_action, "step_7")
             wait_after = program.get('calibration', {}).get('wait_after', 0)
@@ -415,7 +419,7 @@ def start_dwarf_session(program, stop_event=None):
         if goto_solar:
             target_name = program.get('goto_solar', {}).get('target')
             log.notice(f"Processing Goto Solar System : {target_name}")
-            continue_action = select_solar_target(target_name)
+            continue_action = select_solar_target(target_name, session=session)
             if interrupted(): return
             verify_action(continue_action, "step_8")
             wait_after = program.get('goto_solar', {}).get('wait_after', 0)
@@ -438,7 +442,7 @@ def start_dwarf_session(program, stop_event=None):
             except ValueError:
                 decimal_Dec = parse_dec_to_float(manual_declination)
 
-            continue_action = perform_goto(decimal_RA, decimal_Dec, target_name)
+            continue_action = perform_goto(decimal_RA, decimal_Dec, target_name, session=session)
             if interrupted(): return
             verify_action(continue_action, "step_9")
             wait_after = program.get('goto_manual', {}).get('wait_after', 0)
@@ -451,29 +455,29 @@ def start_dwarf_session(program, stop_event=None):
         if take_photo:
             log.notice(f"Processing Astro Photo Session : {count_val} images")
             if exp_val:
-                continue_action = perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)))
+                continue_action = perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if gain_val:
-                continue_action = perform_set_astro_gain_v3(int(gain_val))
+                continue_action = perform_set_astro_gain_v3(int(gain_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if IR_val:
-                continue_action = perform_set_ir_filter_v3(IR_val)
+                continue_action = perform_set_ir_filter_v3(IR_val, session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if binning_val:
-                continue_action = perform_set_astro_stack_binning_v3(int(binning_val))
+                continue_action = perform_set_astro_stack_binning_v3(int(binning_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
             if count_val:
-                continue_action = perform_set_astro_stack_count_v3(int(count_val))
+                continue_action = perform_set_astro_stack_count_v3(int(count_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10")
 
             time.sleep(5)
             if interrupted(): return
-            print_camera_data()
+            print_camera_data(session=session)
             if interrupted(): return
             
             wait_after = program.get('setup_camera', {}).get('wait_after', 0)
@@ -484,18 +488,18 @@ def start_dwarf_session(program, stop_event=None):
             
             time.sleep(2)
             if interrupted(): return
-            continue_action = perform_takeAstroPhoto()
+            continue_action = perform_takeAstroPhoto(session=session)
             if interrupted(): return
             verify_action(continue_action, "step_11")
             
             time.sleep(2)
             if interrupted(): return
             try:
-                continue_action = perform_waitEndAstroPhoto()
+                continue_action = perform_waitEndAstroPhoto(session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_12")
             except Exception as e:
-                continue_action = try_attemps(perform_waitRetryEndAstroPhoto, "Astro photo session completed", 5, interrupted=interrupted)
+                continue_action = try_attemps(lambda: perform_waitRetryEndAstroPhoto(session=session), "Astro photo session completed", 5, interrupted=interrupted)
                 if interrupted(): return
                 verify_action(continue_action, "step_12")
 
@@ -503,7 +507,7 @@ def start_dwarf_session(program, stop_event=None):
         if take_widephoto:
             if take_photo:
                 # need Go Live again in this case
-                continue_action = perform_GoLive()
+                continue_action = perform_GoLive(session=session)
                 verify_action(continue_action, "step_1a")
 
                 # V3: GO LIVE alone does not keep the device in Astro/DSO
@@ -515,26 +519,26 @@ def start_dwarf_session(program, stop_event=None):
                 # starting the wide phase, same as at the top of the
                 # session for tele.
                 log.notice("Entering Astro/DSO shooting mode (again, for wide)")
-                continue_action = perform_enter_astro_mode()
+                continue_action = perform_enter_astro_mode(session=session)
                 verify_action(continue_action, "step_1a")
 
             log.notice(f"Processing Astro Wide Photo Session : {wide_count_val} images")
             if wide_exp_val:
-                continue_action = perform_set_astro_exposure_by_name_v3(wide_exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), camera="wide")
+                continue_action = perform_set_astro_exposure_by_name_v3(wide_exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), camera="wide", session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             if wide_gain_val:
-                continue_action = perform_set_astro_gain_v3(int(wide_gain_val), camera="wide")
+                continue_action = perform_set_astro_gain_v3(int(wide_gain_val), camera="wide", session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             if wide_count_val:
-                continue_action = perform_set_astro_stack_count_v3(int(wide_count_val), camera="wide")
+                continue_action = perform_set_astro_stack_count_v3(int(wide_count_val), camera="wide", session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_13")
             
             time.sleep(5)
             if interrupted(): return
-            print_wide_camera_data()
+            print_wide_camera_data(session=session)
             if interrupted(): return
 
             wait_after = int(program.get('setup_wide_camera', {}).get('wait_after', 0))
@@ -545,18 +549,18 @@ def start_dwarf_session(program, stop_event=None):
             
             time.sleep(2)
             if interrupted(): return
-            continue_action = perform_takeAstroWidePhoto()
+            continue_action = perform_takeAstroWidePhoto(session=session)
             if interrupted(): return
             verify_action(continue_action, "step_14")
             
             time.sleep(2)
             if interrupted(): return
             try:
-                continue_action = perform_waitEndAstroWidePhoto()
+                continue_action = perform_waitEndAstroWidePhoto(session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_15")
             except Exception as e:
-                continue_action = try_attemps(perform_waitRetryEndAstroWidePhoto, "Wide Astro photo session completed", 5, interrupted=interrupted)
+                continue_action = try_attemps(lambda: perform_waitRetryEndAstroWidePhoto(session=session), "Wide Astro photo session completed", 5, interrupted=interrupted)
                 if interrupted(): return
                 verify_action(continue_action, "step_15")
 
@@ -582,7 +586,7 @@ def verify_action(result, action_step):
     else:
         raise RuntimeError(f"Action failed at step: {STEP_DESCRIPTIONS.get(action_step, action_step)}")
 
-def print_camera_data():
+def print_camera_data(session=None):
     camera_exposure = False
     camera_gain = False
     camera_binning = False
@@ -595,12 +599,15 @@ def print_camera_data():
     # reliable for exposure/gain/filter (see MIGRATION_V3.md).
     # modeId=2 (HTTP API numbering) = DSO/astro - not to be confused with
     # mode=8 used by SWITCH_SHOOTING_MODE over the WebSocket connection.
-    http_result = perform_read_camera_params_http_v3(mode_id=2)
+    http_result = perform_read_camera_params_http_v3(mode_id=2, session=session)
     #result_feature = perform_get_all_feature_camera_setting()
 
     # get dwarf type id
-    data_config = config_py.get_config_data()
-    dwarf_id = data_config['dwarf_id']
+    if session is not None:
+        dwarf_id = session.config.dwarf_model_id
+    else:
+        data_config = config_py.get_config_data()
+        dwarf_id = data_config['dwarf_id']
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {config_to_dwarf_id_int(dwarf_id)}")
 
@@ -698,18 +705,21 @@ def print_camera_data():
 
     log.notice("----------------------")
 
-def print_wide_camera_data():
+def print_wide_camera_data(session=None):
     camera_wide_exposure = False
     camera_wide_gain = False
     camera_count = False
 
     # V3: CMD_CAMERA_WIDE_GET_ALL_PARAMS (perform_get_all_camera_wide_setting)
     # does not respond on V3 hardware - use the live HTTP API instead.
-    http_result = perform_read_camera_params_http_v3(mode_id=2)
+    http_result = perform_read_camera_params_http_v3(mode_id=2, session=session)
 
     # get dwarf type id
-    data_config = config_py.get_config_data()
-    dwarf_id = data_config['dwarf_id']
+    if session is not None:
+        dwarf_id = session.config.dwarf_model_id
+    else:
+        data_config = config_py.get_config_data()
+        dwarf_id = data_config['dwarf_id']
     log.notice("----------------------")
     log.notice(f"Connected to Dwarf {config_to_dwarf_id_int(dwarf_id)}")
 

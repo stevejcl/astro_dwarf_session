@@ -31,6 +31,15 @@ import dwarf_python_api.get_config_data as config_py
 # the value return by get_config_data must be used with these functions
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str, config_to_dwarf_id_int
 
+# Multi-Dwarf foundation (additive, see MIGRATION_MULTI_V3.md in
+# dwarf_python_api) - setup_new_config() below also builds/reuses a
+# DwarfSession per config_name, alongside the existing set_config_data()
+# global-pointer redirect (kept unchanged for backward compat). Callers of
+# start_dwarf_session() can pass session=get_current_session() to route
+# to a specific device instead of relying on the implicit global config.
+from dwarf_python_api.lib.dwarf_config import DwarfConfig
+from dwarf_python_api.lib.dwarf_session import get_manager
+
 import dwarf_python_api.lib.my_logger as log
 
 # Directories
@@ -65,11 +74,33 @@ import requests
 
 # Global variable to track current config name
 CURRENT_CONFIG_NAME = CONFIG_DEFAULT
+# Global variable to track the DwarfSession matching CURRENT_CONFIG_NAME
+# (built/refreshed by setup_new_config() below) - additive, does not
+# replace CURRENT_CONFIG_NAME/set_config_data(), just gives callers an
+# explicit session object to pass instead of relying on the implicit
+# global config file pointer.
+CURRENT_SESSION = None
 
 def get_current_config_name():
     """Get the currently active configuration name"""
     global CURRENT_CONFIG_NAME
     return CURRENT_CONFIG_NAME
+
+def get_current_session():
+    """Get the DwarfSession matching the currently active configuration
+    (built by setup_new_config()) - None if it couldn't be built (e.g. no
+    dwarf_uid yet - connect via Bluetooth first)."""
+    global CURRENT_SESSION
+    return CURRENT_SESSION
+
+def get_current_config_py_file():
+    """Get the config.py file path for the current configuration - mirrors
+    get_current_config_ini_file() below."""
+    config_name = get_current_config_name()
+    if config_name == CONFIG_DEFAULT:
+        return 'config.py'
+    else:
+        return f'config_{config_name}.py'
 
 def get_current_config_ini_file():
     """Get the INI file path for the current configuration"""
@@ -206,6 +237,36 @@ def setup_new_config(config_name):
     # update log
     log.update_log_file()
 
+    # Build/reuse a DwarfSession for this config_name (additive - see
+    # comment near the imports above). Reuses an existing session from the
+    # manager if this device's dwarf_uid was already seen before (keeps
+    # its live connection alive instead of forcing a reconnect every time
+    # the user switches back to a previously-used device), creates a new
+    # one otherwise.
+    global CURRENT_SESSION
+    CURRENT_SESSION = None
+    try:
+        dconfig = DwarfConfig.from_files(get_current_config_py_file(), get_current_config_ini_file())
+        if dconfig.dwarf_uid:
+            manager = get_manager()
+            try:
+                existing = manager.get(dconfig.dwarf_uid)
+            except KeyError:
+                existing = None
+            if existing is not None:
+                existing.config = dconfig
+                manager.set_default(dconfig.dwarf_uid)
+                CURRENT_SESSION = existing
+            else:
+                CURRENT_SESSION = manager.add(dconfig, make_default=True)
+        else:
+            log.warning(
+                f"No dwarf_uid found for config '{config_name}' yet - "
+                "session not created (connect via Bluetooth first)."
+            )
+    except Exception as e:
+        log.warning(f"Could not build a DwarfSession for config '{config_name}': {e}")
+
 # Load the JSON file
 def load_json(filepath):
     try:
@@ -255,14 +316,23 @@ def update_process_status(program, status, result=None, message=None, nb_try=Non
         command['processed_date'] = current_datetime
     return program  # Return the updated entire program object
 
-def retry_procedure(program, max_retries=3, stop_event=None):
+def retry_procedure(program, max_retries=3, stop_event=None, session=None):
+    """`session`: optional DwarfSession - pin the specific device this
+    retry procedure targets. Defaults to get_current_session() (the UI's
+    "currently selected" profile) if not given - fine for a one-off call,
+    but a caller that keeps looping (like run_scheduler in the UI) should
+    capture a session ONCE and pass the SAME object on every call, rather
+    than let each call re-resolve get_current_session() - otherwise,
+    switching the active UI profile mid-run silently redirects an
+    in-progress retry loop to a different physical device."""
+    session = session if session is not None else get_current_session()
     attempt = 0
     while attempt < max_retries:
         if stop_event is not None and stop_event.is_set():
             raise Exception("Session interrupted by user.")
         try:
             # Execute the session
-            start_dwarf_session(program['command'], stop_event=stop_event)
+            start_dwarf_session(program['command'], stop_event=stop_event, session=session)
             return attempt + 1
         except Exception as e:
             attempt += 1
@@ -307,7 +377,7 @@ def get_json_files_sorted(directory):
 
 
 # Main function to check and execute the commands
-def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_checks=False):
+def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_checks=False, session=None):
     """
     Check for JSON command files and execute them based on their scheduled time.
     
@@ -315,11 +385,22 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
         ui_instance: UI instance (from astro_dwarf_session_UI.py) or None for command line
         stop_event: Optional event to signal stopping
         skip_time_checks: If True, ignore scheduled time and execute immediately
+        session: optional DwarfSession - pin the specific device this call
+            targets. Defaults to get_current_session() if not given (fine
+            for a single call, but a caller that loops repeatedly - like
+            run_scheduler in the UI - should capture a session ONCE at the
+            start of its own loop and pass that SAME object every time,
+            rather than let this function re-resolve get_current_session()
+            on each call. Otherwise, switching the active UI profile while
+            a scheduler loop is still running for a different device would
+            silently redirect its next scheduled command to the new
+            profile's device instead of the one it started with.
     
     Returns:
         bool: True if any sessions were processed, False otherwise
     """
     global LIST_ASTRO_DIR
+    session = session if session is not None else get_current_session()
     sessions_processed = False
     
     try:
@@ -421,7 +502,7 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
                         if data_config["dwarf_id"]:
                            dwarf_id = data_config['dwarf_id']
 
-                        start_dwarf_session(command_data['command'], stop_event=stop_event)
+                        start_dwarf_session(command_data['command'], stop_event=stop_event, session=session)
 
                         # Session completed successfully
                         id_command['process'] = 'done'
@@ -440,7 +521,7 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
                         try:
                             from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
                             # modeId=2 (HTTP API numbering) = DSO/astro
-                            camera_settings = perform_read_camera_params_http_v3(mode_id=2)
+                            camera_settings = perform_read_camera_params_http_v3(mode_id=2, session=session)
                             tele_cam = camera_settings.get("cameras", {}).get(0) if isinstance(camera_settings, dict) else None
                             if tele_cam:
                                 # Get the actual IR setting used
@@ -533,7 +614,14 @@ def check_and_execute_commands(ui_instance=None, stop_event=None, skip_time_chec
     
     return sessions_processed
 
-def start_connection(startSTA = False, use_web_page = False):
+def start_connection(startSTA = False, use_web_page = False, session=None):
+    """`session`: optional DwarfSession - if given (typically
+    get_current_session(), i.e. whichever config profile is active in the
+    UI), a successful BLE connection applies its discovered ip/dwarf_id/
+    dwarf_uid directly to this session (see connect_ble_dwarf_win /
+    apply_ble_discovery), in addition to the config.py write. Not used for
+    the web/exe branches below (session-aware only for the local BLE
+    Tkinter path for now)."""
 
     result = False
     if not save_bluetooth_config_from_ini_file():
@@ -548,10 +636,10 @@ def start_connection(startSTA = False, use_web_page = False):
             result = connect_bluetooth() 
 
         else:
-            ble_psd = read_bluetooth_ble_psd() or "DWARF_12345678"
-            ble_STA_ssid = read_bluetooth_ble_STA_ssid() or ""
-            ble_STA_pwd = read_bluetooth_ble_STA_pwd() or ""
-            result = connect_ble_dwarf_win(ble_psd, ble_STA_ssid, ble_STA_pwd)
+            ble_psd = read_bluetooth_ble_psd(session=session) or "DWARF_12345678"
+            ble_STA_ssid = read_bluetooth_ble_STA_ssid(session=session) or ""
+            ble_STA_pwd = read_bluetooth_ble_STA_pwd(session=session) or ""
+            result = connect_ble_dwarf_win(ble_psd, ble_STA_ssid, ble_STA_pwd, session=session)
 
     else:
         # use external exe for bluetooth direct connection
@@ -571,31 +659,35 @@ def start_connection(startSTA = False, use_web_page = False):
     if startSTA and result is not False and result!= "":
         
         #init Frame : TIME and TIMEZONE
-        result = perform_time()
+        result = perform_time(session=session)
        
         if result:
-           perform_timezone()
-           perform_set_location()
+           perform_timezone(session=session)
+           perform_set_location(session=session)
     
     return result
 
-def start_STA_connection(CheckDwarfId = False):
+def start_STA_connection(CheckDwarfId = False, session=None):
 
     result = False
-    data_config = config_py.get_config_data()
-    dwarf_ip = data_config["ip"]
-    dwarf_id = data_config["dwarf_id"]
+    if session is not None:
+        dwarf_ip = session.config.dwarf_ip
+        dwarf_id = session.config.dwarf_model_id
+    else:
+        data_config = config_py.get_config_data()
+        dwarf_ip = data_config["ip"]
+        dwarf_id = data_config["dwarf_id"]
 
     if not dwarf_ip:
         log.error("The dwarf Ip has not been set , need Bluetooth First, can't connect to wifi")
     else:
         #init Frame : TIME and TIMEZONE
         log.notice(f'Connecting to the dwarf {config_to_dwarf_id_int(dwarf_id)} on {dwarf_ip}')
-        result = perform_time()
+        result = perform_time(session=session)
        
         if result:
-            perform_timezone()
-            perform_set_location()
+            perform_timezone(session=session)
+            perform_set_location(session=session)
 
         if result and CheckDwarfId:
             update_dwarf_data = update_get_config_data(dwarf_ip)

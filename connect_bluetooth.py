@@ -11,13 +11,13 @@ def connect_bluetooth_web():
 
     return connect_bluetooth()
 
-def connect_bluetooth_cmd(ble_psd, ble_STA_ssid, ble_STA_pwd, auto_select):
+def connect_bluetooth_cmd(ble_psd, ble_STA_ssid, ble_STA_pwd, auto_select, session=None):
 
-    return connect_ble_direct_dwarf(ble_psd, ble_STA_ssid, ble_STA_pwd, auto_select)
+    return connect_ble_direct_dwarf(ble_psd, ble_STA_ssid, ble_STA_pwd, auto_select, session=session)
 
-def connect_bluetooth_win(ble_psd, ble_STA_ssid, ble_STA_pwd):
+def connect_bluetooth_win(ble_psd, ble_STA_ssid, ble_STA_pwd, session=None):
 
-    return connect_ble_dwarf_win(ble_psd, ble_STA_ssid, ble_STA_pwd)
+    return connect_ble_dwarf_win(ble_psd, ble_STA_ssid, ble_STA_pwd, session=session)
 
 if __name__ == "__main__":
 

@@ -13,9 +13,12 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from astro_dwarf_scheduler import check_and_execute_commands, start_connection, start_STA_connection, setup_new_config
+from astro_dwarf_scheduler import get_current_session, get_current_config_name
+from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_start_autofocus, read_longitude, read_latitude, perform_disconnect, perform_time, perform_GoLive, unset_HostMaster, set_HostMaster, perform_stop_goto, perform_calibration, start_polar_align, motor_action, perform_powerdown, perform_reboot
 from dwarf_python_api.lib.dwarf_utils import perform_powerOpenRGB, perform_powerCloseRGB, perform_powerIndOn, perform_powerIndOff
-from dwarf_python_api.lib.websockets_utils import get_client_status
+from dwarf_python_api.lib.dwarf_utilsV2 import perform_getstatus
+from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from astro_dwarf_scheduler import LIST_ASTRO_DIR, get_json_files_sorted
 
 # import data for config.py
@@ -26,6 +29,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_int
 
 import logging
 from dwarf_python_api.lib.my_logger import NOTICE_LEVEL_NUM
+from dwarf_python_api.lib.my_logger import exclude_thread_from_shared_log, include_thread_in_shared_log
 
 from dwarf_session import verify_action
 from tabs import settings
@@ -361,6 +365,18 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.scheduler_running = False
         self.scheduler_stopped = True
         self.scheduler_stop_event = threading.Event()
+        # Pre-existing gap: only ever set inside run_scheduler() before this
+        # fix, so update_session_info() (runs periodically regardless of
+        # scheduler state) could hit it before the scheduler's first-ever
+        # start - initialize it here so it always exists.
+        self.session_running = False
+        # Which profile (config_name) owns the currently running scheduler,
+        # if any - scheduler_running is still a single global flag (only
+        # one scheduler at a time for now, see MIGRATION_MULTI_V3.md), but
+        # tracking which profile it belongs to lets us give a clear
+        # message instead of silently stopping/confusing another profile's
+        # button when a scheduler is already active elsewhere.
+        self.scheduler_running_config_name = None
         self.unset_lock_device_mode = True
         self.bluetooth_connected = False
         self.result = False
@@ -597,6 +613,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.scheduler_running = False
             self.scheduler_stop_event.set()
             self.log("Forcing scheduler to stop...")
+        if self.scheduler_running_2:
+            self.scheduler_running_2 = False
+            self.scheduler_stop_event_2.set()
+            self.log("Forcing scheduler 2 to stop...")
+            if getattr(self, 'file_handler_2', None):
+                logging.getLogger().removeHandler(self.file_handler_2)
+                self.file_handler_2.close()
+                self.file_handler_2 = None
 
         # Schedule the close with a shorter delay
         self.after(2000, self.finalize_close)  # Reduced to 2 seconds
@@ -606,8 +630,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
         Perform the final close with force termination if needed
         '''
         try:
-            # Force disconnect
-            perform_disconnect()
+            # Force disconnect - the app is closing entirely, so disconnect
+            # EVERY known session (not just the mono-dwarf default one),
+            # otherwise other Dwarf connected during this run would be left
+            # dangling.
+            for session in get_manager().all():
+                try:
+                    perform_disconnect(session=session)
+                except Exception:
+                    pass  # Ignore errors during forced disconnect, keep going
         except:
             pass  # Ignore errors during forced disconnect
     
@@ -675,6 +706,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
         print(f"Selected Configuration: {selected_value}")
         setup_new_config(selected_value)
         self.show_current_config(selected_value)
+        # Reflect THIS profile's scheduler state on the button - without
+        # this, switching to a profile with no scheduler running would
+        # still show "Stop Scheduler" if some OTHER profile's scheduler
+        # happens to be active (see MIGRATION_MULTI_V3.md).
+        self.refresh_scheduler_button()
         
         # Refresh the settings tab with the new config's settings
         from tabs import settings
@@ -740,15 +776,38 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.config_combobox.config(state=tk.NORMAL)
         self.add_button.config(state=tk.NORMAL)
 
+    def _scheduler_running_for_current_profile(self):
+        """True only if the (single, global) running scheduler belongs to
+        whatever profile is currently selected in the combobox - False if
+        no scheduler runs, or if one runs but for a DIFFERENT profile."""
+        return self.scheduler_running and self.scheduler_running_config_name == get_current_config_name()
+
+    def refresh_scheduler_button(self):
+        """Update just the scheduler button's text/state to reflect the
+        CURRENTLY SELECTED profile's scheduler state - call this whenever
+        the profile combobox changes, so switching to a profile that has
+        no scheduler running shows "Start Scheduler" even while another
+        profile's scheduler is still active in the background."""
+        if self._scheduler_running_for_current_profile():
+            self.scheduler_button.config(state=tk.NORMAL, text="Stop Scheduler")
+        elif self.scheduler_running:
+            # A DIFFERENT profile's scheduler is running - keep the button
+            # enabled so clicking it gives the clear "already running
+            # elsewhere" message below, rather than looking dead/disabled.
+            self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
+        else:
+            self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
+
     def toggle_buttons(self, state):
         # For the scheduler button, we need different logic
+        scheduler_running_here = self._scheduler_running_for_current_profile()
         if state == "waiting":
             scheduler_state = tk.NORMAL  # Allow stopping while waiting
             scheduler_text = "Stop Scheduler"
             other_state = tk.DISABLED
         elif state == tk.NORMAL:
             # When other buttons are enabled, scheduler depends on its current state
-            if self.scheduler_running:
+            if scheduler_running_here:
                 scheduler_state = tk.NORMAL
                 scheduler_text = "Stop Scheduler"
             else:
@@ -756,7 +815,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 scheduler_text = "Start Scheduler"
             other_state = state
         elif state == tk.DISABLED:
-            if self.scheduler_running:
+            if scheduler_running_here:
                 scheduler_state = tk.NORMAL
                 scheduler_text = "Stop Scheduler"
             else:
@@ -906,11 +965,27 @@ class AstroDwarfSchedulerApp(tk.Tk):
         scheduler_frame.pack(anchor="w", padx=10, pady=(10, 2), fill="x")
 
         # Configure columns to expand equally (updated to 7 columns to include Auto Focus)
-        for i in range(7):
+        for i in range(8):
             scheduler_frame.grid_columnconfigure(i, weight=1)
 
         self.scheduler_button = tk.Button(scheduler_frame, text="Start Scheduler", command=self.toggle_scheduler, state=tk.DISABLED, width=16)
         self.scheduler_button.grid(row=0, column=0, padx=2, sticky="sew")
+
+        # --- Quick test harness: a SECOND, fully independent scheduler slot,
+        # so two Dwarf sessions can genuinely run their scheduler in
+        # parallel - deliberately minimal (no shared toggle_buttons/
+        # session_info_label wiring, no camera controls duplicated) since
+        # this exists to validate real concurrent hardware operation, not
+        # as a polished second control panel. See MIGRATION_MULTI_V3.md.
+        # Usage: pick a profile in the combobox above, click "Start
+        # Scheduler 2" - it captures THAT profile's session right away,
+        # independent of whatever the combobox shows afterwards (same
+        # pinning trick as the main scheduler).
+        self.scheduler_running_2 = False
+        self.scheduler_stop_event_2 = threading.Event()
+        self.scheduler_running_config_name_2 = None
+        self.scheduler_button_2 = tk.Button(scheduler_frame, text="Start Scheduler 2", command=self.toggle_scheduler_2, width=16)
+        self.scheduler_button_2.grid(row=0, column=7, padx=2, sticky="sew")
 
         self.unlock_button = tk.Button(scheduler_frame, text="Unset as Host", command=self.unset_lock_device, state=tk.DISABLED, width=16)
         self.unlock_button.grid(row=0, column=1, padx=2, sticky="sew")
@@ -1035,7 +1110,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def bluetooth_connect_thread(self):
         try:
             self.bluetooth_connected = False
-            self.result = start_connection(False, self.use_web.get())
+            self.result = start_connection(False, self.use_web.get(), session=get_current_session())
             if self.result:
                 self.bluetooth_connected = True
                 # Enable the start scheduler button
@@ -1069,6 +1144,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 self.log("Bluetooth connection failed.")
         except Exception as e:
             self.log(f"Bluetooth connection failed: {e}")
+        finally:
+            # Without this, the config/profile selector (disabled by
+            # start_bluetooth()'s disable_controls() right before this
+            # thread starts) stayed locked forever after a connection
+            # attempt - success or failure - making it impossible to
+            # switch to another profile to connect a second Dwarf.
+            self.enable_controls()
 
       #  self.after(0, self.start_scheduler)
 
@@ -1078,12 +1160,91 @@ class AstroDwarfSchedulerApp(tk.Tk):
         self.bluetooth_connected = False
         self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
 
+    class _ThreadFilter(logging.Filter):
+        """Only lets through log records emitted by ONE specific thread.
+        Every LogRecord already carries `record.thread` (the emitting
+        thread's ident) for free - no change needed to any log.notice()/
+        log.info() call site anywhere in the codebase. Since each
+        scheduler slot runs in its own dedicated thread, this cleanly
+        separates their output without any session-tagging plumbing."""
+        def __init__(self, thread_ident):
+            super().__init__()
+            self.thread_ident = thread_ident
+
+        def filter(self, record):
+            return record.thread == self.thread_ident
+
+    def _attach_dedicated_log_file(self, log_file_path, thread_ident, tag=""):
+        """Create and attach a FileHandler restricted to `thread_ident`'s
+        own records via _ThreadFilter - so this file receives ONLY this
+        scheduler's own output, regardless of what any other concurrently
+        running scheduler/thread logs at the same time. Returns the
+        handler so the caller can remove/close it when its scheduler
+        stops.
+
+        Also registers `thread_ident` with my_logger's shared-log
+        exclusion (exclude_thread_from_shared_log()) so the OLD global/
+        shared file_handler (update_log_file(), re-pointed whenever the
+        combobox selection changes) stops ALSO capturing this thread's
+        output - without this, that unfiltered global handler would
+        still occasionally pick up a stray copy of this thread's messages
+        whenever it happens to be pointed at a file this thread's output
+        would also match."""
+        prefix = f"[{tag}] " if tag else ""
+        handler = logging.FileHandler(log_file_path)
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(logging.Formatter(f'%(asctime)s - %(levelname)s - {prefix}%(message)s'))
+        handler.addFilter(self._ThreadFilter(thread_ident))
+        logging.getLogger().addHandler(handler)
+        exclude_thread_from_shared_log(thread_ident)
+        return handler
+
+    def _detach_dedicated_log_file(self, handler, thread_ident):
+        """Undo _attach_dedicated_log_file(): removes/closes the dedicated
+        handler and re-includes the thread in the shared/global log."""
+        if handler is not None:
+            logging.getLogger().removeHandler(handler)
+            handler.close()
+        include_thread_in_shared_log(thread_ident)
+
+    def _ensure_session_io_thread_excluded(self, session, excluded_idents):
+        """session.event_loop_thread (dwarf_session_socket.py) is a
+        SEPARATE background thread from the scheduler thread itself - it's
+        the one that actually does the raw WebSocket send/receive I/O, not
+        the scheduler loop that calls into it and waits. It's created
+        lazily on first connect (and can be re-created on a reconnect), so
+        excluding just the scheduler thread's own ident (done once, at
+        startup, by _attach_dedicated_log_file) misses this one. Call this
+        periodically (safe/cheap - a no-op once already excluded) to catch
+        it as soon as it exists, including after a reconnect creates a new
+        one. `excluded_idents` is a set the caller owns and must re-include
+        (include_thread_in_shared_log) for every ident in it when its
+        scheduler run ends."""
+        io_thread = getattr(session, "event_loop_thread", None)
+        ident = getattr(io_thread, "ident", None)
+        if ident is not None and ident not in excluded_idents:
+            exclude_thread_from_shared_log(ident)
+            excluded_idents.add(ident)
+
     def start_scheduler(self):
+        if self.scheduler_running and not self._scheduler_running_for_current_profile():
+            self.log(
+                f"A scheduler is already running for profile '{self.scheduler_running_config_name}' - "
+                "stop it first before starting one on this profile.",
+                level="error",
+            )
+            messagebox.showwarning(
+                "Scheduler already running",
+                f"A scheduler is already running for profile '{self.scheduler_running_config_name}'.\n"
+                "Only one scheduler can run at a time for now - switch to that profile to stop it first.",
+            )
+            return
         self.disable_controls()
         if not self.scheduler_running:
             self.log("Astro Dwarf Scheduler is starting...")
             self.toggle_buttons("waiting")
             self.scheduler_running = True
+            self.scheduler_running_config_name = get_current_config_name()
             self.scheduler_stop_event.clear()
             self.start_logHandler()
             self.scheduler_start_time = datetime.now()  # Track when the scheduler starts
@@ -1123,6 +1284,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                     self.scheduler_button.config(state=tk.NORMAL, text="Start Scheduler")
                     self.enable_controls()
                     self.scheduler_stopped = True
+                    self.scheduler_running_config_name = None
                     # Update file counts when scheduler stops
                     if hasattr(self, 'update_session_counts'):
                         self.update_session_counts()
@@ -1150,8 +1312,109 @@ class AstroDwarfSchedulerApp(tk.Tk):
         if hasattr(self, 'update_session_counts'):
             self.update_session_counts()
 
+    def toggle_scheduler_2(self):
+        """Second, independent scheduler slot - see comment near
+        self.scheduler_button_2 above. No cross-guard with the main
+        scheduler needed: the two slots are fully independent (each has
+        its own running flag/stop event/thread), by design - that's the
+        whole point of this quick test harness."""
+        if self.scheduler_running_2:
+            self.stop_scheduler_2()
+        else:
+            self.start_scheduler_2()
+
+    def start_scheduler_2(self):
+        if self.scheduler_running_2:
+            return
+        self.scheduler_running_2 = True
+        self.scheduler_running_config_name_2 = get_current_config_name()
+        self.scheduler_stop_event_2.clear()
+        self.scheduler_button_2.config(text="Stop Scheduler 2")
+        self.log(f"[Scheduler 2] Starting for profile '{self.scheduler_running_config_name_2}'...")
+
+        if not hasattr(self, 'scheduler_thread_2') or not self.scheduler_thread_2.is_alive():
+            self.scheduler_thread_2 = threading.Thread(target=self.run_scheduler_2, daemon=True)
+            self.scheduler_thread_2.start()
+
+    def stop_scheduler_2(self):
+        if not self.scheduler_running_2:
+            return
+        self.scheduler_running_2 = False
+        self.scheduler_stop_event_2.set()
+        self.log(f"[Scheduler 2] Stopping for profile '{self.scheduler_running_config_name_2}'...")
+        self.scheduler_button_2.config(text="Start Scheduler 2")
+
+    def run_scheduler_2(self):
+        """Minimal loop mirroring run_scheduler()'s core - deliberately
+        skips toggle_buttons()/session_info_label/countdown polish (those
+        are tied to "the currently displayed profile", not this slot) so
+        it can't fight over shared widgets with the main scheduler. Good
+        enough to validate real parallel hardware operation; revisit with
+        a proper per-profile refactor (see MIGRATION_MULTI_V3.md) if this
+        becomes a permanent feature rather than a test harness."""
+        try:
+            scheduler_session_2 = get_current_session()
+            # Dedicated, thread-filtered log file - see
+            # _attach_dedicated_log_file()/_ThreadFilter above. Attached
+            # from THIS thread (not from start_scheduler_2()) since a
+            # Thread's .ident only exists once it has actually started.
+            self.file_handler_2 = None
+            file_handler_2_thread_ident = threading.current_thread().ident
+            if scheduler_session_2 is not None:
+                try:
+                    log_file_2 = scheduler_session_2.config.log_file or "app.log"
+                    self.file_handler_2 = self._attach_dedicated_log_file(
+                        log_file_2, file_handler_2_thread_ident, tag="Scheduler 2",
+                    )
+                except Exception as e:
+                    self.log(f"[Scheduler 2] Could not set up its own log file, entries may be missing: {e}", level="error")
+            attempt = 0
+            result = False
+            extra_excluded_idents_2 = set()
+            while not result and attempt < 3 and self.scheduler_running_2 and not self.scheduler_stop_event_2.is_set():
+                attempt += 1
+                result = start_STA_connection(True, session=scheduler_session_2)
+
+            if not result:
+                self.log(f"[Scheduler 2] Could not connect for profile '{self.scheduler_running_config_name_2}'.", level="error")
+            elif scheduler_session_2 is not None:
+                self._ensure_session_io_thread_excluded(scheduler_session_2, extra_excluded_idents_2)
+
+            while result and self.scheduler_running_2 and not self.scheduler_stop_event_2.is_set():
+                try:
+                    if scheduler_session_2 is not None:
+                        self._ensure_session_io_thread_excluded(scheduler_session_2, extra_excluded_idents_2)
+                    sessions_processed = check_and_execute_commands(
+                        stop_event=self.scheduler_stop_event_2, session=scheduler_session_2,
+                    )
+                    if not sessions_processed:
+                        self.scheduler_stop_event_2.wait(timeout=10)
+                except Exception as e:
+                    self.log(f"[Scheduler 2] Error: {e}", level="error")
+                    self.scheduler_stop_event_2.wait(timeout=10)
+        finally:
+            self.scheduler_running_2 = False
+            self.after(0, lambda: self.scheduler_button_2.config(text="Start Scheduler 2"))
+            self.log(f"[Scheduler 2] Stopped for profile '{self.scheduler_running_config_name_2}'.")
+            self._detach_dedicated_log_file(getattr(self, 'file_handler_2', None), file_handler_2_thread_ident)
+            self.file_handler_2 = None
+            for ident in extra_excluded_idents_2:
+                include_thread_in_shared_log(ident)
+
     def toggle_scheduler(self):
         """Toggle between start and stop scheduler functionality."""
+        if self.scheduler_running and not self._scheduler_running_for_current_profile():
+            self.log(
+                f"A scheduler is already running for profile '{self.scheduler_running_config_name}' - "
+                "switch to it to stop it, or wait for it to finish.",
+                level="error",
+            )
+            messagebox.showwarning(
+                "Scheduler already running",
+                f"A scheduler is already running for profile '{self.scheduler_running_config_name}'.\n"
+                "Switch to that profile to stop it.",
+            )
+            return
         if self.scheduler_running:
             self.stop_scheduler()
         else:
@@ -1233,7 +1496,8 @@ class AstroDwarfSchedulerApp(tk.Tk):
         if not confirm or result:  # User clicked "Yes" or Not necessary
             # Only start if not already running and user confirmed
             if not hasattr(self, 'stop_astro_photo') or not self.stop_astro_photo.is_alive():
-                self.stop_astro_photo = threading.Thread(target=perform_stopAstroPhoto, daemon=True)
+                session = get_current_session()
+                self.stop_astro_photo = threading.Thread(target=lambda: perform_stopAstroPhoto(session=session), daemon=True)
 
             self.stop_astro_photo.start()
 
@@ -1285,7 +1549,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
         else:
             self.log("Timeout reached, forcing disconnect...")
             try:
-                perform_disconnect()
+                perform_disconnect(session=getattr(self, 'scheduler_session', None))
             except:
                 pass
             self.scheduler_stopped = True
@@ -1297,21 +1561,65 @@ class AstroDwarfSchedulerApp(tk.Tk):
         try:
             self.scheduler_stopped = False
             self.session_running = False  # Track if a session is running
+            scheduler_session = None  # defined early so the finally block is always safe
+            scheduler_log_handler = None
+            scheduler_thread_ident = None
+            extra_excluded_idents = set()
+            # Pin the device this scheduler run targets to whatever profile
+            # is active RIGHT NOW - captured once, used for this thread's
+            # entire lifetime. Without this, switching the active UI
+            # profile while this scheduler loop keeps running would
+            # silently redirect its next scheduled command to a different
+            # physical device (get_current_session() would return
+            # whatever is newly selected, not what this run started with).
+            scheduler_session = get_current_session()
+            # Also kept as an instance attribute so other methods tied to
+            # the main scheduler (e.g. verifyCountdown()'s forced-disconnect
+            # timeout path) can reach this run's pinned session too,
+            # without depending on whatever profile the combobox shows by
+            # the time they run.
+            self.scheduler_session = scheduler_session
+            # Dedicated, thread-filtered log file for THIS scheduler run -
+            # see _attach_dedicated_log_file()/_ThreadFilter above. Applies
+            # the same fix to the main scheduler as scheduler 2 already
+            # has, so BOTH files stay clean during genuine parallel runs
+            # instead of just one of them.
+            scheduler_log_handler = None
+            scheduler_thread_ident = threading.current_thread().ident
+            if scheduler_session is not None:
+                try:
+                    log_file = scheduler_session.config.log_file or "app.log"
+                    scheduler_log_handler = self._attach_dedicated_log_file(
+                        log_file, scheduler_thread_ident,
+                    )
+                except Exception as e:
+                    self.log(f"Could not set up dedicated log file for this scheduler: {e}", level="error")
+            # Once the session is pinned above, this scheduler thread is
+            # fully independent from whatever profile the UI shows next -
+            # safe to unlock the profile selector now instead of waiting
+            # for this scheduler to fully stop, so the user can switch to
+            # another profile and connect/operate a second Dwarf while
+            # this one keeps running.
+            self.enable_controls()
             attempt = 0
             result = False
             while not result and attempt < 3 and self.scheduler_running and not self.scheduler_stop_event.is_set():
                 attempt += 1
-                result = start_STA_connection(not self.bluetooth_connected)
+                result = start_STA_connection(not self.bluetooth_connected, session=scheduler_session)
 
             if result:
                 # Enable controls  
                 self.toggle_buttons(tk.NORMAL)
                 self.log("Connected to the Dwarf")
+                if scheduler_session is not None:
+                    self._ensure_session_io_thread_excluded(scheduler_session, extra_excluded_idents)
 
                 while result and self.scheduler_running and not self.scheduler_stop_event.is_set():
                     try:
+                        if scheduler_session is not None:
+                            self._ensure_session_io_thread_excluded(scheduler_session, extra_excluded_idents)
                         session_start = datetime.now()
-                        sessions_processed = check_and_execute_commands(ui_instance=self, stop_event=self.scheduler_stop_event, skip_time_checks=self.skip_time_checks)
+                        sessions_processed = check_and_execute_commands(ui_instance=self, stop_event=self.scheduler_stop_event, skip_time_checks=self.skip_time_checks, session=scheduler_session)
                         session_end = datetime.now()
 
                         if sessions_processed:
@@ -1349,10 +1657,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.session_running = False  # Ensure session state is reset
             # Ensure proper cleanup
             try:
-                perform_disconnect()
+                perform_disconnect(session=scheduler_session)
                 self.log("Disconnected from the Dwarf.")
             except Exception as e:
                 self.log(f"Error during disconnect: {e}", level="error")
+
+            if scheduler_thread_ident is not None:
+                self._detach_dedicated_log_file(scheduler_log_handler, scheduler_thread_ident)
+            for ident in extra_excluded_idents:
+                include_thread_in_shared_log(ident)
 
             # Update UI state on main thread
             def update_ui_after_scheduler():
@@ -1371,14 +1684,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_unset_lock_device(self):
         try:
+            session = get_current_session()
             attempt = 0
             result = False
             while not result and attempt < 3:
                 attempt += 1
                 if self.unset_lock_device_mode:
-                    result = unset_HostMaster()
+                    result = unset_HostMaster(session=session)
                 else:
-                    result = set_HostMaster()
+                    result = set_HostMaster(session=session)
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
             if result:
@@ -1395,6 +1709,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_eq_solving(self):
         try:
+            session = get_current_session()
             attempt = 0
             result = False
             self.log("Starting EQ Solving process...")
@@ -1402,14 +1717,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 attempt += 1
                 setattr(self, '_stop_video_stream', False)
                 self.start_video_preview()
-                result = start_polar_align()
+                result = start_polar_align(session=session)
                 if not result:
                     time.sleep(10)  # Sleep for 10 seconds between checks
             setattr(self, '_stop_video_stream', True)
         except Exception as e:
             try:
-                read_longitude()
-                read_latitude()
+                read_longitude(session=session)
+                read_latitude(session=session)
                 self.log(f"Error during EQ Solving: {e}", level="error")
             except Exception as e:
                 self.log(f"Error: Missing Longitude/Latitude in settings", level="error")
@@ -1418,10 +1733,15 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_polar_position(self):
         try:
+            session = get_current_session()
             dwarf_id = 2
-            data_config = config_py.get_config_data()
-            if data_config.get("dwarf_id"):
-                dwarf_id = data_config['dwarf_id']
+            if session is not None:
+                if session.config.dwarf_model_id:
+                    dwarf_id = session.config.dwarf_model_id
+            else:
+                data_config = config_py.get_config_data()
+                if data_config.get("dwarf_id"):
+                    dwarf_id = data_config['dwarf_id']
 
             dwarf_id_int = config_to_dwarf_id_int(dwarf_id)
 
@@ -1434,25 +1754,25 @@ class AstroDwarfSchedulerApp(tk.Tk):
             while not result and attempt < 1:
                 attempt += 1
                 # Rotation Motor Resetting
-                result = motor_action(5)
+                result = motor_action(5, session=session)
                 if result:
                     # Pitch Motor Resetting
-                    result = motor_action(6)
+                    result = motor_action(6, session=session)
 
                 self.start_video_preview()
 
                 if result and dwarf_id_int >= 3:
                     # Rotation Motor positioning D3
-                    result = motor_action(9)
+                    result = motor_action(9, session=session)
                 elif result:
                     # Rotation Motor positioning
-                    result = motor_action(2)
+                    result = motor_action(2, session=session)
                 if result and dwarf_id_int >= 3:
                     # Pitch Motor positioning D3
-                    result = motor_action(7)
+                    result = motor_action(7, session=session)
                 elif result:
                     # Pitch Motor positioning
-                    result = motor_action(3)
+                    result = motor_action(3, session=session)
 
                 if result:
                     self.log("Successfully positioned for polar alignment")
@@ -1467,21 +1787,22 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def start_auto_focus(self):
         try:
+            session = get_current_session()
             self.log("Starting Auto Focus process...")
             setattr(self, '_stop_video_stream', False)
             self.start_video_preview()
 
-            continue_action = perform_time()
+            continue_action = perform_time(session=session)
             verify_action(continue_action, "step_0")
 
             # Go Live
-            continue_action = perform_GoLive()
+            continue_action = perform_GoLive(session=session)
             verify_action(continue_action, "step_1a")
 
             wait_after = 5
             wait_before = 5
 
-            continue_action = perform_stop_goto()
+            continue_action = perform_stop_goto(session=session)
             verify_action(continue_action, "step_6")
             self.log(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
@@ -1489,14 +1810,14 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.log("Starting Auto Focus")
             self.log(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
-            continue_action = perform_start_autofocus()
+            continue_action = perform_start_autofocus(session=session)
             verify_action(continue_action, "step_7")
             self.log(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
-            continue_action = perform_stop_goto()
+            continue_action = perform_stop_goto(session=session)
             self.log(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
-            continue_action = perform_start_autofocus()
+            continue_action = perform_start_autofocus(session=session)
 
             setattr(self, '_stop_video_stream', True)
 
@@ -1506,23 +1827,24 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_calibration(self):
         try:
+            session = get_current_session()
 
             # Session initialization
             self.log("Starting Calibration process...")
             setattr(self, '_stop_video_stream', False)
             self.start_video_preview()
 
-            continue_action = perform_time()
+            continue_action = perform_time(session=session)
             verify_action(continue_action, "step_0")
 
             # Go Live
-            continue_action = perform_GoLive()
+            continue_action = perform_GoLive(session=session)
             verify_action(continue_action, "step_1a")
 
             wait_after = 5
             wait_before = 5
 
-            continue_action = perform_stop_goto()
+            continue_action = perform_stop_goto(session=session)
             verify_action(continue_action, "step_6")
             self.log(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
@@ -1530,11 +1852,11 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.log("Starting Calibration")
             self.log(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
-            continue_action = perform_calibration()
+            continue_action = perform_calibration(session=session)
             verify_action(continue_action, "step_7")
             self.log(f"Waiting for {wait_after} seconds")
             time.sleep(wait_after)
-            continue_action = perform_stop_goto()
+            continue_action = perform_stop_goto(session=session)
             self.log(f"Waiting for {wait_after} seconds")
 
             setattr(self, '_stop_video_stream', True)
@@ -1545,6 +1867,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_stop_astrophotos(self):
         try:
+            session = get_current_session()
             self.log("Stopping Astro Photo Session...")
             setattr(self, '_stop_video_stream', False)
             self.start_video_preview()
@@ -1555,7 +1878,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
             self.log(f"Waiting for {wait_before} seconds")
             time.sleep(wait_before)
 
-            continue_action = perform_stopAstroPhoto()
+            continue_action = perform_stopAstroPhoto(session=session)
             verify_action(continue_action, "step_16")
 
             self.log(f"Waiting for {wait_after} seconds")
@@ -1570,8 +1893,12 @@ class AstroDwarfSchedulerApp(tk.Tk):
     def run_toogle_lights(self):
         try:
             self.log("Starting toogle lights process...")
+            session = get_current_session()
+            if session is None:
+                self.log("No active session yet - connect a Dwarf first.", level="error")
+                return
             # get Status
-            dwarf_status = get_client_status()
+            dwarf_status = get_client_status(session)
             self.status_powerlight = (
                 dwarf_status.get("fullStatus", {}).get("PowerIndicatorDwarf", False)
             )
@@ -1579,13 +1906,13 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 dwarf_status.get("fullStatus", {}).get("RgbIndicatorDwarf", False)
             )
             if self.status_rgblight:
-                perform_powerCloseRGB()
+                perform_powerCloseRGB(session=session)
             else:
-                perform_powerOpenRGB()
+                perform_powerOpenRGB(session=session)
             if self.status_powerlight:
-                perform_powerIndOff()
+                perform_powerIndOff(session=session)
             else:
-                perform_powerIndOn()
+                perform_powerIndOn(session=session)
             
         except Exception as e:
             self.log(f"Error in Power Down: {e}", level="error")
@@ -1593,6 +1920,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_powerdown(self):
         try:
+            session = get_current_session()
             self.log("Starting Power Down process...")
             self.toggle_buttons(tk.NONE)
             # Run toggle_scheduler in background with 5 second delay
@@ -1600,7 +1928,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 time.sleep(5)
                 self.toggle_scheduler()            
             threading.Thread(target=delayed_toggle, daemon=True).start()
-            perform_powerdown()
+            perform_powerdown(session=session)
             
         except Exception as e:
             self.log(f"Error in Power Down: {e}", level="error")
@@ -1608,6 +1936,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
 
     def run_start_reboot(self):
         try:
+            session = get_current_session()
             self.log("Starting Reboot process...")
             self.toggle_buttons(tk.NONE)
             # Run toggle_scheduler in background with 5 second delay
@@ -1615,7 +1944,7 @@ class AstroDwarfSchedulerApp(tk.Tk):
                 time.sleep(5)
                 self.toggle_scheduler()            
             threading.Thread(target=delayed_toggle, daemon=True).start()
-            perform_reboot()
+            perform_reboot(session=session)
             
         except Exception as e:
             self.log(f"Error in Power Down: {e}", level="error")

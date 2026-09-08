@@ -33,7 +33,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-local.txt --target .
-          pip install pyinstaller nicegui-pack
+          pip install pyinstaller
 
       - name: ⚙️ Run build script
         run: |

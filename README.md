@@ -1,23 +1,25 @@
+
 # Astro Dwarf Session
 
 Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 3, and Dwarf Mini telescopes. It runs as a lightweight local web app (built with [NiceGUI](https://nicegui.io)) that you open in a browser or as a native desktop window — and, since it's a web app, from your phone or tablet too, on the same network.
 
 > **Note:** this project used to ship a Tkinter desktop GUI (`astro_dwarf_session_UI.py`). That interface is retired — a full rewrite on NiceGUI now covers everything it did and more, including proper multi-device support. The old Tkinter code is preserved on the `V3-multi` branch for reference.
 
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Home.png)
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Home_Session.png)
+<img width="1008" height="791" alt="Screen_Dwarf_Session_Home" src="https://github.com/user-attachments/assets/cd685d0f-505a-4468-9543-40224d2020b6" />
 
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Detail.png)
+<img width="1011" height="905" alt="Screen_Dwarf_Session_Home_Session" src="https://github.com/user-attachments/assets/1120c509-5a21-4ce6-b0fa-cddb6a9b012c" />
 
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Program_1.png)
+<img width="1007" height="1049" alt="Screen_Dwarf_Session_Detail" src="https://github.com/user-attachments/assets/98211df4-4266-41f5-8ff0-516ef13b59c3" />
 
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Program_2.png)
+<img width="1004" height="1002" alt="Screen_Dwarf_Session_Program_1" src="https://github.com/user-attachments/assets/e5a28f22-86f8-455c-93a0-c3d21811cc96" />
+<img width="1004" height="595" alt="Screen_Dwarf_Session_Program_2" src="https://github.com/user-attachments/assets/f054525e-f82a-4bba-b5f5-4c536639d961" />
 
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Program_Scripts.png)
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Program_Result.png)
+<img width="1003" height="771" alt="Screen_Dwarf_Session_Program_Scripts" src="https://github.com/user-attachments/assets/b5b03398-e0ff-4406-b01f-3bdf050fd501" />
+<img width="1005" height="896" alt="Screen_Dwarf_Session_Program_Result" src="https://github.com/user-attachments/assets/74aecb3d-e8bf-4611-ba34-425c645efde2" />
 
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Explorer.png)
-![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Explorer_full.png)
+
+<img width="1010" height="794" alt="Screen_Dwarf_Session_Explorer" src="https://github.com/user-attachments/assets/13fa5367-5671-43e5-ae4b-88154625fcf3" />
+<img width="1009" height="793" alt="Screen_Dwarf_Session_Explorer_full" src="https://github.com/user-attachments/assets/78209d87-05c4-4ef6-81f2-ee9a8cb356cd" />
 
 ## What it does
 

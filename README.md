@@ -1,207 +1,126 @@
-# Astro Dwarf Scheduler
+# Astro Dwarf Session
 
-Astro Dwarf Scheduler is a comprehensive tool designed to automate imaging sessions for Dwarf II and Dwarf III devices. It provides both GUI and console interfaces for creating, managing, and executing astronomical imaging sessions with advanced scheduling capabilities.
+Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 3, and Dwarf Mini telescopes. It runs as a lightweight local web app (built with [NiceGUI](https://nicegui.io)) that you open in a browser or as a native desktop window — and, since it's a web app, from your phone or tablet too, on the same network.
 
-<img width="812" height="832" alt="Screenshot 2025-09-14 233515" src="https://github.com/user-attachments/assets/f059393c-19d7-4026-b04d-69ddb28f0ca0" />
+> **Note:** this project used to ship a Tkinter desktop GUI (`astro_dwarf_session_UI.py`). That interface is retired — a full rewrite on NiceGUI now covers everything it did and more, including proper multi-device support. The old Tkinter code is preserved on the `V3-multi` branch for reference.
 
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Home.png)
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Home_Session.png)
 
-## Features
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Detail.png)
 
-### Core Functionality
-- **Automated Session Management**: Processes JSON session files based on scheduled times
-- **Multi-Device Support**: Full compatibility with Dwarf II and Dwarf III telescopes
-- **Flexible Connectivity**: Supports both Bluetooth and Wi-Fi connections
-- **Cross-Platform**: Works on Windows, macOS, and Linux
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Program_1.png)
 
-### GUI Application (`astro_dwarf_session_UI.py`)
-The modern GUI provides six comprehensive tabs:
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Program_2.png)
 
-#### 📋 **Main Tab**
-- **Multi-Configuration Support**: Manage multiple telescope setups
-- **Real-Time Video Preview**: Live MJPEG stream from telescope
-- **Session Monitoring**: Live session info with runtime tracking and countdowns
-- **Connection Management**: Bluetooth/Wi-Fi connection controls
-- **Scheduler Controls**: Start/stop scheduler, calibration, polar alignment
-- **Session Statistics**: Real-time file counts for ToDo/Current/Done/Error/Results
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Program_Scripts.png)
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Program_Result.png)
 
-#### ⚙️ **Settings Tab**
-- **Device Configuration**: Telescope type, camera settings, imaging parameters
-- **Location Services**: Automatic location detection and manual coordinates
-- **Path Management**: Stellarium integration, session directories
-- **UI Preferences**: Display brightness and interface customization
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Explorer.png)
+![image](p:\JiCi_IMG\Screenshots\Screen_Dwarf_Session_Explorer_full.png)
 
-#### 🆕 **Create Session Tab**
-- **Manual Session Creation**: Target coordinates, imaging parameters, scheduling
-- **CSV Import Support**: 
-  - Stellarium CSV format
-  - Telescopius mosaic planning files
-- **Real-Time Stellarium Integration**: Fetch current target from Stellarium
-- **Smart Validation**: Comprehensive session data validation
-- **Multiple Target Types**: Solar system objects, manual coordinates, or no goto
+## What it does
 
-#### 👁️ **Overview Session Tab**
-- **Session Queue Management**: Visual session pipeline (ToDo → Current → Done/Error)
-- **Real-Time Monitoring**: Live video feed with frame capture
-- **Session Details**: Complete session information display
-- **Queue Operations**: Move, delete, and organize sessions
-- **Execution Controls**: Start/stop individual or batch sessions
-
-#### 📊 **Results Session Tab**
-- **Automated Analysis**: JSON to CSV conversion by observation night
-- **Success/Error Tracking**: Separate views for completed and failed sessions
-- **Session Statistics**: Exposure counts, timing, equipment settings
-- **Data Export**: CSV format for further analysis
-- **Historical Data**: Organized by observation date
-
-#### ✏️ **Edit Sessions Tab**
-- **Live Session Editing**: Modify existing session files
-- **Form-Based Interface**: User-friendly parameter adjustment
-- **Bulk Operations**: Select and modify multiple sessions
-- **Real-Time Validation**: Immediate feedback on changes
-
-### Advanced Features
-- **Directory Auto-Creation**: Intelligent session folder management
-- **Error Recovery**: Robust error handling and session retry logic
-- **Time Zone Support**: Proper handling of observation scheduling
-- **Configuration Backup**: Safe configuration management
-- **Video Stream Management**: Efficient MJPEG streaming with proper cleanup
-- **Memory Management**: Optimized video streaming and UI updates
-- **Thread Safety**: Proper multi-threaded operation
-- **Cross-Platform Paths**: Proper path handling for all operating systems
+- **Connects to your Dwarf(s)** over Wi-Fi (BLE pairing built in) and talks to them live over the same WebSocket/protobuf protocol the official app uses.
+- **Controls several telescopes from one app**, side by side — a "mission control" dashboard shows every paired Dwarf at a glance: connected/disconnected, battery, sensor temperature, free storage, and a live camera thumbnail while a capture is running.
+- **Runs and schedules imaging programs**: build a program once (goto, calibration, EQ Solving, camera settings, capture — including Mosaic panels) and either run it live or schedule it for later. A background scheduler picks up due programs even with no browser tab open.
+- **Lets you browse the sessions already on the device** — a dedicated explorer lists real astro sessions straight from the Dwarf's own storage, sorted newest first, with thumbnails and a one-click enlarged view showing target, date, exposure, gain, and IR filter.
+- **Keeps a live step-by-step trace** of what a running program is doing, and a full log viewer for anything that needs a closer look.
+- **Installs to your phone's home screen** as a standalone app (no browser address bar) via built-in PWA support.
 
 ## Installation
 
 ### Prerequisites
-- Python 3.8 or higher
-- Windows 10/11, macOS 10.15+, or modern Linux distribution
+- Python 3.10+
+- Windows, macOS, or Linux
 
-### Quick Setup
-1. Download or clone this project to your local machine
-
-2. Install the required Python libraries:
-   ```sh
-   python -m pip install -r requirements.txt
-   python -m pip install -r requirements-local.txt --target .
-   ```
-   > **Note**: The `dwarf_python_api` library must be installed locally in the root path of this project using the `--target .` parameter.
-
-3. **Optional**: Install video preview dependencies:
-   ```sh
-   pip install Pillow requests
-   ```
-
-4. Configure the `config.ini` file with your Wi-Fi SSID and password to use your Dwarf on your local Wi-Fi network.
-
-### Starting the Application
-
-#### GUI Version (Recommended)
+### Setup
 ```sh
-python astro_dwarf_session_UI.py
+git clone <this repo>
+cd astro_dwarf_session
+
+Install a virtual env
+python -m venv myenv
+Add Rights on Windows
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+Activate the virtual env
+myenv\Scripts\activate
+
+Install the dependency
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-local.txt --target .
 ```
 
-#### Console Version
-```sh
-python astro_dwarf_scheduler.py
-```
+Note: The dwarf_python_api library must be installed locally in the root path of this project using the --target . parameter.
 
-For console version with parameters:
+
+### Running
 ```sh
-python astro_dwarf_scheduler.py --ip ip_value --id (2 or 3)
+python astro_dwarf_ui.py
 ```
+This opens a native desktop window by default, backed by a local web server. To run it server-only (no desktop window, useful headless or to just use it from a browser/phone):
+```sh
+python astro_dwarf_ui.py --no-native
+```
+Then open `http://<this-computer's-IP>:<port>` from any device on the same network — the port is chosen automatically and printed on startup, or pass `--port` to fix it.
+
+On a phone, open that same address in the browser, then use "Add to Home Screen" (iOS Safari) or "Install app" (Android Chrome) to get an app-like icon with no address bar.
 
 ## Usage
 
-### Getting Started
-1. **Configure Settings**: Use the Settings tab to set up your telescope and location
-2. **Create Sessions**: Use the Create Session tab or import CSV files
-3. **Monitor Progress**: Use the Overview tab to watch sessions execute
-4. **Review Results**: Check the Results tab for session analysis
+### Pairing a device
+From the dashboard, tap **+** to pair a new Dwarf over Bluetooth — it walks you through selecting the device and joining your Wi-Fi network. Once paired, the device shows up on the dashboard permanently (until you remove it).
 
-### Session File Management
-- Session files are automatically organized in `./Astro_Sessions/` subdirectories:
-  - `ToDo/`: Sessions waiting to be processed
-  - `Current/`: Currently executing session
-  - `Done/`: Successfully completed sessions
-  - `Error/`: Failed sessions for review
-  - `Results/`: CSV analysis files organized by night
+### Live control
+Open a paired device from the dashboard to reach its control page: camera settings (exposure, gain, binning, IR filter — per-model, since Dwarf II/3/Mini each have their own filter set), one-off actions (calibration, EQ Solving with a live Azimuth/Altitude correction readout, goto, reboot), and the live camera stream.
 
-### Multi-Device Setup
-The application supports multiple telescope configurations:
-1. Enable "Multiple" mode in the Main tab
-2. Create named configurations for different telescopes
-3. Each configuration maintains separate session directories
-4. Switch between configurations seamlessly
+### Programs
+The program editor builds a JSON session file — the same format the scheduler consumes — covering goto (solar/manual/none), calibration, EQ Solving, camera setup, capture duration, and Mosaic (framing scale on each axis, shots per panel). Save a program to run it immediately, or schedule it for a specific date/time; the scheduler runs in the background regardless of which page you're looking at, and retries a failed step a configurable number of times before giving up.
 
-### Stellarium Integration
-- Real-time target fetching from Stellarium
-- Automatic coordinate conversion
-- Object identification and description
-- Seamless workflow integration
+### Session explorer
+Each device's control page links to an **Astro Sessions** explorer: a grid of thumbnails pulled directly from the Dwarf's own on-device album (no separate app or cloud account needed), sorted most-recent-first. Click a thumbnail for a large view with the session's target, capture date, exposure, gain, and IR filter.
 
-### CSV Import Formats
-#### Stellarium CSV
-```csv
-Name,RA,Dec,Magnitude,Type
-M31,00:42:44.3,+41:16:09,3.4,Galaxy
-```
-
-#### Telescopius Mosaic
-```csv
-Pane,RA,DEC,Description
-1,00:42:44.3,+41:16:09,M31 Pane 1
-```
-
-## Troubleshooting
-
-### Connection Issues
-- If Bluetooth fails, the application will prompt for connection attempts
-- Wi-Fi parameters can be set via command line for headless operation
-- Use the Dwarfium app to establish initial connection if needed
-
-### Configuration Issues
-- **Dwarf ID Inconsistency Fix**: The system handles dwarf_id values differently between Bluetooth and IP connections:
-  - **Device returns actual ID**: Dwarf II = 2, Dwarf III = 3
-  - **Config stores offset ID**: Dwarf II = 1, Dwarf III = 2
-  - **Bluetooth connection**: Correctly sends offset values
-  - **IP connection**: Now converts actual device ID to offset before storing
-  - **Result**: Consistent dwarf_id handling across all connection methods
-
-### Video Preview Issues
-- Install `Pillow` and `requests` if video preview shows installation message
-- Check network connectivity to telescope IP
-- Video stream URL: `http://{DWARF_IP}:8092/mainstream`
-
-### Session Management
-- Ensure proper permissions for session directories
-- Check that JSON session files are properly formatted
-- Review error logs for detailed troubleshooting information
+### Logs
+A dedicated `/logs` page tails the shared log file live, with a text filter — useful for anything the on-screen step trace doesn't cover in enough detail.
 
 ## Architecture
 
-### File Structure
 ```
-astro_dwarf_session/
-├── astro_dwarf_session_UI.py    # Main GUI application
-├── astro_dwarf_scheduler.py     # Console scheduler
-├── config.py                    # Configuration management
-├── dwarf_session.py            # Session execution logic
-├── tabs/                       # GUI tab modules
-├── Astro_Sessions/             # Session data directories
-└── dwarf_python_api/           # Telescope API
+astro_dwarf_session/          (this repo)
+├── astro_dwarf_ui.py         # entry point (NiceGUI + native window)
+├── dwarf_session.py          # session-execution logic (goto/calibration/EQ/capture/Mosaic)
+├── device_registry.py        # loads known devices' config.py/config.ini pairs at startup
+├── components/                # UI building blocks + the scheduler
+│   ├── scheduler_runner.py    #   runs one program, step by step
+│   ├── scheduler_loop.py      #   background timer that picks up due programs
+│   ├── program_editor.py      #   the program-builder form
+│   ├── camera_stream.py       #   live HTTP camera preview
+│   ├── device_card.py         #   the dashboard's per-device "mission control" card
+│   └── ...
+├── pages/                     # one file per route (dashboard, session, programs, explorer, settings, pairing, logs)
+├── images/                    # device-model icons shown on the dashboard
+└── dwarf_python_api/          # device-control library (WebSocket/protobuf + HTTP), a separate project
 ```
 
-### Session Workflow
-1. **Creation** → Sessions created in ToDo folder
-2. **Scheduling** → Automatic processing based on scheduled time
-3. **Execution** → Moved to Current during processing
-4. **Completion** → Moved to Done (success) or Error (failure)
-5. **Analysis** → Automatically analyzed into Results CSV files
+Session JSON files move through `Devices_Sessions/<device>/Astro_Sessions/{ToDo,Current,Done,Error}/` exactly as before — but for each device
+
+### Multi-device model
+Every paired Dwarf gets its own `DwarfSession` (own connection, own event loop, own cached state) inside a single process-wide `DwarfManager` — so the dashboard, a program running on one device, and live camera control on another can all happen at once without cross-talk between devices.
+
+## Troubleshooting
+
+- **A device shows "Disconnected" but the Dwarf's own status light is solid**: give it a few seconds — the app validates the connection with a real round-trip to the device rather than trusting the raw socket state, since a socket can look open while the device stopped actually responding.
+- **Video preview issues**: the live camera preview needs the Dwarf's own HTTP stacking endpoint (`http://<dwarf-ip>:8092/mainstream` for tele, `/secondstream` for wide) — confirm the device is reachable at that address.
+- **Windows async warnings** (`ConnectionResetError [WinError 10054]`, `_ProactorBasePipeTransport`): harmless asyncio/Windows noise, already suppressed at both the device-connection layer and the app's own web server.
+
+## See also
+
+**[Dwarfium Scope Archive](https://github.com/stevejcl/dwarfium-scope-archive)** — a companion tool for archiving and browsing completed Dwarf sessions via USB/FTP, without going through the device's live network API at all. Built on the same NiceGUI foundation as this app, which makes cross-launching between the two (jump straight from a just-finished session here into archiving it there, and back) a realistic near-term goal rather than a stretch.
 
 ## Contributing
 
-We welcome contributions! The codebase includes comprehensive error handling, logging, and cross-platform compatibility.
+Issues and pull requests welcome — this project leans heavily on real-hardware testing (network captures, direct device testing across Dwarf II/3/Mini) rather than guesswork, so bug reports with a log excerpt are especially useful.
 
 ## Notes
-- Clear skies and good luck! The Dwarf will work for you.
-- The application automatically manages session directories and file organization.
-- All configuration changes are applied immediately without restart required.
+
+Clear skies and good luck — the Dwarf will work for you.

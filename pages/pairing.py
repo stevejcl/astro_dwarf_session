@@ -203,6 +203,17 @@ async def _handle_pair(
         return
 
     if outcome == "single":
+        # Release BEFORE calling _finish_pairing() - that function
+        # acquires this SAME lock itself (shared with the "multiple
+        # devices, user picks one" path below, which re-scans by name
+        # and needs its own serialization). threading.Lock is NOT
+        # reentrant, so calling it here while still holding the lock
+        # from above guaranteed a self-block: _finish_pairing()'s own
+        # acquire() would always fail, firing "pairing_already_in_
+        # progress" on every single-device pairing attempt (user-
+        # reported Sep 2026) - not an actually-stuck lock from a prior
+        # crash, just this call site never releasing first.
+        _pairing_lock.release()
         await _finish_pairing(
             device_name, ble_psd, wifi_ssid, wifi_pwd, "", status_label, pair_button
         )

@@ -278,10 +278,11 @@ def build_session_page() -> None:
                         full_status = get_client_status(session).get("fullStatus", {})
 
                     error = full_status.get("ErrorConnection")
-                    capturing = full_status.get("AstroCapture") or full_status.get(
-                        "takePhotoStarted"
+                    capturing = (
+                        full_status.get("AstroCapture")
+                        or full_status.get("takePhotoStarted")
+                        or full_status.get("takeWidePhotoStarted")
                     )
-
                     # session.is_connected only reflects whether a
                     # client_instance/websocket OBJECT still exists - it
                     # does NOT get cleared when a single command times out
@@ -311,8 +312,17 @@ def build_session_page() -> None:
                     if error:
                         status_banner(t("error_with_detail", error=error), kind="danger")
                     elif capturing:
-                        stacked = full_status.get("takePhotoStacked", 0)
-                        count = full_status.get("takePhotoCount", 0)
+                        stacked = (
+                            full_status.get("takePhotoStacked", 0)
+                            or full_status.get("takeWidePhotoStacked", 0)
+                            or full_status.get("takeMosaicStacked", 0)
+                        )
+
+                        count = (
+                            full_status.get("takePhotoCount", 0)
+                            or full_status.get("takeWidePhotoCount", 0)
+                            or full_status.get("takeMosaicCount", 0)
+                        )
                         status_banner(
                             t("astro_capture_in_progress", stacked=stacked, count=count),
                             kind="info",

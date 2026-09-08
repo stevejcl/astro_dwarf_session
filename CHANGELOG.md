@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.0.0] - 2026-09-09
+
+### Improvements
+    Nice GUI new Interface
+    Dwarflab API 3.0 support
+    Adding Session Explorer
+    Multi Devices Support at same time
+
 ## [1.7.6] - 2025-10-15
 
 ### Improvements

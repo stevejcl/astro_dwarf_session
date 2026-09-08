@@ -33,7 +33,8 @@ from components.stellarium import get_target_from_stellarium
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 _SOLAR_TARGETS = ["", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Sun"]
-
+BINNING_MAP_D3 = {0: "4k", 1: "2k"}
+BINNING_NAME_TO_VAL_D3 = {"4k": 0, "2k": 1}
 
 def _blank_program() -> dict:
     """Mirrors save_to_json()'s own "data" dict shape exactly, with
@@ -265,6 +266,12 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             (v["name"] for v in _ir_filter_table(dwarf_type).values if v["index"] == _initial_ircut_index),
             None,
         )
+        try:
+            _initial_binning_index = int(cmd["setup_camera"].get("binning", "0") or "0")
+        except (TypeError, ValueError):
+            _initial_binning_index = 0
+        _initial_binning_name = "4k" if _initial_binning_index == 0 else "2k"
+
 
         with ui.row().classes("w-full gap-2") as camera_settings_section:
             exposure_input = ui.select(
@@ -286,6 +293,10 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 t("prog_wait_after_camera"), value=cmd["setup_camera"]["wait_after"], min=0
             ).classes("w-32")
 
+        def _ir_filter_names(dwarf_type: str) -> list[str]:
+            return [v["name"] for v in _ir_filter_table(dwarf_type).values]
+
+
         with ui.row().classes("w-full gap-2") as ir_filter_section:
             ir_filter_input = ui.select(
                 _ir_filter_names(dwarf_type),
@@ -293,6 +304,20 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 label=t("ir_filter"),
             ).classes("flex-1")
 
+            # Binning only on D3
+            binning_input = None
+
+            if dwarf_type == "3":
+                initial_val = BINNING_NAME_TO_VAL_D3.get(_initial_binning_name, 0)
+
+                binning_input = ui.select(
+                    options=BINNING_MAP_D3,
+                    value=initial_val,
+                    label=t("binning"),
+                ).classes("flex-1")
+
+                binning_val = binning_input.value
+    
         # Mosaic (tele-only, user-requested Sep 2026): a sub-section of
         # the tele capture settings - doMosaic off by default (a normal
         # single-target session). framingX/framingY are shown as the
@@ -551,6 +576,13 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 except (TypeError, ValueError):
                     return ""
 
+            if dwarf_type == "3" and binning_input is not None:
+                current_binning_val = binning_input.value
+            elif dwarf_type == "5":
+                current_binning_val = 1
+            else:
+                current_binning_val = 0
+
             return {
                 "id_command": {
                     **cmd["id_command"],
@@ -595,7 +627,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                     "do_action": (not is_wide and not is_no_camera) and int(count_input.value or 0) != 0,
                     "exposure": exposure_input.value or "",
                     "gain": str(int(gain_input.value)),
-                    "binning": cmd["setup_camera"].get("binning", "0"),
+                    "binning": str(current_binning_val), 
                     "ircut": str(_ir_filter_index_by_name(dwarf_type, ir_filter_input.value))
                     if ir_filter_input.value
                     else cmd["setup_camera"].get("ircut", "0"),

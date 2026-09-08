@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import sys
 from multiprocessing import freeze_support
@@ -37,11 +38,48 @@ from multiprocessing import freeze_support
 # is changed, which is what this does. Must run before ui.run() (or
 # anything else) creates any event loop - set at import time, as early
 # as possible in this file, rather than inside main().
+#
+# CAVEAT (Sep 2026, user-reported): this same noise can still show up
+# around BLE pairing specifically - bleak's own WinRT backend
+# (bleak.backends.winrt.util.allow_sta()'s own docs) genuinely wants a
+# Windows event loop "properly integrated with asyncio" for its COM/
+# WinRT calls, which in practice means Proactor-flavoured behaviour,
+# in tension with the blanket Selector policy above. Rather than trying
+# to thread a DIFFERENT policy through just the BLE pairing code path
+# (fragile, and bleak may create its own loop machinery regardless of
+# our process-wide policy), _suppress_benign_proactor_noise() below is
+# a narrower, complementary safety net: it lets the exact known-benign
+# "ConnectionResetError during _call_connection_lost cleanup" pattern
+# through silently (logged at DEBUG, not printed as an unhandled
+# exception), from WHICHEVER source it still slips through from,
+# without touching anything else asyncio's default handler would
+# normally report.
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+
+def _suppress_benign_proactor_noise(loop: "asyncio.AbstractEventLoop", context: dict) -> None:
+    exception = context.get("exception")
+    # Checks BOTH context["message"] and the handle's own string repr -
+    # asyncio's exact context dict shape for this callback-exception
+    # path isn't pinned down by public docs, and the "_call_connection_
+    # lost" marker reliably shows up in the handle's repr (matching the
+    # user's own log: "handle: <Handle _ProactorBasePipeTransport.
+    # _call_connection_lost(None)>") even if it's absent from message.
+    marker_text = f"{context.get('message', '')} {context.get('handle', '')}"
+    if isinstance(exception, ConnectionResetError) and "_call_connection_lost" in marker_text:
+        # Known-harmless Windows/Proactor cleanup noise (WinError 10054
+        # - the other side of a TCP connection was already reset by the
+        # time cleanup runs) - never indicates the connection/pairing
+        # itself failed, only that its OWN teardown logging is noisy.
+        logging.getLogger("asyncio").debug("Suppressed benign Proactor cleanup noise: %r", exception)
+        return
+    loop.default_exception_handler(context)
+
+
 from nicegui import native, app, ui
 
+import dwarf_python_api.lib.my_logger as my_logger
 from dwarf_python_api.lib.dwarf_session import get_manager
 
 from device_registry import bootstrap_devices
@@ -77,6 +115,33 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    # dwarf_python_api's own my_logger.py auto-configures itself at
+    # IMPORT time (setup_logger() runs unconditionally at module load,
+    # before this function ever gets a chance to run) - using a neutral
+    # "app.log" default, since it's a GENERIC library shared by several
+    # standalone tools (main_v3.py, get_live_data_dwarf.py, ...), not
+    # just this app (user-corrected Sep 2026: an earlier attempt at this
+    # fix hardcoded "astro_session.log" directly inside the library
+    # itself, which wrongly baked in astro_dwarf_ui's own naming
+    # preference at the generic-library level). THIS is where that
+    # application-level choice actually belongs - re-triggers the same
+    # update_log_file() the library already ran automatically, just
+    # with OUR preferred name instead of its own neutral default.
+    #
+    # Guarded to __name__ == "__main__" specifically (user-reported Sep
+    # 2026: real log showed this whole sequence twice) - native mode's
+    # pywebview window runs in a genuinely SEPARATE child process
+    # (spawned, not forked - see freeze_support()'s own comment below),
+    # which re-imports and re-runs this ENTIRE script from scratch,
+    # with __name__ == "__mp_main__" instead. Without this guard, that
+    # child process's own call renamed the real astro_session.log (the
+    # one THIS/parent process had just created moments before) to
+    # astro_session.log.old, destroying the true PREVIOUS session's
+    # backup that file was meant to hold - not just cosmetic log
+    # duplication, an actual loss of the intended history.
+    if __name__ == "__main__":
+        my_logger.update_log_file(default_name="astro_session.log")
+
     PORT = args.port if args.port else native.find_open_port()
 
     # Device-type icons (dashboard's model badge, see device_card.py) -
@@ -90,6 +155,18 @@ def main() -> None:
     # enlever la barre d'adresse") - see components/pwa.py's own
     # docstring for what this does/doesn't cover.
     register_manifest_route()
+
+    if sys.platform == "win32":
+        # Installed via on_startup, not right after set_event_loop_policy
+        # above - a handler can only be attached to an ACTUAL running
+        # loop instance, which doesn't exist yet until ui.run()'s own
+        # uvicorn server is up. See _suppress_benign_proactor_noise()'s
+        # own docstring/comment for why this exists alongside (not
+        # instead of) the process-wide policy set earlier.
+        def _install_proactor_noise_filter() -> None:
+            asyncio.get_running_loop().set_exception_handler(_suppress_benign_proactor_noise)
+
+        app.on_startup(_install_proactor_noise_filter)
 
     # A single DwarfManager for the whole process. Populated at startup
     # from the known config.py/config.ini pairs (see device_registry.py)

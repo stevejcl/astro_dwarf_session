@@ -179,7 +179,7 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
         # Initialize camera parameter variables to avoid unbound errors
         exp_val = None
         gain_val = None
-        binning_val = None
+        binning_val = None # Only on Dwarf 3
         IR_val = None
         count_val = None
         wide_exp_val = None
@@ -258,8 +258,9 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 log.notice(f" To do => Astro Photo with these parameters")
                 log.notice(f"     exposure  => {exp_val}s")
                 log.notice(f"     gain  => {gain_val}")
-                log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
-                log.notice(f"real binning => {binning_val}")
+                if config_to_dwarf_id_str(dwarf_id) == "3":  # only on D3
+                    log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
+                    log.notice(f"real binning => {binning_val}")
                 if config_to_dwarf_id_str(dwarf_id) == "3":
                     log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
                 elif config_to_dwarf_id_str(dwarf_id) == "5":
@@ -527,7 +528,7 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 continue_action = perform_set_ir_filter_v3(IR_val, session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
-            if binning_val:
+            if binning_val and str(config_to_dwarf_id_str(dwarf_id)) == "3": # only on D3
                 continue_action = perform_set_astro_stack_binning_v3(int(binning_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)

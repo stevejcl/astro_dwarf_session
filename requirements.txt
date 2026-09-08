@@ -2,28 +2,17 @@ websockets==11.0.3
 
 protobuf>=4.25.8
 
-bleak
+bleak==1.1.1
 
 FileLock
 
 paramiko
 
-tk
-
-tkcalendar
-
 requests
-
-geopy
-
-timezonefinder
 
 inputimeout
 
-pytz
+nicegui
 
-pillow
+pywebview
 
-pyserial
-
-cx_Freeze

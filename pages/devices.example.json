@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Dwarf 3",
+    "config_py": "config_d3.py",
+    "config_ini": "config_d3.ini"
+  },
+  {
+    "name": "Dwarf Mini",
+    "config_py": "config_mini.py",
+    "config_ini": "config_mini.ini"
+  }
+]

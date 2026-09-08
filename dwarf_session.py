@@ -15,11 +15,16 @@ from dwarf_python_api.lib.dwarf_utils import perform_goto_stellar
 from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
 from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroPhoto
+from dwarf_python_api.lib.dwarf_utils import perform_continue_shooting
+from dwarf_python_api.lib.dwarf_utils import perform_clear_needs_continue_shooting
+from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto, perform_waitRetryEndAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_exposure_by_name_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_gain_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_ir_filter_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_stack_count_v3
+from dwarf_python_api.lib.dwarf_utils import perform_set_astro_mosaic_count_v3
+from dwarf_python_api.lib.dwarf_utils import perform_start_mosaic_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_stack_binning_v3
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto, perform_waitRetryEndAstroWidePhoto
@@ -93,7 +98,7 @@ STEP_DESCRIPTIONS = {
     "step_1d": "Do Infinite Autofocus",
     "step_2": "Set Exposure to 1s for Calibration",
     "step_3": "Set Gain to 80 for Calibration",
-    "step_4": "Set IR PASS for Calibration",
+    "step_4": "Set IR Filter for Calibration",
     "step_5": "Set Binning to 4k for Calibration",
     "step_6": "Send Stop Goto to start Calibration command",
     "step_7": "Perform Calibration process",
@@ -135,7 +140,7 @@ def try_attemps (function, function_succeed_message, max_attempts = 3, interrupt
     return continue_action
 
 
-def start_dwarf_session(program, stop_event=None, session=None):
+def start_dwarf_session(program, stop_event=None, session=None, progress_callback=None):
     try:
         def interrupted():
             return stop_event is not None and stop_event.is_set()
@@ -219,6 +224,36 @@ def start_dwarf_session(program, stop_event=None, session=None):
             IR_val = str(program['setup_camera'].get('ircut', "0"))
             count_val = str(program['setup_camera'].get('count', "0"))
 
+            # Mosaic (tele-only, user-requested Sep 2026): a sub-section
+            # of the tele capture settings, backward-compatible -
+            # missing keys (an older program file saved before this was
+            # added) default to doMosaic=False, exactly like a normal
+            # single-target session.
+            do_mosaic = bool(program['setup_camera'].get('doMosaic', False))
+            framing_x = int(program['setup_camera'].get('framingX', 100))
+            framing_y = int(program['setup_camera'].get('framingY', 100))
+            mosaic_count_val = str(program['setup_camera'].get('mosaic_count', "45"))
+            # Both at 100 (1.00x, i.e. no extra framing in either axis)
+            # means there is nothing to mosaic - same rule as main_v3.py's
+            # own option_A17() (dwarf_python_api's reference CLI tool).
+            if do_mosaic and framing_x == 100 and framing_y == 100:
+                log.warning(" Mosaic requested but framingX/framingY are both 1.00x - nothing to mosaic, falling back to a normal session.")
+                do_mosaic = False
+            # Mosaic requires a prior MANUAL (DSO) goto specifically -
+            # confirmed by real hardware testing (Sep 2026): without
+            # one, the device rejects the mosaic start with CODE_ASTRO_
+            # NEED_GOTO_DSO (-11518) - "DSO" as in Deep Sky Object. A
+            # Solar system goto (goto_solar) does NOT satisfy this -
+            # Mosaic is an Astro-only feature, not applicable to Solar
+            # system targets at all (corrected Sep 2026: an earlier
+            # version of this check wrongly accepted goto_solar too).
+            # The program editor (astro_dwarf_ui) validates this at save
+            # time too - this is a second guard for a hand-edited or
+            # imported program file that bypassed that.
+            if do_mosaic and not goto_manual:
+                log.warning(" Mosaic requested but no Manual (DSO) goto is configured - the device would reject this with CODE_ASTRO_NEED_GOTO_DSO (Solar system targets don't count), falling back to a normal session.")
+                do_mosaic = False
+
             if exp_val or gain_val or binning_val or IR_val or count_val:
                 log.notice(f" To do => Astro Photo with these parameters")
                 log.notice(f"     exposure  => {exp_val}s")
@@ -254,7 +289,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
         # Session initialization
         log.notice("######################")
         continue_action = try_attemps(lambda: perform_time(session=session), "Init succeeded.")
-        verify_action(continue_action, "step_0")
+        verify_action(continue_action, "step_0", progress_callback=progress_callback)
 
         # V3: SET_LOCATION and CMD_GLOBAL_TASK_GET_DEVICE_STATE_INFO are
         # now both sent automatically - location at the connection layer
@@ -266,7 +301,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
 
         # Go Live
         continue_action = perform_GoLive(session=session)
-        verify_action(continue_action, "step_1a")
+        verify_action(continue_action, "step_1a", progress_callback=progress_callback)
 
         # V3: switch the device into the right shooting mode + technique
         # (SWITCH_SHOOTING_MODE/ENTER_CAMERA/SWITCH_SHOOTING_TECH,
@@ -293,7 +328,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
         else:
             log.notice("Entering Astro/DSO shooting mode")
             continue_action = perform_enter_astro_mode(session=session)
-        verify_action(continue_action, "step_1a")
+        verify_action(continue_action, "step_1a", progress_callback=progress_callback)
 
         # Auto Focus
         if auto_focus:
@@ -305,7 +340,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
             log.notice("Processing automatic autofocus")
             continue_action = perform_start_autofocus(False, session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_1c")
+            verify_action(continue_action, "step_1c", progress_callback=progress_callback)
             wait_after = program.get('auto_focus', {}).get('wait_after', 0)
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")
@@ -322,7 +357,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
             log.notice("Processing infinite autofocus")
             continue_action = perform_start_autofocus(True, session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_1d")
+            verify_action(continue_action, "step_1d", progress_callback=progress_callback)
             wait_after = program.get('infinite_focus', {}).get('wait_after', 0)
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")
@@ -340,12 +375,12 @@ def start_dwarf_session(program, stop_event=None, session=None):
                 log.notice("Processing infinite autofocus (forced before EQ Solving)")
                 continue_action = perform_start_autofocus(True, session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_1d")
+                verify_action(continue_action, "step_1d", progress_callback=progress_callback)
                 time.sleep(5)
 
             continue_action = perform_stop_goto(session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_6")
+            verify_action(continue_action, "step_6", progress_callback=progress_callback)
             if interrupted(): return
             time.sleep(5)
             if interrupted(): return
@@ -357,7 +392,33 @@ def start_dwarf_session(program, stop_event=None, session=None):
             log.notice("Processing EQ Solving")
             continue_action = start_polar_align(session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_1b")
+            verify_action(continue_action, "step_1b", progress_callback=progress_callback)
+            # Visible step-log trace of the EQ result (user-requested Sep
+            # 2026: "tracer a l'ecran apres l'etape EQ... dans les
+            # programmes automatiques") - azi_err/alt_err are already
+            # cached on the client after start_polar_align()'s own
+            # response (see websockets_utils.py) but were only ever
+            # surfaced through the manual session-page button before
+            # this; reading them here makes them show up in the same
+            # step trace the scheduled program's other steps already use
+            # (progress_callback), without needing to open logs.
+            eq_status = get_client_status(session).get("fullStatus", {})
+            eq_azi = eq_status.get("eqAziErr")
+            eq_alt = eq_status.get("eqAltErr")
+            if eq_azi is not None and eq_alt is not None:
+                log.notice(f"EQ Solving result: azimuth {eq_azi:+.2f}\u00b0, altitude {eq_alt:+.2f}\u00b0")
+                if progress_callback:
+                    # step_key doubles as the displayed label here (via
+                    # STEP_DESCRIPTIONS.get(step_key, step_key)'s own
+                    # fallback-to-raw-key behaviour in scheduler_runner.py)
+                    # since this is dynamic per-run text, not a fixed,
+                    # reusable step description - status="success" gives
+                    # it a proper checkmark icon in the step trace rather
+                    # than an unstyled generic circle.
+                    progress_callback(
+                        f"EQ Solving: azimuth {eq_azi:+.2f}\u00b0, altitude {eq_alt:+.2f}\u00b0",
+                        "success",
+                    )
             wait_after = program.get('eq_solving', {}).get('wait_after', 0)
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")
@@ -370,24 +431,24 @@ def start_dwarf_session(program, stop_event=None, session=None):
             log.notice("    Set Exposure to 1s")
             continue_action = perform_set_astro_exposure_by_name_v3("1", dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_2")
+            verify_action(continue_action, "step_2", progress_callback=progress_callback)
             
             log.notice("    Set Gain to 80")
             continue_action = perform_set_astro_gain_v3(80, session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_3")
+            verify_action(continue_action, "step_3", progress_callback=progress_callback)
             if config_to_dwarf_id_str(dwarf_id) >= "3":
                 log.notice("    Set IR to Astro Filter")
             else:
                 log.notice("    Set IR to IR_PASS")
             continue_action = perform_set_ir_filter_v3("1", session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_4")
+            verify_action(continue_action, "step_4", progress_callback=progress_callback)
             
             log.notice("    Set Binning to 4k")
             continue_action = perform_set_astro_stack_binning_v3(0, session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_5")
+            verify_action(continue_action, "step_5", progress_callback=progress_callback)
             
             time.sleep(5)
             if interrupted(): return
@@ -396,7 +457,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
             
             continue_action = perform_stop_goto(session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_6")
+            verify_action(continue_action, "step_6", progress_callback=progress_callback)
             time.sleep(5)
             if interrupted(): return
             
@@ -408,7 +469,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
             if interrupted(): return
             continue_action = perform_calibration(session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_7")
+            verify_action(continue_action, "step_7", progress_callback=progress_callback)
             wait_after = program.get('calibration', {}).get('wait_after', 0)
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")
@@ -421,7 +482,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
             log.notice(f"Processing Goto Solar System : {target_name}")
             continue_action = select_solar_target(target_name, session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_8")
+            verify_action(continue_action, "step_8", progress_callback=progress_callback)
             wait_after = program.get('goto_solar', {}).get('wait_after', 0)
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")
@@ -444,7 +505,7 @@ def start_dwarf_session(program, stop_event=None, session=None):
 
             continue_action = perform_goto(decimal_RA, decimal_Dec, target_name, session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_9")
+            verify_action(continue_action, "step_9", progress_callback=progress_callback)
             wait_after = program.get('goto_manual', {}).get('wait_after', 0)
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")
@@ -457,23 +518,42 @@ def start_dwarf_session(program, stop_event=None, session=None):
             if exp_val:
                 continue_action = perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_10")
+                verify_action(continue_action, "step_10", progress_callback=progress_callback)
             if gain_val:
                 continue_action = perform_set_astro_gain_v3(int(gain_val), session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_10")
+                verify_action(continue_action, "step_10", progress_callback=progress_callback)
             if IR_val:
                 continue_action = perform_set_ir_filter_v3(IR_val, session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_10")
+                verify_action(continue_action, "step_10", progress_callback=progress_callback)
             if binning_val:
                 continue_action = perform_set_astro_stack_binning_v3(int(binning_val), session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_10")
-            if count_val:
+                verify_action(continue_action, "step_10", progress_callback=progress_callback)
+            # Regular (non-mosaic) stack count is skipped entirely when
+            # Mosaic is active (user-reported Sep 2026: real hardware
+            # test with count=40/mosaic_count=20 - the correct, already-
+            # saved values per the program JSON - produced
+            # subviewShotsToTake=100 on the device, not the expected 20).
+            # Sending BOTH the regular stackCount (40, meant for a
+            # single-panel session) AND the mosaic-specific mosaicCount
+            # (20) back-to-back doesn't make conceptual sense for a
+            # session that's actually going to run in Mosaic mode - this
+            # skips the regular one so only the mosaic-specific count
+            # ever reaches the device for a Mosaic session, removing
+            # that cross-talk as a possible cause. NOT independently
+            # confirmed by network capture to be the exact mechanism
+            # behind the observed 100 - re-test on real hardware to
+            # verify subviewShotsToTake matches mosaic_count afterward.
+            if count_val and not do_mosaic:
                 continue_action = perform_set_astro_stack_count_v3(int(count_val), session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_10")
+                verify_action(continue_action, "step_10", progress_callback=progress_callback)
+            if do_mosaic:
+                continue_action = perform_set_astro_mosaic_count_v3(int(mosaic_count_val), session=session)
+                if interrupted(): return
+                verify_action(continue_action, "step_10", progress_callback=progress_callback)
 
             time.sleep(5)
             if interrupted(): return
@@ -488,27 +568,53 @@ def start_dwarf_session(program, stop_event=None, session=None):
             
             time.sleep(2)
             if interrupted(): return
-            continue_action = perform_takeAstroPhoto(session=session)
+            if do_mosaic:
+                log.notice(f"Starting Mosaic Session : framingX={framing_x/100:.2f}x framingY={framing_y/100:.2f}x")
+                continue_action = perform_start_mosaic_v3(framing_x, framing_y, session=session)
+            else:
+                continue_action = perform_takeAstroPhoto(session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_11")
+            verify_action(continue_action, "step_11", progress_callback=progress_callback)
+
+            # CMD_ASTRO_CONTINUE_SHOOTING follow-up (user-identified, Sep
+            # 2026): CODE_ASTRO_DARK_TEMP_MISMATCH is a genuinely BLOCKING
+            # state on the device side (the official app shows a
+            # confirmation dialog for it) - websockets_utils.py's own
+            # handling of that response code unblocks OUR waiting caller
+            # locally (result_receive_messages() with a faked OK), but
+            # that alone does NOT tell the DEVICE itself to actually
+            # proceed. needsContinueShooting is set there specifically to
+            # flag this - checked here, right after the step it applies
+            # to, so the explicit CMD_ASTRO_CONTINUE_SHOOTING (11050) can
+            # be sent, matching what the user taps in the official app's
+            # own dialog for this exact scenario. Cleared immediately
+            # after, so a LATER unrelated check of this flag doesn't
+            # re-trigger a stale follow-up.
+            status = get_client_status(session) if session is not None else {}
+            if status.get("fullStatus", {}).get("needsContinueShooting"):
+                log.notice("Dark frame temperature mismatch was ignored - sending Continue Shooting confirmation")
+                continue_action = perform_continue_shooting(session=session)
+                perform_clear_needs_continue_shooting(session=session)
+                if interrupted(): return
+                verify_action(continue_action, "step_11", progress_callback=progress_callback)
             
             time.sleep(2)
             if interrupted(): return
             try:
                 continue_action = perform_waitEndAstroPhoto(session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_12")
+                verify_action(continue_action, "step_12", progress_callback=progress_callback)
             except Exception as e:
                 continue_action = try_attemps(lambda: perform_waitRetryEndAstroPhoto(session=session), "Astro photo session completed", 5, interrupted=interrupted)
                 if interrupted(): return
-                verify_action(continue_action, "step_12")
+                verify_action(continue_action, "step_12", progress_callback=progress_callback)
 
         # Wide Photo
         if take_widephoto:
             if take_photo:
                 # need Go Live again in this case
                 continue_action = perform_GoLive(session=session)
-                verify_action(continue_action, "step_1a")
+                verify_action(continue_action, "step_1a", progress_callback=progress_callback)
 
                 # V3: GO LIVE alone does not keep the device in Astro/DSO
                 # mode - field-confirmed (Aug 2026): after a tele session,
@@ -520,21 +626,21 @@ def start_dwarf_session(program, stop_event=None, session=None):
                 # session for tele.
                 log.notice("Entering Astro/DSO shooting mode (again, for wide)")
                 continue_action = perform_enter_astro_mode(session=session)
-                verify_action(continue_action, "step_1a")
+                verify_action(continue_action, "step_1a", progress_callback=progress_callback)
 
             log.notice(f"Processing Astro Wide Photo Session : {wide_count_val} images")
             if wide_exp_val:
                 continue_action = perform_set_astro_exposure_by_name_v3(wide_exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), camera="wide", session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_13")
+                verify_action(continue_action, "step_13", progress_callback=progress_callback)
             if wide_gain_val:
                 continue_action = perform_set_astro_gain_v3(int(wide_gain_val), camera="wide", session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_13")
+                verify_action(continue_action, "step_13", progress_callback=progress_callback)
             if wide_count_val:
                 continue_action = perform_set_astro_stack_count_v3(int(wide_count_val), camera="wide", session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_13")
+                verify_action(continue_action, "step_13", progress_callback=progress_callback)
             
             time.sleep(5)
             if interrupted(): return
@@ -551,18 +657,28 @@ def start_dwarf_session(program, stop_event=None, session=None):
             if interrupted(): return
             continue_action = perform_takeAstroWidePhoto(session=session)
             if interrupted(): return
-            verify_action(continue_action, "step_14")
+            verify_action(continue_action, "step_14", progress_callback=progress_callback)
+
+            # CMD_ASTRO_CONTINUE_SHOOTING follow-up - see the tele/mosaic
+            # branch's own note above for why this is needed.
+            status = get_client_status(session) if session is not None else {}
+            if status.get("fullStatus", {}).get("needsContinueShooting"):
+                log.notice("Dark frame temperature mismatch was ignored - sending Continue Shooting confirmation")
+                continue_action = perform_continue_shooting(session=session)
+                perform_clear_needs_continue_shooting(session=session)
+                if interrupted(): return
+                verify_action(continue_action, "step_14", progress_callback=progress_callback)
             
             time.sleep(2)
             if interrupted(): return
             try:
                 continue_action = perform_waitEndAstroWidePhoto(session=session)
                 if interrupted(): return
-                verify_action(continue_action, "step_15")
+                verify_action(continue_action, "step_15", progress_callback=progress_callback)
             except Exception as e:
                 continue_action = try_attemps(lambda: perform_waitRetryEndAstroWidePhoto(session=session), "Wide Astro photo session completed", 5, interrupted=interrupted)
                 if interrupted(): return
-                verify_action(continue_action, "step_15")
+                verify_action(continue_action, "step_15", progress_callback=progress_callback)
 
     except Exception as e:
         line_number = e.__traceback__.tb_lineno if e.__traceback__ else "unknown"
@@ -574,16 +690,30 @@ def start_dwarf_session(program, stop_event=None, session=None):
         log.success(f"  End of Session")
         log.success("######################")
 
-def verify_action(result, action_step):
-    """Fixed verify_action function with consistent behavior"""
+def verify_action(result, action_step, progress_callback=None):
+    """Fixed verify_action function with consistent behavior.
+
+    progress_callback(action_step, status), status in {"success", "failed"} -
+    optional, additive (see start_dwarf_session()'s own progress_callback
+    param). Called from whatever thread runs start_dwarf_session (usually
+    a worker thread, not the UI's event loop) - a caller wiring this up to
+    a live UI should have the callback only write to a plain, thread-safe
+    shared state and let the UI's own timer poll it, rather than touching
+    UI elements directly from here."""
     log.notice(f"verify_action : {result}")
     if result is False:
+        if progress_callback:
+            progress_callback(action_step, "failed")
         raise RuntimeError(f"Action failed at step: {STEP_DESCRIPTIONS.get(action_step, action_step)}")
     elif result or result == 0:
         log.success(f"Action successful for: {STEP_DESCRIPTIONS.get(action_step, action_step)}")
         log.notice("----------------------")
+        if progress_callback:
+            progress_callback(action_step, "success")
         return True
     else:
+        if progress_callback:
+            progress_callback(action_step, "failed")
         raise RuntimeError(f"Action failed at step: {STEP_DESCRIPTIONS.get(action_step, action_step)}")
 
 def print_camera_data(session=None):

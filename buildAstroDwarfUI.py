@@ -38,7 +38,7 @@ DIST_LOCALES_DIR = DIST_DIR / "components" / "locales"
 #_ble_connect_html = Path("dwarf_ble_connect") / "connect_dwarf.html"
 #sep = os.pathsep  # Cross-platform separator: ; on Windows, : on Unix/macOS
 
-#extra_data = []
+extra_data = []
 #if _ble_connect_html.exists():
 #    extra_data.append(f"{_ble_connect_html}{sep}dwarf_ble_connect")
 #else:

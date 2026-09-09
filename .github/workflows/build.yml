@@ -3,8 +3,7 @@ name: Build Astro Dwarf UI
 on:
   push:
     branches:
-      - main
-      - evolution-main
+      - NiceGui_V3_multi
   workflow_dispatch:
 
 permissions:

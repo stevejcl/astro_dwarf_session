@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.0.1] - 2026-09-09
+
+### Bug
+   Install Static Images Procedure correction
+
 ## [3.0.0] - 2026-09-09
 
 ### Improvements

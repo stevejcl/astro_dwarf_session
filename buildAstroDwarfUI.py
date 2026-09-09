@@ -83,6 +83,7 @@ pack_cmd = [
     "--windowed",
     *icon_args,
     "--name", APP_NAME,
+    "--add-data", f"{IMAGES_DIR}{sep}images",
     *[arg for data in extra_data for arg in ["--add-data", data]],
     SOURCE_FILE,
 ]

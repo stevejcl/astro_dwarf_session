@@ -35,14 +35,14 @@ DIST_LOCALES_DIR = DIST_DIR / "components" / "locales"
 # pairing flow - see dwarf_python_api/lib/dwarf_utils.py's own
 # html_file_path reference) - a genuine DATA file PyInstaller's default
 # import-tracing doesn't pick up, unlike the .py modules around it.
-#_ble_connect_html = Path("dwarf_ble_connect") / "connect_dwarf.html"
-#sep = os.pathsep  # Cross-platform separator: ; on Windows, : on Unix/macOS
+_ble_connect_html = Path("dwarf_ble_connect") / "connect_dwarf.html"
+sep = os.pathsep  # Cross-platform separator: ; on Windows, : on Unix/macOS
 
 extra_data = []
-#if _ble_connect_html.exists():
-#    extra_data.append(f"{_ble_connect_html}{sep}dwarf_ble_connect")
-#else:
-#    print(f"Warning: {_ble_connect_html} not found - BLE pairing may break in the built exe.")
+if _ble_connect_html.exists():
+    extra_data.append(f"{_ble_connect_html}{sep}dwarf_ble_connect")
+else:
+    print(f"Warning: {_ble_connect_html} not found - BLE pairing may break in the built exe.")
 
 print("Current working directory:", os.getcwd())
 

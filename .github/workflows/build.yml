@@ -1,4 +1,4 @@
-name: Build Astro Dwarf UI
+I'mname: Build Astro Dwarf UI
 
 on:
   push:
@@ -65,7 +65,7 @@ jobs:
         run: |
           VERSION=${{ env.BASE_VERSION }}
 
-          if [ "${{ github.ref_name }}" != "main" ] && [ "${{ github.ref_name }}" != "evolution-main" ]; then
+          if [ "${{ github.ref_name }}" != "NiceGui_V3_multi" ]; then
             RUN=${{ github.run_number }}
             VERSION="${VERSION}-beta.${RUN}"
           fi

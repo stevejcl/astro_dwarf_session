@@ -148,8 +148,22 @@ def main() -> None:
     # served from /images/<name>.png. Resolved relative to THIS file
     # (not the current working directory), so it works regardless of
     # where the app is launched from.
-    images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
-    app.add_static_files("/images", images_dir)
+    from pathlib import Path
+
+    # Detect PyInstaller running
+    if getattr(sys, 'frozen', False):
+        BASE_DIR = Path(sys._MEIPASS)
+    else:
+        BASE_DIR = Path(__file__).parent
+
+    # Chemin complet vers le dossier images
+    images_dir = BASE_DIR / "images"
+    
+    # Creadte directory to avoid RuntimeError
+    images_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Declare ats Static Dir for NiceGUI 
+    app.add_static_files('/images', str(images_dir))
 
     # PWA support (user-requested Sep 2026: "plein ecran sur Mobile,
     # enlever la barre d'adresse") - see components/pwa.py's own

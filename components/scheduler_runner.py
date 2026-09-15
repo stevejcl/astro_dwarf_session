@@ -90,6 +90,7 @@ from dwarf_session import STEP_DESCRIPTIONS
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
+from dwarf_python_api.lib.dwarf_utils import perform_is_camera_actually_busy
 
 from components import connection_health
 from components.session_dirs import session_dirs_for
@@ -194,6 +195,38 @@ def _capture_eq_solving_result(id_command: dict, session) -> None:
         pass
 
 
+def _capture_shots_result(id_command: dict, session) -> None:
+    """User-requested Sep 2026: "est ce que le nombre images et
+    stackees sont presentes dans le Jason final" - shotsTaken/
+    shotsStacked, alongside eq_azimut_error/eq_altitude_error above,
+    same best-effort read from the client's own live-tracked counters
+    (websockets_utils.py), updated throughout the run from
+    CMD_NOTIFY_PROGRESS_CAPTURE_RAW_LIVE_STACKING notifications - not
+    re-fetched from the device's own album listing after the fact.
+
+    Tries the tele/mosaic/wide counter pairs in turn and uses whichever
+    is non-zero - a session only ever populates ONE of these three
+    (matching perform_waitEndAstroPhoto()'s own routing by
+    takePhotoStarted/takeWidePhotoStarted), so this reads correctly
+    regardless of which kind of capture the program actually ran,
+    without needing the caller to already know which one to check."""
+    try:
+        full_status = get_client_status(session).get("fullStatus", {})
+        for count_key, stacked_key in (
+            ("takeMosaicCount", "takeMosaicStacked"),
+            ("takeWidePhotoCount", "takeWidePhotoStacked"),
+            ("takePhotoCount", "takePhotoStacked"),
+        ):
+            count = full_status.get(count_key)
+            stacked = full_status.get(stacked_key)
+            if count:
+                id_command["shots_taken"] = count
+                id_command["shots_stacked"] = stacked
+                return
+    except Exception:
+        pass
+
+
 def _set_dwarf_field(id_command: dict, session) -> None:
     dwarf_model_id = getattr(session.config, "dwarf_model_id", None)
     if dwarf_model_id:
@@ -209,6 +242,32 @@ def get_run_state(dwarf_uid: str) -> RunState | None:
 def is_running(dwarf_uid: str) -> bool:
     state = _runs.get(dwarf_uid)
     return bool(state and state.running)
+
+
+def device_is_actively_capturing(session) -> bool:
+    """Checks the DEVICE's real, live state via a FRESH
+    CMD_GLOBAL_TASK_GET_DEVICE_STATE_INFO query - NOT get_client_status()'s
+    AstroCapture/takePhotoStarted/takeWidePhotoStarted flags.
+
+    CORRECTION (this function previously used those three flags - traced
+    through dwarf_python_api/lib/websockets_utils.py and confirmed they
+    are UNRELIABLE for this purpose): each only flips True on a
+    notification whose state matches `self.command == the exact command
+    THIS process itself last sent` (e.g. the CMD_ASTRO_START_CAPTURE_RAW_
+    LIVE_STACKING block). A session started by the OFFICIAL Dwarf app, or
+    an on-device native shooting-schedule task, never sets self.command to
+    any of those values here - so those flags silently stay False for it
+    even while the device is genuinely capturing, which is exactly the
+    scenario this check exists to catch. perform_is_camera_actually_busy()
+    instead sends a fresh request and reads the device's real answer,
+    regardless of who started the activity.
+
+    Fails OPEN (returns False) if the query itself fails/times out, same
+    as perform_is_camera_actually_busy() - see its own docstring.
+    """
+    if not session.is_connected:
+        return False
+    return perform_is_camera_actually_busy(session=session)
 
 
 def _run_blocking(
@@ -315,6 +374,7 @@ def _run_blocking(
             _set_dwarf_field(id_command, session)
             _capture_actual_camera_settings(id_command, session)
             _capture_eq_solving_result(id_command, session)
+            _capture_shots_result(id_command, session)
 
             if current_path is not None:
                 dirs = session_dirs_for(session)
@@ -377,8 +437,25 @@ def start_run(
     for a throwaway run with nothing to track."""
     if is_running(dwarf_uid):
         raise RuntimeError("A program is already running for this device.")
-    if not connection_health.try_acquire_command_slot(dwarf_uid):
+    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="scheduler_runner.start_run"):
         raise RuntimeError("A command is already in progress for this device.")
+    # Neither check above knows about activity astro_dwarf_session didn't
+    # itself start (a manual session from the official Dwarf app, or an
+    # on-device native shooting-schedule task currently running) - without
+    # this, start_run() would happily fire goto/calibration/capture-start
+    # commands on top of whatever's already happening, interrupting it.
+    # The Dwarf's OWN scheduling logic already queues a shooting-schedule
+    # task behind a running capture gracefully (field-confirmed) - but
+    # that graceful handling is on the RECEIVING end for a schedule sync,
+    # not for a full manual start_dwarf_session() run, which actively
+    # drives goto/calibration/capture from the first step.
+    if device_is_actively_capturing(session):
+        connection_health.release_command_slot(dwarf_uid)
+        raise RuntimeError(
+            "The Dwarf is already capturing (started elsewhere - official "
+            "app or an on-device schedule) - refusing to start a new "
+            "session on top of it."
+        )
 
     state = RunState()
     state.program_name = program.get("id_command", {}).get("description") or ""

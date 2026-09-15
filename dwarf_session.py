@@ -140,6 +140,23 @@ def try_attemps (function, function_succeed_message, max_attempts = 3, interrupt
     return continue_action
 
 
+def _ir_filter_display_name(dwarf_id, IR_val: str) -> str:
+    """User-requested Sep 2026: "dans l'affichage du filtre lors d'une
+    session, on peut mettre la vrai valeur pas le chiffre" - factored
+    out of the model-dependent naming ternary already used a few lines
+    below for the "To do => Astro Photo" log block, so both that block
+    and the step-trace notice added for verification (see the
+    perform_set_ir_filter_v3() call site) show the SAME real name
+    rather than duplicating (and risking drifting) this per-model
+    mapping in two places."""
+    dwarf_type = config_to_dwarf_id_str(dwarf_id)
+    if dwarf_type == "3":
+        return {"0": "VIS_FILTER", "1": "ASTRO_FILTER"}.get(IR_val, "DUAL_BAND")
+    if dwarf_type == "5":
+        return {"0": "DARK", "1": "ASTRO_FILTER"}.get(IR_val, "DUAL_BAND")
+    return "IR_CUT" if IR_val == "0" else "IR_PASS"
+
+
 def start_dwarf_session(program, stop_event=None, session=None, progress_callback=None):
     try:
         def interrupted():
@@ -179,7 +196,7 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
         # Initialize camera parameter variables to avoid unbound errors
         exp_val = None
         gain_val = None
-        binning_val = None # Only on Dwarf 3
+        binning_val = None
         IR_val = None
         count_val = None
         wide_exp_val = None
@@ -258,15 +275,9 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 log.notice(f" To do => Astro Photo with these parameters")
                 log.notice(f"     exposure  => {exp_val}s")
                 log.notice(f"     gain  => {gain_val}")
-                if config_to_dwarf_id_str(dwarf_id) == "3":  # only on D3
-                    log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
-                    log.notice(f"real binning => {binning_val}")
-                if config_to_dwarf_id_str(dwarf_id) == "3":
-                    log.notice(f"     IR => {'VIS_FILTER' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
-                elif config_to_dwarf_id_str(dwarf_id) == "5":
-                    log.notice(f"     IR => {'DARK' if IR_val == '0' else 'ASTRO_FILTER' if IR_val == '1' else 'DUAL_BAND'}")
-                else:
-                    log.notice(f"     IR  => {'IR_CUT' if IR_val== '0' else 'IR_PASS'}")
+                log.notice(f"     binning => {'4k' if binning_val == '0' else '2k'}")
+                log.notice(f"real binning => {binning_val}")
+                log.notice(f"     IR => {_ir_filter_display_name(dwarf_id, IR_val)}")
                 log.notice(f"     number of images  => {count_val}")
             else:
                 log.warning(f" Error in Settings => PHOTO : none settings found, task ignored!")
@@ -447,9 +458,17 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             verify_action(continue_action, "step_4", progress_callback=progress_callback)
             
             log.notice("    Set Binning to 4k")
-            continue_action = perform_set_astro_stack_binning_v3(0, session=session)
-            if interrupted(): return
-            verify_action(continue_action, "step_5", progress_callback=progress_callback)
+            # D3-ONLY (corrected, user-confirmed Sep 2026): the official
+            # DWARFLAB app itself only exposes binning control for the
+            # Dwarf 3 - not D2, not Mini. An earlier version of this
+            # gate used ">= 3" (D3 or Mini), based only on D2's own
+            # observed 150s silent timeout with no confirmation of
+            # Mini's own behavior - too permissive now that the
+            # official app's own actual restriction is confirmed.
+            if config_to_dwarf_id_str(dwarf_id) == "3":
+                continue_action = perform_set_astro_stack_binning_v3(0, session=session)
+                if interrupted(): return
+                verify_action(continue_action, "step_5", progress_callback=progress_callback)
             
             time.sleep(5)
             if interrupted(): return
@@ -520,18 +539,41 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 continue_action = perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
+                # Actual-value traces (user-requested Sep 2026: "affichage
+                # des parametrage images dans les traces des etapes...
+                # pour verification") - same step_key-doubles-as-label
+                # trick used for the EQ Solving result trace above,
+                # since this is per-run dynamic text, not a fixed,
+                # reusable STEP_DESCRIPTIONS entry.
+                if progress_callback:
+                    progress_callback(f"Exposure: {exp_val}", "success")
             if gain_val:
                 continue_action = perform_set_astro_gain_v3(int(gain_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
+                if progress_callback:
+                    progress_callback(f"Gain: {gain_val}", "success")
             if IR_val:
                 continue_action = perform_set_ir_filter_v3(IR_val, session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
-            if binning_val and str(config_to_dwarf_id_str(dwarf_id)) == "3": # only on D3
+                if progress_callback:
+                    progress_callback(f"IR Filter: {_ir_filter_display_name(dwarf_id, IR_val)}", "success")
+            # Same D2 stack_binning gate as the manual/live flow above
+            # (see that call site's own comment) - a scheduled program
+            # with setup_camera.binning set would otherwise hit the
+            # same 150s silent timeout on this model.
+            # D3-ONLY (corrected, user-confirmed Sep 2026): see the
+            # manual/live flow's own comment above - the official app
+            # itself only exposes binning control for D3, not D2/Mini.
+            if binning_val and config_to_dwarf_id_str(dwarf_id) == "3":
                 continue_action = perform_set_astro_stack_binning_v3(int(binning_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
+                if progress_callback:
+                    progress_callback(
+                        f"Binning: {'2K' if str(binning_val) == '1' else '4K'}", "success"
+                    )
             # Regular (non-mosaic) stack count is skipped entirely when
             # Mosaic is active (user-reported Sep 2026: real hardware
             # test with count=40/mosaic_count=20 - the correct, already-

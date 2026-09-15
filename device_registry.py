@@ -1,33 +1,34 @@
 """
-Persistance de la liste des Dwarf connus (couples config.py/config.ini
-par appareil physique) - remplace la liste KNOWN_DEVICE_CONFIGS codee en
-dur du premier scaffold.
+Persistence of the list of known Dwarfs (config.py/config.ini pairs per
+physical device) - replaces the KNOWN_DEVICE_CONFIGS list hardcoded in
+the first scaffold.
 
-Format: un simple fichier JSON, devices.json, a cote du point d'entree:
+Format: a simple JSON file, devices.json, next to the entry point:
 
     [
       {"name": "Dwarf 3", "config_py": "config_d3.py", "config_ini": "config_d3.ini"},
       {"name": "Dwarf Mini", "config_py": "config_mini.py", "config_ini": "config_mini.ini"}
     ]
 
-Un simple JSON suffit ici (contrairement a dwarf_backup.db dans
-dwarfium-scope-archive) car cette liste ne contient que des chemins de
-fichiers a associer a un nom affiche - rien a interroger/filtrer/joindre.
+A plain JSON file is enough here (unlike dwarf_backup.db in
+dwarfium-scope-archive), since this list only maps file paths to a
+display name - nothing to query/filter/join.
 
-Ce fichier est le SEUL endroit qui connait la correspondance
-nom-affiche <-> couple-de-fichiers-config. DwarfConfig.from_files() et
-DwarfManager (indexe par dwarf_uid) restent inchanges - ce module ne
-fait qu'appeler l'un pour peupler l'autre.
+This file is the ONLY place that knows the display-name <-> config-file-
+pair mapping. DwarfConfig.from_files() and DwarfManager (keyed by
+dwarf_uid) are untouched - this module only calls one to populate the
+other.
 
-Si devices.json n'existe pas encore, la liste est simplement vide -
-c'est a pages/pairing.py d'appeler add_device_entry() une fois un
-nouvel appareil apparie avec succes (dwarf_uid confirme).
+If devices.json doesn't exist yet, the list is simply empty - it's up
+to pages/pairing.py to call add_device_entry() once a new device has
+been successfully paired (dwarf_uid confirmed).
 """
 from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Callable
 
 from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import DwarfManager
@@ -60,16 +61,15 @@ def _write_entries(entries: list[DeviceEntry]) -> None:
 
 
 def list_device_entries() -> list[DeviceEntry]:
-    """Utilise par la future page Settings pour afficher/editer la liste
-    (renommer, retirer un appareil, corriger un chemin de fichier)."""
+    """Used by the future Settings page to display/edit the list
+    (rename, remove a device, fix a file path)."""
     return _read_entries()
 
 
 def add_device_entry(name: str, config_py: str, config_ini: str) -> DeviceEntry:
-    """Enregistre un nouveau couple de fichiers config. A appeler depuis
-    pages/pairing.py une fois l'appairage BLE reussi et le dwarf_uid
-    confirme (evite d'enregistrer une entree pour un appareil dont on ne
-    sait pas encore s'il repond vraiment)."""
+    """Registers a new config file pair. Call this from pages/pairing.py
+    once BLE pairing succeeded and dwarf_uid was confirmed (avoids
+    registering a device we don't actually know responds correctly)."""
     entries = _read_entries()
     entry = DeviceEntry(name=name, config_py=config_py, config_ini=config_ini)
     entries.append(entry)
@@ -78,18 +78,17 @@ def add_device_entry(name: str, config_py: str, config_ini: str) -> DeviceEntry:
 
 
 def remove_device_entry(config_py: str) -> None:
-    """Retire une entree par son chemin config.py (cle naturelle: un
-    couple de fichiers correspond a un seul appareil physique)."""
+    """Removes an entry by its config.py path (natural key: one file
+    pair corresponds to exactly one physical device)."""
     entries = [e for e in _read_entries() if e.config_py != config_py]
     _write_entries(entries)
 
 
 def bootstrap_devices(manager: DwarfManager) -> None:
-    """Enregistre un DwarfSession par entree connue dans devices.json.
-    Une entree dont les fichiers sont introuvables ou sans dwarf_uid
-    exploitable est ignoree silencieusement plutot que de faire planter
-    le demarrage - l'appareil pourra toujours etre reappaire plus tard
-    via pages/pairing.py."""
+    """Registers one DwarfSession per known entry in devices.json. An
+    entry whose files are missing, or without a usable dwarf_uid, is
+    silently skipped rather than crashing startup - the device can
+    always be re-paired later via pages/pairing.py."""
     for entry in _read_entries():
         try:
             cfg = DwarfConfig.from_files(entry.config_py, entry.config_ini)
@@ -100,3 +99,29 @@ def bootstrap_devices(manager: DwarfManager) -> None:
             continue
 
         manager.add(cfg)
+
+
+def find_shared_config_value(manager: DwarfManager, getter, exclude_uid: str = ""):
+    """User-requested Sep 2026: "pre enregistrer si existant pour un
+    autre Dwarf" - Wi-Fi name/password, Stellarium IP/port, and
+    location are almost always the SAME across every Dwarf a person
+    owns (same home network, same house), so re-typing them for every
+    newly paired device is pure friction. Scans every OTHER already-
+    registered device's own config for the first value `getter` returns
+    that isn't None/empty, e.g.:
+        find_shared_config_value(manager, lambda c: c.ble_sta_ssid)
+        find_shared_config_value(manager, lambda c: c.longitude)
+    Generic over the getter's own return type (str, float, int, ...) -
+    truthiness is enough to detect "genuinely unset" (None, "", 0.0 for
+    a coordinate would all be equally meaningless as a pre-fill anyway).
+    Returns None if no other device has a value (nothing to pre-fill
+    with, not an error) - callers should still let the user type their
+    own value in that case, same as today."""
+    for session in manager.all():
+        if session.config.dwarf_uid == exclude_uid:
+            continue
+        value = getter(session.config)
+        if value:
+            return value
+    return None
+

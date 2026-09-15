@@ -44,7 +44,7 @@ from components.ble_pairing import connect_ble, scan_dwarf_devices, write_ble_cr
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
-from device_registry import add_device_entry
+from device_registry import add_device_entry, find_shared_config_value
 
 # IMPORTANT (found while wiring this screen, needs an upstream fix):
 # dwarf_ble_connect/lib/connect_direct_bluetooth.py unconditionally
@@ -296,8 +296,19 @@ def build_pairing_page() -> None:
             ble_psd = ui.input(
                 t("bluetooth_password"), value="DWARF_12345678"
             ).classes("w-full")
-            wifi_ssid = ui.input(t("wifi_ssid")).classes("w-full")
-            wifi_pwd = ui.input(t("wifi_password"), password=True).classes("w-full")
+            # Pre-filled from another already-paired device's own
+            # config, if any (user-requested Sep 2026) - same home Wi-Fi
+            # for every Dwarf is the overwhelmingly common case, so
+            # pre-filling saves re-typing it for every new pairing. The
+            # user can still freely edit/clear either field.
+            wifi_ssid = ui.input(
+                t("wifi_ssid"), value=find_shared_config_value(get_manager(), lambda c: c.ble_sta_ssid)
+            ).classes("w-full")
+            wifi_pwd = ui.input(
+                t("wifi_password"),
+                password=True,
+                value=find_shared_config_value(get_manager(), lambda c: c.ble_sta_pwd),
+            ).classes("w-full")
 
             status_label = ui.label("").classes("text-sm text-grey-6")
             choice_container = ui.column().classes("w-full gap-1")

@@ -31,6 +31,7 @@ from nicegui import ui
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 
 from components.i18n import t
+from components import rtsp_worker
 
 # Values confirmed via websockets_utils.py's own CMD_NOTIFY_STREAM_TYPE
 # handling: 1=RTSP, 2=JPEG, anything else/missing=not reported yet.
@@ -65,25 +66,35 @@ def _stream_type_label(by_camera: dict, cam_id: int) -> str:
 class _PreviewHandles:
     cam_id: int
     url: str
+    rtsp_url: str
     stack_field: str
     image: ui.image
     container: ui.column
     not_available_label: ui.label
+    rtsp_image: ui.image
+    rtsp_container: ui.column
+    rtsp_started: bool = False
 
 
-def _build_preview(cam_config: dict, url: str) -> _PreviewHandles:
-    """One camera's HTTP preview block. Shown by default (see
-    build_camera_stream_section()'s docstring for why hiding-by-default
-    is the wrong failure mode here) - only hidden once the poll loop
-    specifically confirms this camera is in RTSP mode."""
+def _build_preview(cam_config: dict, url: str, rtsp_url: str) -> _PreviewHandles:
+    """One camera's preview block: an HTTP snapshot preview (shown by
+    default - see build_camera_stream_section()'s docstring for why
+    hiding-by-default is the wrong failure mode here) and an embedded
+    live RTSP preview (shown only once the poll loop specifically
+    confirms this camera IS in RTSP mode - see rtsp_worker.py's own
+    module docstring for why eagerly starting this is wasteful/risky).
+    Only one of the two is ever visible at a time."""
     not_available_label = ui.label(t("camera_stream_http_not_available")).classes(
         "text-xs text-grey-5 italic"
     )
     not_available_label.set_visibility(False)
+
+    _size_classes = "w-full rounded bg-neutral-900 h-48 md:h-64 xl:h-80 2xl:h-96"
+
     with ui.column().classes("w-full gap-1") as container:
         ui.label(t(cam_config["label_key"])).classes("text-xs text-grey-6")
         # Responsive height (user-reported Sep 2026: "le flux http en
-        # mode Program à mettre en taille de la fenetre video (pas
+        # mode Program Ã  mettre en taille de la fenetre video (pas
         # assez haut)" - this was still a fixed 200px inline style,
         # same issue as the dashboard's own camera image had before
         # being made responsive - w-full already scaled with this
@@ -92,11 +103,7 @@ def _build_preview(cam_config: dict, url: str) -> _PreviewHandles:
         # looking undersized relative to the growing width). Tailwind
         # classes ONLY - no inline height style, which would win by CSS
         # specificity and defeat the responsiveness.
-        image = (
-            ui.image(url)
-            .classes("w-full rounded bg-neutral-900 h-48 md:h-64 xl:h-80 2xl:h-96")
-            .props("fit=contain")
-        )
+        image = ui.image(url).classes(_size_classes).props("fit=contain")
         with ui.row().classes("items-center gap-2 w-full"):
             ui.input(value=url).props("readonly dense").classes("flex-1")
             ui.button(
@@ -108,13 +115,25 @@ def _build_preview(cam_config: dict, url: str) -> _PreviewHandles:
                 on_click=lambda u=url: ui.navigate.to(u, new_tab=True),
             ).props("flat dense round")
 
+    # Embedded live RTSP preview (user-requested Sep 2026) - hidden
+    # until confirmed RTSP; its own <img src> points at OUR OWN
+    # /video/rtsp_stream/ route (rtsp_worker.py), not the raw rtsp://
+    # URL directly, since browsers can't play RTSP natively at all.
+    with ui.column().classes("w-full gap-1") as rtsp_container:
+        ui.label(t(cam_config["label_key"])).classes("text-xs text-grey-6")
+        rtsp_image = ui.image("").classes(_size_classes).props("fit=contain")
+    rtsp_container.set_visibility(False)
+
     return _PreviewHandles(
         cam_id=cam_config["cam_id"],
         url=url,
+        rtsp_url=rtsp_url,
         stack_field=cam_config["stack_field"],
         image=image,
         container=container,
         not_available_label=not_available_label,
+        rtsp_image=rtsp_image,
+        rtsp_container=rtsp_container,
     )
 
 
@@ -250,13 +269,50 @@ def build_camera_stream_section(session) -> None:
     nothing is available, but because nothing NEW happened to report.
     Defaulting an unknown state to HIDDEN would then hide a perfectly
     working stream indefinitely, so each preview defaults to SHOWN and
-    only hides once a camera is specifically confirmed to be RTSP."""
+    only hides once a camera is specifically confirmed to be RTSP. This
+    SAME unknown-defaults-to-HTTP rule is what keeps a fresh reconnect
+    safe: get_client_status()'s own StreamTypeByCamera cache is reset
+    to empty on every new connection (websockets_utils.py), so right
+    after reconnecting we genuinely don't know the current mode - and
+    defaulting to the cheap, harmless HTTP preview (rather than eagerly
+    starting an RTSP worker thread against a guess) is the safe choice.
+
+    EMBEDDED LIVE RTSP (user-requested Sep 2026, via rtsp_worker.py):
+    shown instead of the HTTP preview once a camera is specifically
+    CONFIRMED RTSP (StreamTypeByCamera == 1). The worker (OpenCV/FFmpeg
+    background thread decoding to a re-servable MJPEG stream) only
+    starts once BOTH this section is expanded AND that camera is
+    confirmed RTSP - not eagerly for a collapsed/never-opened section -
+    and stops the moment either condition stops holding (mode flips
+    back to JPEG, the section collapses, or the connection drops/resets
+    or this page is torn down), so a stale worker never keeps holding
+    open a connection to the Dwarf's own RTSP server, which most
+    embedded devices only serve to a single client at a time."""
     ip = session.config.dwarf_ip
     if not ip:
         return
     urls = _stream_urls(ip)
 
-    with ui.expansion(t("camera_stream_title"), icon="videocam", value=False).classes("w-full"):
+    # expansion.value (read directly in _poll() below, not mirrored
+    # into a separate tracked flag) is the ground truth for whether the
+    # panel is open - see rtsp_worker.py's own docstring for why an
+    # idle, collapsed section shouldn't eagerly hold an RTSP connection
+    # open.
+    expansion = ui.expansion(t("camera_stream_title"), icon="videocam", value=False).classes("w-full")
+
+    def _on_expansion_change(e) -> None:
+        if not e.value:
+            # Collapsing the section releases every RTSP worker this
+            # camera set might currently hold, immediately rather than
+            # waiting for the next poll tick to notice.
+            for preview in previews:
+                if preview.rtsp_started:
+                    rtsp_worker.stop_worker(preview.rtsp_url)
+                    preview.rtsp_started = False
+
+    expansion.on_value_change(_on_expansion_change)
+
+    with expansion:
         with ui.row().classes("items-center justify-between w-full"):
             ui.label(t("camera_stream_http_label")).classes("text-xs text-grey-6")
             ui.button(
@@ -264,10 +320,23 @@ def build_camera_stream_section(session) -> None:
             ).props("flat round dense")
         ui.label(t("camera_stream_http_hint")).classes("text-xs text-grey-5")
 
-        previews = [_build_preview(cfg, urls[cfg["url_key"]]) for cfg in _CAMERAS]
+        previews = [_build_preview(cfg, urls[cfg["url_key"]], urls[cfg["rtsp_key"]]) for cfg in _CAMERAS]
 
         def _poll() -> None:
+            if not expansion.value:
+                return
             if not session.is_connected:
+                # Disconnected: release any RTSP worker still running
+                # rather than leaving it spinning against a source
+                # that's now unreachable anyway - and so it isn't still
+                # holding the Dwarf's own (usually single-client) RTSP
+                # server busy once a reconnect attempt starts.
+                for preview in previews:
+                    if preview.rtsp_started:
+                        rtsp_worker.stop_worker(preview.rtsp_url)
+                        preview.rtsp_started = False
+                        preview.rtsp_container.set_visibility(False)
+                        preview.container.set_visibility(True)
                 return
             result = get_client_status(session)
             full_status = result.get("fullStatus", {})
@@ -275,14 +344,31 @@ def build_camera_stream_section(session) -> None:
             by_camera = full_status.get("StreamTypeByCamera", {})
 
             for preview in previews:
-                # Hide only when we KNOW this camera is RTSP (1) - see
-                # the docstring's LIMITATION note for why unknown stays
-                # visible rather than hidden.
-                available = by_camera.get(preview.cam_id) != 1
-                preview.container.set_visibility(available)
-                preview.not_available_label.set_visibility(not available)
+                # Confirmed RTSP (1) -> embedded live preview.
+                # Confirmed JPEG (2) or genuinely unknown (unset,
+                # including right after a reconnect - see the module
+                # docstring above) -> HTTP snapshot preview, the safe
+                # default that never needs starting a worker thread.
+                is_rtsp = by_camera.get(preview.cam_id) == 1
+                preview.container.set_visibility(not is_rtsp)
+                preview.not_available_label.set_visibility(False)
+                preview.rtsp_container.set_visibility(is_rtsp)
 
-                if preview.stack_field in new_values:
+                if is_rtsp and not preview.rtsp_started:
+                    rtsp_worker.start_worker(preview.rtsp_url)
+                    # Set once - this is a continuous multipart stream,
+                    # not a snapshot, so it never needs cache-busting
+                    # re-fetches like the HTTP preview below does (see
+                    # rtsp_worker.py's own docstring point 2 for why an
+                    # earlier version's repeated re-pointing caused
+                    # visible stuttering).
+                    preview.rtsp_image.set_source(f"/video/rtsp_stream/{ip}/{preview.cam_id}")
+                    preview.rtsp_started = True
+                elif not is_rtsp and preview.rtsp_started:
+                    rtsp_worker.stop_worker(preview.rtsp_url)
+                    preview.rtsp_started = False
+
+                if not is_rtsp and preview.stack_field in new_values:
                     preview.image.set_source(f"{preview.url}?t={time.monotonic()}")
 
         ui.timer(_POLL_INTERVAL_S, _poll)

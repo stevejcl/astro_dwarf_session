@@ -90,6 +90,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import dwarf_python_api.lib.my_logger as log
 
 from nicegui import background_tasks, run
 
@@ -138,6 +139,13 @@ _check_started_at: dict[str, float] = {}
 # see the CONCURRENCY NOTE above for why this needs to be a single
 # shared registry rather than each call site guarding only itself.
 _command_in_flight: set[str] = set()
+# Diagnostic only (user-requested Sep 2026: "device busy" shown often
+# when sending a schedule, unclear whether it's a brief/expected
+# contention or a slot stuck forever - traced here rather than actively
+# debugged right now). Records WHO holds each uid's slot and WHEN it was
+# acquired, purely for the log lines below - not used for any logic.
+_command_in_flight_since: dict[str, float] = {}
+_command_in_flight_caller: dict[str, str] = {}
 
 # uids where _MAX_AUTO_RECONNECT_ATTEMPTS auto-reconnect attempts just
 # failed in a row - stop auto-retrying until the user manually
@@ -146,21 +154,45 @@ _auto_reconnect_exhausted: set[str] = set()
 _auto_reconnect_in_progress: set[str] = set()
 
 
-def try_acquire_command_slot(dwarf_uid: str) -> bool:
+def try_acquire_command_slot(dwarf_uid: str, caller: str = "?") -> bool:
     """Claims the exclusive right to send ONE command to this device.
     Returns False if another command - ours or a user action from
     pages/session.py - is already in flight for it; the caller should
     back off (skip this tick, or tell the user to wait) rather than
-    risk racing dwarf_python_api's unlocked client_instance.command."""
+    risk racing dwarf_python_api's unlocked client_instance.command.
+
+    `caller` is a short label identifying WHO is asking (e.g.
+    "api_routes.sync", "session.refresh_schedules", "health_check") -
+    diagnostic only, logged so a persistently-busy report can be traced
+    to whichever call site is actually (or wrongly still) holding it.
+    """
     if dwarf_uid in _command_in_flight:
+        held_by = _command_in_flight_caller.get(dwarf_uid, "?")
+        held_since = _command_in_flight_since.get(dwarf_uid)
+        held_for = f"{time.monotonic() - held_since:.1f}s" if held_since else "?"
+        log.info(f"[{dwarf_uid}] slot busy: {caller!r} denied - held by {held_by!r} for {held_for} so far.")
         return False
     _command_in_flight.add(dwarf_uid)
+    _command_in_flight_since[dwarf_uid] = time.monotonic()
+    _command_in_flight_caller[dwarf_uid] = caller
+    log.debug(f"[{dwarf_uid}] slot acquired by {caller!r}.")
     return True
 
 
 def release_command_slot(dwarf_uid: str) -> None:
+    held_since = _command_in_flight_since.pop(dwarf_uid, None)
+    caller = _command_in_flight_caller.pop(dwarf_uid, "?")
     _command_in_flight.discard(dwarf_uid)
+    if held_since is not None:
+        held_for = time.monotonic() - held_since
+        log_fn = log.warning if held_for > 5.0 else log.debug
+        log_fn(f"[{dwarf_uid}] slot released by {caller!r} after {held_for:.1f}s.")
 
+def is_busy(dwarf_uid: str) -> bool:
+    """Read-only check - does NOT claim the slot. For UI/API code that
+    only wants to know/display whether a command is in flight (e.g. a
+    manual astro_dwarf_session run) without racing to acquire it."""
+    return dwarf_uid in _command_in_flight
 
 def is_actually_connected(session: DwarfSession) -> bool:
     """session.is_connected AND no active check has failed since AND no
@@ -207,7 +239,7 @@ async def _auto_reconnect(session: DwarfSession) -> None:
     _auto_reconnect_in_progress.add(uid)
     try:
         for attempt in range(1, _MAX_AUTO_RECONNECT_ATTEMPTS + 1):
-            if not try_acquire_command_slot(uid):
+            if not try_acquire_command_slot(uid, caller="auto_reconnect"):
                 # A manual action (or another auto-reconnect pass)
                 # already has the slot - back off rather than fight over
                 # it; the next failed check will try again later.
@@ -258,7 +290,7 @@ async def _cleanup_stale_event_loop(session: DwarfSession) -> None:
         return
 
     uid = session.dwarf_uid
-    if not try_acquire_command_slot(uid):
+    if not try_acquire_command_slot(uid, caller="cleanup_stale_loop"):
         return
     try:
         await run.io_bound(stop_event_loop, session=session)
@@ -287,7 +319,7 @@ async def maybe_check(session: DwarfSession) -> None:
     now = time.monotonic()
     if now - _last_check_at.get(uid, 0.0) < _CHECK_INTERVAL_S:
         return
-    if not try_acquire_command_slot(uid):
+    if not try_acquire_command_slot(uid, caller="health_check"):
         return
 
     _check_started_at[uid] = time.monotonic()

@@ -39,6 +39,8 @@ from nicegui import run, ui
 from dwarf_python_api.get_config_data import set_config_data
 from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import get_manager
+
+from device_registry import find_shared_config_value
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
 from components import connection_health
@@ -154,14 +156,37 @@ def build_settings_page() -> None:
 
             geolocation_status = ui.label("").classes("text-xs")
 
+            # Pre-filled from another already-configured device, if this
+            # device's own value isn't set yet (user-requested Sep
+            # 2026) - location/Stellarium/timezone are almost always the
+            # SAME across every Dwarf someone owns (same house, same PC
+            # running Stellarium), so re-entering them for every newly
+            # paired device is pure friction. Never overrides a value
+            # THIS device already has - only fills in genuine gaps.
+            shared_longitude = session.config.longitude
+            if shared_longitude is None:
+                shared_longitude = find_shared_config_value(get_manager(), lambda c: c.longitude, exclude_uid=dwarf_uid)
+            shared_latitude = session.config.latitude
+            if shared_latitude is None:
+                shared_latitude = find_shared_config_value(get_manager(), lambda c: c.latitude, exclude_uid=dwarf_uid)
+            shared_timezone = session.config.timezone or find_shared_config_value(
+                get_manager(), lambda c: c.timezone, exclude_uid=dwarf_uid
+            ) or ""
+            shared_stellarium_ip = session.config.stellarium_ip or find_shared_config_value(
+                get_manager(), lambda c: c.stellarium_ip, exclude_uid=dwarf_uid
+            ) or "127.0.0.1"
+            shared_stellarium_port = session.config.stellarium_port or find_shared_config_value(
+                get_manager(), lambda c: c.stellarium_port, exclude_uid=dwarf_uid
+            ) or 8090
+
             longitude_input = ui.number(
                 t("settings_longitude"),
-                value=session.config.longitude,
+                value=shared_longitude,
                 format="%.6f",
             ).classes("w-full")
             latitude_input = ui.number(
                 t("settings_latitude"),
-                value=session.config.latitude,
+                value=shared_latitude,
                 format="%.6f",
             ).classes("w-full")
 
@@ -193,18 +218,44 @@ def build_settings_page() -> None:
             ).props("flat")
 
             timezone_input = ui.input(
-                t("settings_timezone"), value=session.config.timezone
+                t("settings_timezone"), value=shared_timezone
             ).classes("w-full")
 
             ui.label(t("settings_stellarium_hint")).classes("text-sm text-grey-6 mt-2")
             with ui.row().classes("w-full gap-2"):
                 stellarium_ip_input = ui.input(
                     t("settings_stellarium_ip"),
-                    value=session.config.stellarium_ip or "127.0.0.1",
+                    value=shared_stellarium_ip,
                 ).classes("flex-1")
                 stellarium_port_input = ui.number(
                     t("settings_stellarium_port"),
-                    value=session.config.stellarium_port or 8090,
+                    value=shared_stellarium_port,
+                    format="%.0f",
+                ).classes("w-32")
+
+            # Dwarfium Scope Archive (user-requested Sep 2026: cross-
+            # launch links between the two apps) - dwarfium_id is
+            # looked up manually by the user once, in Dwarfium's own
+            # Dwarf Configuration page (its SQLite "id" column) - no
+            # automatic detection in this first version.
+            # getattr(..., "") on read (user-reported Sep 2026:
+            # AttributeError on an older dwarf_python_api not yet
+            # carrying these two new DwarfConfig fields) - see
+            # pages/session.py's own matching comment. Writing these
+            # back further down (session.config.dwarfium_base_url = ...)
+            # doesn't need the same guard - plain attribute assignment
+            # works even on an object whose class didn't originally
+            # declare the field.
+            ui.label(t("settings_dwarfium_hint")).classes("text-sm text-grey-6 mt-2")
+            with ui.row().classes("w-full gap-2"):
+                dwarfium_url_input = ui.input(
+                    t("settings_dwarfium_url"),
+                    value=getattr(session.config, "dwarfium_base_url", "") or "http://localhost:8080",
+                ).classes("flex-1")
+                _dwarfium_id_current = getattr(session.config, "dwarfium_id", "")
+                dwarfium_id_input = ui.number(
+                    t("settings_dwarfium_id"),
+                    value=int(_dwarfium_id_current) if _dwarfium_id_current else None,
                     format="%.0f",
                 ).classes("w-32")
 
@@ -221,6 +272,10 @@ def build_settings_page() -> None:
                 tz = timezone_input.value.strip()
                 stellarium_ip = stellarium_ip_input.value.strip() or "127.0.0.1"
                 stellarium_port = int(stellarium_port_input.value or 8090)
+                dwarfium_url = dwarfium_url_input.value.strip()
+                dwarfium_id = (
+                    str(int(dwarfium_id_input.value)) if dwarfium_id_input.value else ""
+                )
 
                 ini = _read_ini(session.config.config_ini_path)
                 ini["CONFIG"]["longitude"] = str(lon)
@@ -228,6 +283,8 @@ def build_settings_page() -> None:
                 ini["CONFIG"]["timezone"] = tz
                 ini["CONFIG"]["stellarium_ip"] = stellarium_ip
                 ini["CONFIG"]["stellarium_port"] = str(stellarium_port)
+                ini["CONFIG"]["dwarfium_base_url"] = dwarfium_url
+                ini["CONFIG"]["dwarfium_id"] = dwarfium_id
                 with open(session.config.config_ini_path, "w", encoding="utf-8") as f:
                     ini.write(f)
 
@@ -240,6 +297,8 @@ def build_settings_page() -> None:
                 session.config.timezone = tz
                 session.config.stellarium_ip = stellarium_ip
                 session.config.stellarium_port = stellarium_port
+                session.config.dwarfium_base_url = dwarfium_url
+                session.config.dwarfium_id = dwarfium_id
 
                 status_label.set_text(t("settings_saved"))
                 status_label.classes(replace="text-sm text-green-700")

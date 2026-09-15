@@ -23,6 +23,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from components import scheduler_loop, scheduler_runner
 from components.i18n import t
 from components.program_editor import build_program_editor
+from components.schedule_editor import build_schedule_editor
 from components.session_dirs import session_dirs_for
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
@@ -98,6 +99,7 @@ def build_programs_page() -> None:
                 editor_tab = ui.tab(t("tab_editor"))
                 scripts_tab = ui.tab(t("tab_scripts"))
                 results_tab = ui.tab(t("tab_results"))
+                schedule_tab = ui.tab(t("tab_schedule"))
 
             with ui.tab_panels(tabs, value=editor_tab).classes("w-full"):
 
@@ -347,6 +349,14 @@ def build_programs_page() -> None:
                                         )
                                         if id_command.get("ir_actual"):
                                             detail += f" \u00b7 IR: {id_command['ir_actual']}"
+                                        # user-requested Sep 2026: "nombre
+                                        # images et stackees... pour
+                                        # affichages card program"
+                                        if id_command.get("shots_taken"):
+                                            detail += (
+                                                f" \u00b7 {id_command.get('shots_stacked', 0)}/"
+                                                f"{id_command['shots_taken']} {t('prog_shots_stacked')}"
+                                            )
                                         ui.label(detail).classes("text-xs")
                                     if id_command.get("starting_date") or id_command.get("processed_date"):
                                         ui.label(
@@ -364,6 +374,10 @@ def build_programs_page() -> None:
                                         ).props("flat dense round color=primary")
 
                     render_results()
+
+                # --- Native Schedule (on-device, module 13) ----------------
+                with ui.tab_panel(schedule_tab):
+                    build_schedule_editor(session)
 
             # Refresh Scripts/Results when switching to them, in case a
             # program finished (or was saved) while the user was looking

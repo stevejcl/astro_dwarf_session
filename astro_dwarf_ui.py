@@ -79,11 +79,29 @@ def _suppress_benign_proactor_noise(loop: "asyncio.AbstractEventLoop", context: 
 
 from nicegui import native, app, ui
 
+import platform
+
+is_win32 = True if (
+    platform.system() == "Windows"
+    and platform.architecture()[0] == "32bit"
+) else None
+
+if is_win32:
+    print("start win32")
+
+    app.native.start_args["gui"] = "edgechromium"
+
+    app.native.settings["WEBVIEW2_RUNTIME_PATH"] = (
+        r"C:\Program Files\Microsoft\EdgeWebView\Application>"
+    )
+
 import dwarf_python_api.lib.my_logger as my_logger
 from dwarf_python_api.lib.dwarf_session import get_manager
 
 from device_registry import bootstrap_devices
 from components.pwa import register_manifest_route
+from components import rtsp_worker
+from components.api_routes import register_api_routes
 from components.scheduler_loop import start_background_loop
 from pages.dashboard import build_dashboard_page
 from pages.explorer import build_explorer_page
@@ -170,6 +188,14 @@ def main() -> None:
     # docstring for what this does/doesn't cover.
     register_manifest_route()
 
+    # Embedded live RTSP preview (user-requested Sep 2026) - registers
+    # the /video/rtsp_stream/ and /video/rtsp_snapshot/ routes
+    # components/camera_stream.py's own <img> tags point at. stop_all()
+    # on shutdown releases every camera's OpenCV/FFmpeg worker thread
+    # cleanly rather than leaving them running past the app's own exit.
+    rtsp_worker.register_routes()
+    app.on_shutdown(rtsp_worker.stop_all)
+
     if sys.platform == "win32":
         # Installed via on_startup, not right after set_event_loop_policy
         # above - a handler can only be attached to an ACTUAL running
@@ -186,6 +212,11 @@ def main() -> None:
     # from the known config.py/config.ini pairs (see device_registry.py)
     # - NOT recreated per NiceGUI client.
     bootstrap_devices(get_manager())
+
+    # REST API for external tools (e.g. the DSO catalog page's "Program
+    # session to the Dwarf" button) - GET /api/dwarfs, POST /api/schedule.
+    # See components/api_routes.py's module docstring.
+    register_api_routes()
 
     build_dashboard_page()
     build_explorer_page()

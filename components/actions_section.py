@@ -165,15 +165,36 @@ def _polar_position_sequence(session) -> bool:
     single attempt (the original retries once with a 10s sleep between
     attempts; left as a single try here since a UI button can just be
     pressed again if it fails, rather than silently blocking for 10s+
-    inside one click)."""
+    inside one click).
+
+    BUG FIX (Sep 2026, field-confirmed on a real Dwarf Mini): this
+    previously did an UNCONDITIONAL Rotation motor reset (action==5)
+    for every model, then branched on dwarf_id_int >= 3 - meaning Mini
+    (dwarf_id_int==5) fell into the "D3" branch and got D3's Rotation/
+    Pitch positioning angles (158°/169°) and a Rotation reset it can't
+    actually complete. Live testing showed exactly that: the Rotation
+    reset call never finishes (CODE_STEP_MOTOR_OVERTIME_GET_RESET_
+    RETURN) - watching a real perform_calibration() run confirmed why:
+    on Mini, the Rotation axis (id=1) has NO home/limit sensor at all,
+    the device only ever resets Pitch and starts plate-solving from
+    wherever Rotation already was. There is no absolute reference to
+    reset TO for that axis on this model - by design, not a bug in the
+    device - so Mini gets NO Rotation reset/positioning call at all,
+    only Pitch (reset via action==6, then positioning via the new
+    Mini-specific action==11, end_position 90° - see motor_action()'s
+    own docstring for how that value was determined).
+    """
     dwarf_id_int = config_to_dwarf_id_int(session.config.dwarf_model_id) or 2
 
-    if not motor_action(5, session=session):  # Rotation motor reset
-        return False
+    if dwarf_id_int != 5:  # no need for Mini
+        if not motor_action(5, session=session):  # Rotation motor reset
+            return False
     if not motor_action(6, session=session):  # Pitch motor reset
         return False
 
-    if dwarf_id_int >= 3:
+    if dwarf_id_int == 5:
+        return bool(motor_action(11, session=session))  # Pitch positioning (Mini)
+    elif dwarf_id_int == 3:
         if not motor_action(9, session=session):  # Rotation positioning (D3)
             return False
         return bool(motor_action(7, session=session))  # Pitch positioning (D3)

@@ -26,6 +26,9 @@ own target list - nothing shared across pages/devices anymore."""
 from __future__ import annotations
 
 import asyncio
+import json
+import time
+from datetime import datetime
 from typing import Callable
 
 from nicegui import run, ui
@@ -33,6 +36,9 @@ from nicegui import run, ui
 from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
+from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
+from dwarf_python_api.lib.dwarf_utils import perform_get_all_shooting_schedule_full
+import pending_schedules
 from dwarf_python_api.lib.my_logger import (
     register_thread_device_label,
     unregister_thread_device_label,
@@ -41,6 +47,7 @@ from dwarf_python_api.lib.my_logger import (
 from components import connection_health, scheduler_runner
 from components.actions_section import build_actions_section
 from components.camera_stream import build_camera_stream_section
+from components.motor_control import build_motor_pad, build_motor_position_tool
 from components.camera_settings import build_camera_settings
 from components.i18n import t
 from components.program_section import build_program_section
@@ -131,8 +138,179 @@ def _safe_ongoing_notification(message: str):
         return _NullNotification()
 
 
+async def _offer_pending_schedule_sync(session, dwarf_uid: str, pending: dict) -> None:
+    """Called right after a successful (re)connect when
+    pending_schedules.get_pending(dwarf_uid) returned something (i.e. a
+    "Program session to the Dwarf" POST arrived from the catalog page while
+    this device was offline - see components/api_routes.py). Asks before
+    syncing rather than doing it silently: the plan may be stale by the
+    time the person actually opens the app and connects."""
+    name = pending.get("scheduleName", "a pending schedule")
+    n_tasks = len(pending.get("shooting_tasks", []))
+
+    async def _sync_now() -> None:
+        dialog.close()
+        notif = _safe_ongoing_notification("Syncing schedule…")
+        ok = await run.io_bound(perform_sync_shooting_schedule, pending, session=session)
+        notif.spinner = False
+        if ok:
+            pending_schedules.clear_pending(dwarf_uid)
+            notif.message = "Schedule synced."
+            notif.type = "positive"
+        else:
+            notif.message = "Schedule sync failed — left as pending, retry later."
+            notif.type = "negative"
+        await asyncio.sleep(2.0)
+        notif.dismiss()
+
+    def _dismiss_only() -> None:
+        dialog.close()
+
+    with ui.dialog() as dialog, ui.card():
+        ui.label(f"A schedule is waiting for this device: \"{name}\" ({n_tasks} target(s)).")
+        with ui.row():
+            ui.button("Sync now", on_click=_sync_now)
+            ui.button("Later", on_click=_dismiss_only)
+            ui.button("Discard", on_click=lambda: (pending_schedules.clear_pending(dwarf_uid), dialog.close()))
+    dialog.open()
+
+
+_SCHEDULE_STATE_LABELS = {0: "Initialized", 1: "Pending", 2: "Shooting", 3: "Completed", 4: "Expired"}
+_TASK_STATE_LABELS = {0: "Idle", 1: "Shooting", 2: "Success", 3: "Failed", 4: "Interrupted"}
+
+# Per-dwarf_uid cache of the last CMD_GET_ALL_SHOOTING_SCHEDULE read - see
+# _handle_refresh_schedules(). Module-level (like connection_health's own
+# state), not per-NiceGUI-client: the device's actual stored schedules
+# are shared truth regardless of which browser tab asked.
+_schedules_cache: dict[str, list[dict]] = {}
+_schedules_fetch_error: dict[str, str] = {}
+_schedules_last_fetch: dict[str, float] = {}
+# How many of _schedules_cache[uid] (already sorted newest-first) to
+# render before the "Show more" button - user-requested (Sep 2026):
+# newest first, 3 at a time, "more" to reveal the rest.
+_schedules_shown_count: dict[str, int] = {}
+
+
+class _BoolBox:
+    """Tiny mutable wrapper so ui.expansion's open/closed state can be
+    bound (via .bind_value()) to a specific dwarf_uid's slot in a plain
+    dict - bind_value needs a settable OBJECT ATTRIBUTE, not a dict key.
+    """
+    def __init__(self, value: bool = False) -> None:
+        self.value = value
+
+
+# User-reported (Sep 2026): "la fenêtre se replie toute seule" - the
+# WHOLE render function (including this ui.expansion) re-runs on every
+# 2s poll tick (see build_session_page()'s ui.timer), so a freshly
+# recreated ui.expansion() with no persisted state defaults back to
+# closed every single tick, undoing any manual open within ~2s. One
+# _BoolBox per dwarf_uid, read for the initial `value=` and bound so
+# NiceGUI writes user toggles back into it, keeps the open/closed choice
+# alive across those re-renders instead of resetting it.
+_schedule_section_open: dict[str, _BoolBox] = {}
+
+
+def _get_schedule_section_box(dwarf_uid: str) -> _BoolBox:
+    box = _schedule_section_open.get(dwarf_uid)
+    if box is None:
+        box = _BoolBox(False)
+        _schedule_section_open[dwarf_uid] = box
+    return box
+
+
+async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
+    """User-reported (Sep 2026): after a schedule sync succeeds, there was
+    no way to see what's actually stored on the device from within
+    astro_dwarf_session's own UI at all - not just "was the last sync
+    successful", but "what schedules/tasks does the device currently
+    think it has, and what state is each one in" (idle/shooting/success/
+    failed/...). This reads that directly from the device (CMD_GET_ALL_
+    SHOOTING_SCHEDULE) rather than trusting our own bookkeeping, since a
+    schedule could have been synced by something else entirely (the
+    official app, or a previous astro_dwarf_session run)."""
+    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.refresh_schedules"):
+        _safe_notify(t("device_busy"), type="warning")
+        return
+    try:
+        info = await run.io_bound(perform_get_all_shooting_schedule_full, session=session)
+    finally:
+        connection_health.release_command_slot(dwarf_uid)
+
+    if info is None:
+        _schedules_fetch_error[dwarf_uid] = "Could not read schedules from the device."
+        _schedules_cache.pop(dwarf_uid, None)
+        _safe_notify("Could not read schedules from the device.", type="negative")
+    else:
+        _schedules_fetch_error.pop(dwarf_uid, None)
+        parsed = []
+        for sched in info.shooting_schedule:
+            tasks = []
+            for task in sched.shooting_tasks:
+                try:
+                    p = json.loads(task.params)
+                except Exception:
+                    p = {}
+                tasks.append({
+                    "name": p.get("name", "?"),
+                    "state": _TASK_STATE_LABELS.get(task.state, str(task.state)),
+                    "shutterName": p.get("shutterName"),
+                    "gainName": p.get("gainName"),
+                    "filterModeName": p.get("filterModeName"),
+                    "count": p.get("count"),
+                    "stacked": p.get("stacked"),
+                })
+            # Recency key for sorting (most recent first, see the render
+            # section) - updated_time is set on every sync/state change;
+            # fall back to created_time, then schedule_time, so a
+            # schedule with no updates yet still sorts sensibly.
+            recency = sched.updated_time or sched.created_time or sched.schedule_time or 0
+            parsed.append({
+                "name": sched.schedule_name or sched.schedule_id,
+                "state": _SCHEDULE_STATE_LABELS.get(sched.state, str(sched.state)),
+                "tasks": tasks,
+                "recency": recency,
+            })
+        parsed.sort(key=lambda s: s["recency"], reverse=True)
+        _schedules_cache[dwarf_uid] = parsed
+        _schedules_shown_count[dwarf_uid] = 3  # reset paging on every fresh fetch
+        # Explicit confirmation (user-reported Sep 2026: "je ne sais pas
+        # si la commande a été envoyée (pas de notif)") - this function
+        # previously only updated the cache and refreshed the view
+        # silently, with no feedback distinguishable from "nothing
+        # happened" if the person wasn't staring at the section already.
+        _safe_notify(f"Schedules refreshed ({len(parsed)} found).", type="positive")
+    _schedules_last_fetch[dwarf_uid] = time.time()
+    refresh_view()
+
+
+async def _handle_sync_pending(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
+    """Triggered by the persistent "Pending schedule" banner (shown
+    whenever connected + not busy + something is queued) - covers the case
+    the connect-time dialog (_offer_pending_schedule_sync) doesn't: a
+    schedule arriving while the device was BUSY (a manual/scheduled
+    program running - see scheduler_runner's COMMAND SLOT note) rather
+    than offline. No reconnect event fires when a run simply finishes, so
+    this is checked declaratively on every poll tick instead."""
+    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.sync_pending"):
+        _safe_notify(t("device_busy"), type="warning")
+        return
+    pending = pending_schedules.get_pending(dwarf_uid)
+    try:
+        ok = await run.io_bound(perform_sync_shooting_schedule, pending, session=session) if pending else False
+    finally:
+        connection_health.release_command_slot(dwarf_uid)
+
+    if ok:
+        pending_schedules.clear_pending(dwarf_uid)
+        _safe_notify("Schedule synced.", type="positive")
+    else:
+        _safe_notify("Schedule sync failed — left as pending, retry later.", type="negative")
+    refresh_view()
+
+
 async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
-    if not connection_health.try_acquire_command_slot(dwarf_uid):
+    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.connect"):
         _safe_notify(t("device_busy"), type="warning")
         return
     _busy_uids.add(dwarf_uid)
@@ -157,6 +335,10 @@ async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], No
         notification.type = "positive"
         connection_health.mark_just_connected(dwarf_uid)
         _label_thread_for_device(session)
+
+        pending = pending_schedules.get_pending(dwarf_uid)
+        if pending is not None:
+            await _offer_pending_schedule_sync(session, dwarf_uid, pending)
     refresh_view()
 
     # A direct asyncio.sleep + dismiss() call, NOT a ui.timer: dismiss()
@@ -173,7 +355,7 @@ async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], No
 
 
 async def _handle_disconnect(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
-    if not connection_health.try_acquire_command_slot(dwarf_uid):
+    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.disconnect"):
         _safe_notify(t("device_busy"), type="warning")
         return
     _busy_uids.add(dwarf_uid)
@@ -196,7 +378,7 @@ async def _handle_reconnect(session, dwarf_uid: str, refresh_view: Callable[[], 
     reuse it and time out again (connect_socket() only goes through
     init_socket() when client_instance is None/start_client is False).
     A real reconnect needs a clean disconnect first."""
-    if not connection_health.try_acquire_command_slot(dwarf_uid):
+    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.reconnect"):
         _safe_notify(t("device_busy"), type="warning")
         return
     _busy_uids.add(dwarf_uid)
@@ -220,6 +402,10 @@ async def _handle_reconnect(session, dwarf_uid: str, refresh_view: Callable[[], 
         notification.type = "positive"
         connection_health.mark_just_connected(dwarf_uid)
         _label_thread_for_device(session)
+
+        pending = pending_schedules.get_pending(dwarf_uid)
+        if pending is not None:
+            await _offer_pending_schedule_sync(session, dwarf_uid, pending)
     refresh_view()
     await asyncio.sleep(2.0)
     notification.dismiss()
@@ -257,6 +443,52 @@ def build_session_page() -> None:
                     on_click=lambda: ui.navigate.to(f"/session/{dwarf_uid}/settings"),
                 ).props("flat round")
 
+            # "Open in Dwarfium" (user-requested Sep 2026: cross-launch
+            # links to the companion Dwarfium Scope Archive app) - only
+            # shown once configured (settings page), since there's
+            # nothing meaningful to link to otherwise. Plain external
+            # links (ui.link, new tab) rather than any native-window
+            # control - the user explicitly settled on this simpler
+            # scope for v1, deferring same-window native navigation.
+            #
+            # session resolved HERE, independently of session_view()'s
+            # own internal `session` below (user-reported Sep 2026:
+            # "NameError: name 'session' is not defined" - that name is
+            # local to the @ui.refreshable session_view() function
+            # further down, not visible at this outer scope where this
+            # block was originally placed; a real scoping bug on my
+            # part, not a version-mismatch issue like the getattr()
+            # guard below addresses). try/except KeyError matches
+            # pages/explorer.py's own guard for the same "stale/bad
+            # dwarf_uid in the URL" case.
+            try:
+                _header_session = get_manager().get(dwarf_uid)
+            except KeyError:
+                _header_session = None
+
+            # getattr(..., "") rather than direct attribute access
+            # (user-reported Sep 2026: "AttributeError: 'DwarfConfig'
+            # object has no attribute 'dwarfium_base_url'") - these two
+            # fields were added to dwarf_python_api's own DwarfConfig
+            # alongside this feature, and astro_dwarf_ui can end up
+            # slightly ahead of whichever dwarf_python_api version is
+            # actually installed, being separate repos - same defensive
+            # pattern already used for dwarf_model_id in scheduler_
+            # runner.py. Degrades to simply not showing these links
+            # rather than crashing the whole session page.
+            dwarfium_base_url = getattr(_header_session.config, "dwarfium_base_url", "") if _header_session else ""
+            dwarfium_id = getattr(_header_session.config, "dwarfium_id", "") if _header_session else ""
+            if dwarfium_base_url and dwarfium_id:
+                base = dwarfium_base_url.rstrip("/")
+                did = dwarfium_id
+                with ui.row().classes("items-center gap-3 -mt-1"):
+                    ui.link(t("open_in_dwarfium_config"), f"{base}/Dwarf?DwarfId={did}", new_tab=True).classes(
+                        "text-xs"
+                    )
+                    ui.link(
+                        t("open_in_dwarfium_explore"), f"{base}/Explore/?DwarfId={did}", new_tab=True
+                    ).classes("text-xs")
+
             # Defined HERE, inside the page function, not at module
             # level - see the module docstring for why: this gives THIS
             # page load its own private refreshable object, so its
@@ -283,6 +515,7 @@ def build_session_page() -> None:
                         or full_status.get("takePhotoStarted")
                         or full_status.get("takeWidePhotoStarted")
                     )
+
                     # session.is_connected only reflects whether a
                     # client_instance/websocket OBJECT still exists - it
                     # does NOT get cleared when a single command times out
@@ -342,6 +575,34 @@ def build_session_page() -> None:
                         status_banner(t("connected"), kind="success")
                     else:
                         status_banner(t("disconnected"), kind="warning")
+
+                    # --- Pending schedule (declarative, checked every poll
+                    # tick — covers BOTH "was offline, just connected" and
+                    # "was busy running a manual/scheduled program, just
+                    # freed up" cases; the latter has no reconnect event to
+                    # hook, hence checking state here rather than only at
+                    # connect time in _handle_connect/_handle_reconnect. ---
+                    pending_sched = pending_schedules.get_pending(dwarf_uid)
+                    if pending_sched and connected and not program_running and not capturing:
+                        with ui.row().classes("items-center gap-2 w-full"):
+                            ui.icon("schedule").classes("text-amber-6")
+                            ui.label(
+                                f"Pending schedule: {pending_sched.get('scheduleName', '?')} "
+                                f"({len(pending_sched.get('shooting_tasks', []))} target(s))"
+                            ).classes("text-sm flex-1")
+                            ui.button(
+                                "Sync now",
+                                on_click=lambda: _handle_sync_pending(
+                                    session, dwarf_uid, refresh_view_and_camera_settings
+                                ),
+                            ).props("dense flat color=primary")
+                            ui.button(
+                                "Discard",
+                                on_click=lambda: (
+                                    pending_schedules.clear_pending(dwarf_uid),
+                                    refresh_view_and_camera_settings(),
+                                ),
+                            ).props("dense flat color=negative")
 
                     # --- Connection ------------------------------------------
                     with ui.row().classes("w-full gap-2"):
@@ -462,6 +723,90 @@ def build_session_page() -> None:
             if actions_session is not None:
                 build_actions_section(actions_session, session_view.refresh)
                 build_camera_stream_section(actions_session)
+                with ui.expansion(t("motor_pad_title"), icon="control_camera").classes("w-full"):
+                    build_motor_pad(actions_session)
+
+                    with ui.expansion("Motor axis positioning (advanced)", icon="tune").classes("w-full"):
+                        build_motor_position_tool(actions_session)
+
+            # --- Shooting schedule (on device) — user-reported
+            # (Sep 2026): no visibility anywhere in the UI into
+            # what's actually stored on the device after a sync,
+            # or whether it's idle/running/succeeded/failed. Reads
+            # straight from the device (not our own bookkeeping) -
+            # manual refresh only, not polled every tick, since
+            # it's a real device round-trip.
+            #
+            # BUG FIX (Sep 2026, user-reported: "je ne vois rien... il
+            # faut changer de page"): this used to be plain inline code
+            # in session_page()'s own "built once" section - clicking
+            # Refresh correctly updated _schedules_cache server-side,
+            # but refresh_view_and_camera_settings() only ever calls
+            # session_view.refresh()/refresh_camera_settings(), NEITHER
+            # of which touches this block, so the new data never
+            # actually got drawn (matching "toggling the expansion does
+            # nothing either" - its children were built once, at page-
+            # load time, and never told to rebuild). Needs its OWN
+            # @ui.refreshable - and per the module docstring above, that
+            # MUST be defined HERE, inside session_page(), not at module
+            # level, for the exact same cross-device-bleeding reason
+            # session_view already had to be fixed for.
+            @ui.refreshable
+            def shooting_schedule_view() -> None:
+                with ui.expansion(
+                    "Shooting schedule (on device)", icon="event_note",
+                ).classes("w-full").bind_value(_get_schedule_section_box(dwarf_uid), "value"):
+                    last_fetch = _schedules_last_fetch.get(dwarf_uid)
+                    if last_fetch:
+                        ui.label(
+                            "Last checked: " + datetime.fromtimestamp(last_fetch).strftime("%H:%M:%S")
+                        ).classes("text-xs text-grey-6")
+                    fetch_err = _schedules_fetch_error.get(dwarf_uid)
+                    cached_scheds = _schedules_cache.get(dwarf_uid)
+                    if fetch_err:
+                        ui.label(fetch_err).classes("text-negative text-sm")
+                    elif cached_scheds is None:
+                        ui.label("Not checked yet — click Refresh.").classes("text-sm text-grey-6")
+                    elif not cached_scheds:
+                        ui.label("No shooting schedule currently stored on this device.").classes("text-sm text-grey-6")
+                    else:
+                        shown = _schedules_shown_count.get(dwarf_uid, 3)
+                        for sc in cached_scheds[:shown]:
+                            with ui.card().classes("w-full q-pa-sm q-mb-xs"):
+                                ui.label(f"{sc['name']} — {sc['state']}").classes("font-medium text-sm")
+                                for tsk in sc["tasks"]:
+                                    detail_bits = []
+                                    if tsk.get("shutterName"):
+                                        detail_bits.append(f"{tsk['shutterName']}s")
+                                    if tsk.get("gainName"):
+                                        detail_bits.append(f"gain {tsk['gainName']}")
+                                    if tsk.get("filterModeName"):
+                                        detail_bits.append(tsk["filterModeName"])
+                                    if tsk.get("count") is not None:
+                                        detail_bits.append(f"{tsk['count']} imgs")
+                                    if tsk.get("stacked") is not None:
+                                        detail_bits.append(f"{tsk['stacked']} stacked")
+                                    detail = " · ".join(str(b) for b in detail_bits if b)
+                                    line = f"• {tsk['name']}: {tsk['state']}"
+                                    if detail:
+                                        line += f" ({detail})"
+                                    ui.label(line).classes("text-xs text-grey-7")
+                        if len(cached_scheds) > shown:
+                            ui.button(
+                                f"Show more ({len(cached_scheds) - shown} more)",
+                                on_click=lambda: (
+                                    _schedules_shown_count.__setitem__(dwarf_uid, shown + 3),
+                                    shooting_schedule_view.refresh(),
+                                ),
+                            ).props("dense flat size=sm")
+                    ui.button(
+                        "Refresh",
+                        on_click=lambda: _handle_refresh_schedules(
+                            actions_session, dwarf_uid, shooting_schedule_view.refresh
+                        ),
+                    ).props("dense flat")
+
+            shooting_schedule_view()
 
             # Program (scheduler): also built once, not on the 2s poll -
             # it holds its own upload widget + a running program's live

@@ -13,15 +13,16 @@ the astro_dwarf_session side:
 1. update_config_data() requires the TARGET config.py to already exist
    (it does a line-by-line search/replace, it never creates anything) -
    so for a genuinely new device, a config.py/config.ini must first be
-   materialized from a template (see _TEMPLATE_PY/_INI below, copied
-   from Install/config.py and Install/config.ini).
+   materialized from a template (see device_provisioning.py, shared
+   with pages/manual_config.py's no-BLE wizard).
 
 2. The current Install/config.py has NO "DWARF_UID = ..." line -
    without that line, update_config_data('dwarf_uid', ...) finds
    nothing to replace and writes NOTHING, silently (it still returns
-   True, "Value not found, file not changed"). The template below adds
-   the missing line - but Install/config.py itself probably deserves
-   the same fix so setupBLE.py etc. aren't hit by the same gap.
+   True, "Value not found, file not changed"). device_provisioning.py's
+   template adds the missing line - but Install/config.py itself
+   probably deserves the same fix so setupBLE.py etc. aren't hit by the
+   same gap.
 
 CONCURRENCY: set_config_data() redirects a GLOBAL state at the
 get_config_data module level (not per-session) - two simultaneous
@@ -30,9 +31,7 @@ _pairing_lock therefore serializes pairing: only one at a time, even
 with several NiceGUI tabs/clients open."""
 from __future__ import annotations
 
-import re
 import threading
-from pathlib import Path
 
 from nicegui import run, ui
 
@@ -44,6 +43,7 @@ from components.ble_pairing import connect_ble, scan_dwarf_devices, write_ble_cr
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
+from device_provisioning import ensure_config_files, slugify
 from device_registry import add_device_entry, find_shared_config_value
 
 # IMPORTANT (found while wiring this screen, needs an upstream fix):
@@ -57,58 +57,7 @@ from device_registry import add_device_entry, find_shared_config_value
 # fix upstream: move those imports inside connect_ble_dwarf_win(), or
 # guard them behind `if sys.platform == "win32"`).
 
-_TEMPLATE_PY = """DWARF_IP = ""
-DWARF_ID = "2"
-DWARF_UID = ""
-DWARF_UI = ""
-CLIENT_ID = "0000DAF2-0000-1000-8000-00805F9B34FB"
-TIMEOUT_CMD = "0"
-LOG_FILE = "astro_session.log"
-DEBUG = True
-TRACE = ""
-"""
-
-_TEMPLATE_INI = """[CONFIG]
-longitude =
-latitude =
-timezone = Europe/Paris
-ble_psd = DWARF_12345678
-ble_sta_ssid =
-ble_sta_pwd =
-exposure = 15
-gain = 100
-ircut = 0
-binning = 0
-count = 20
-address =
-dwarf_ip =
-stellarium_ip =
-stellarium_port =
-camera_type = Tele Camera
-device_type = Dwarf II
-"""
-
 _pairing_lock = threading.Lock()
-
-
-def _slugify(name: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", name.strip().lower()).strip("_")
-    return slug or "device"
-
-
-def _ensure_config_files(slug: str) -> tuple[str, str]:
-    """Creates config_<slug>.py / .ini from the template if they don't
-    exist yet. Never touches a file that already exists (this could be
-    a RE-pairing of an already-known device)."""
-    config_py = f"config_{slug}.py"
-    config_ini = f"config_{slug}.ini"
-
-    if not Path(config_py).exists():
-        Path(config_py).write_text(_TEMPLATE_PY, encoding="utf-8")
-    if not Path(config_ini).exists():
-        Path(config_ini).write_text(_TEMPLATE_INI, encoding="utf-8")
-
-    return config_py, config_ini
 
 
 def _do_pairing(
@@ -134,8 +83,8 @@ def _do_pairing(
             "pairing_ble_unavailable", error_type=type(e).__name__, error=str(e)
         )
 
-    slug = _slugify(device_name)
-    config_py, config_ini = _ensure_config_files(slug)
+    slug = slugify(device_name)
+    config_py, config_ini = ensure_config_files(slug)
 
     # Redirects update_config_data()'s writes to THIS file pair - same
     # mechanism as connect_bluetooth_cmd.py --config-py.

@@ -20164,6 +20164,19 @@ function _dwarfSetBridgeUrl(url) {
   try { localStorage.setItem(DWARF_SCHEDULE_BRIDGE_KEY, url); } catch (e) {}
 }
 function _dwarfToast(msg) {
+  // BUG FIX (Sep 2026): routed through the in-modal #dwarf-send-status
+  // line first when the "Program session to the Dwarf" modal is open -
+  // see that element's own comment for why the original bottom-of-
+  // screen toast alone was invisible in that case (hidden behind the
+  // modal's own much higher z-index). Still ALSO fires the original
+  // toast underneath - harmless, and covers the (rarer) case where
+  // this is called with the modal already closed.
+  var inModal = document.getElementById('dwarf-send-status');
+  if (inModal) {
+    var isError = /fail|error|refused|unreachable|stale/i.test(msg);
+    inModal.textContent = msg;
+    inModal.style.color = isError ? 'var(--red,#e05a5a)' : 'var(--teal,#4fd8c8)';
+  }
   // Reuse the mosaic toast element if present (already in the DOM/CSS);
   // otherwise fall back to a plain alert so the message is never silently lost.
   var t = document.getElementById('mosaic-toast');
@@ -20224,8 +20237,16 @@ function _dwarfTaskFromPlan(p) {
     shutterName: fr.subSec != null ? String(fr.subSec) : null,
     gainIndex: null,
     gainName: fr.gain != null ? String(fr.gain) : null,
-    count: null,                               // total shots — not computed by this planner yet
-    stacked: null,
+    // count: 0, NOT null - field-confirmed (Sep 2026): the official
+    // app's own successful schedules (a real device dump via CMD_GET_
+    // ALL_SHOOTING_SCHEDULE) always send count:0, never null/omitted -
+    // 0 apparently means "shoot until the task's own end_time", the
+    // catalog page's actual intent here (it never computes a target
+    // shot count). Sending null instead triggered CODE_SHOOTING_
+    // SCHEDULE_INVALID_SHOOTING_DURATION (-16301) on a real device,
+    // even with an otherwise perfectly reasonable window/exposure.
+    count: 0,
+    stacked: 0,                                // same reasoning as count above — official app always sends 0, never null
     filterModeIndex: null,
     // Was fr.filterId directly (this catalog's own id, e.g. "dwarf-
     // astro") - the Dwarf's own lookup table has never heard of that
@@ -20233,7 +20254,7 @@ function _dwarfTaskFromPlan(p) {
     // can resolve an index from it.
     filterModeName: _DWARF_FILTER_DEVICE_NAME[fr.filterId] || fr.filterId || null,
     schedule_task_id: _dwarfUuid(),
-    createFrom: 0,                             // 0 = "Recommended list" per §3.2.4
+    createFrom: 2,                             // 0 = "Recommended list" per §3.2.4
   };
 }
 function _dwarfSequenceTasks(tasks) {
@@ -20360,6 +20381,16 @@ function openDwarfProgramPanel(plans, meta) {
         '<button type="button" id="dwarf-btn-dl" class="btn-plan-mosaic">⬇ Download .json</button>' +
         '<button type="button" id="dwarf-btn-close" class="btn-plan-mosaic" style="margin-left:auto">Close</button>' +
       '</div>' +
+      // BUG FIX (Sep 2026, user-reported: "pas de retour visuel en cas de
+      // success ou d'erreur"): _dwarfToast()'s bottom-of-screen toast has
+      // z-index:2400, but THIS modal (#dwarf-sched-overlay) has z-index:
+      // 9500 and stays open while sending - every toast triggered from a
+      // button in here (Send, Copy, Download) was rendering completely
+      // hidden behind the modal itself, invisible until the person closed
+      // it. This status line sits INSIDE the modal instead, impossible to
+      // hide behind it - see _dwarfToast's own updated comment for how
+      // messages get routed here now.
+      '<div id="dwarf-send-status" style="margin-top:10px;font-size:12px;min-height:1.4em"></div>' +
     '</div>';
 
   const dynamicRegion = document.getElementById('dwarf-dynamic-region');
@@ -20443,6 +20474,18 @@ function openDwarfProgramPanel(plans, meta) {
   document.getElementById('dwarf-bridge-url').addEventListener('change', loadDevices);
 
   document.getElementById('dwarf-btn-send').addEventListener('click', () => {
+    // BUG FIX (Sep 2026, field-confirmed): this used to send whatever
+    // `sched` last happened to be (built by rebuild(), only re-run on a
+    // checkbox toggle) - clicking Send twice without touching a
+    // checkbox in between resent the exact SAME scheduleId/task ids
+    // both times. A real device test showed the SECOND identical send
+    // (right after the schedule had already been synced once, then
+    // deleted via astro_dwarf_session's own UI) came back WS_PARSE_
+    // PROTOBUF_ERROR (-1) - a random UUID landing on the exact same
+    // value twice by chance is essentially impossible, so this was the
+    // cause, not a coincidence. rebuild() here guarantees a fresh id
+    // on every actual send, independent of whether a checkbox changed.
+    rebuild();
     if (!sched.shooting_tasks.length) { _dwarfToast('Nothing selected — tick at least one target.'); return; }
     if (stalenessWarning) {
       _dwarfToast('Refused to send a stale schedule — reload the page first (see the warning above).');
@@ -20456,7 +20499,25 @@ function openDwarfProgramPanel(plans, meta) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dwarfUid: dwarfUid, schedule: sched }),
     })
-      .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json().catch(() => ({})); })
+      .then(res => {
+        // BUG FIX (Sep 2026, user-reported: "bizarre le Dwarf est bien
+        // connecté"): status 502 specifically is api_routes.py's OWN
+        // deliberate choice for "the bridge WAS reached fine, but the
+        // device itself rejected perform_sync_shooting_schedule" - not
+        // a real connectivity failure. A genuine network failure never
+        // reaches this .then() at all (it throws before res exists,
+        // landing straight in .catch() with a different err.message
+        // like "Failed to fetch"), so 502 here is unambiguous - read
+        // its JSON body (now includes the real DwarfErrorCode name,
+        // e.g. "CODE_SHOOTING_SCHEDULE_TIME_CONFLICT", per user request
+        // Sep 2026: "ce message m'intéresse plus que... check the log")
+        // rather than just tagging it generically.
+        if (res.status === 502) {
+          return res.json().catch(() => ({})).then(body => { throw new Error('DEVICE_SYNC_FAILED:' + (body.reason || '')); });
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json().catch(() => ({}));
+      })
       .then(data => {
         const label = dwarfUid && select.selectedOptions[0] ? select.selectedOptions[0].textContent : url;
         if (data && data.mode === 'pending') {
@@ -20464,10 +20525,19 @@ function openDwarfProgramPanel(plans, meta) {
         } else if (data && data.mode === 'busy_pending') {
           _dwarfToast(label + ' is busy (manual/scheduled session running) — schedule queued, offered once it frees up.');
         } else {
-          _dwarfToast('Sent to ' + label + '.');
+          _dwarfToast('Sent “' + sched.scheduleName + '” (' + sched.shooting_tasks.length + ' target(s)) to ' + label + '.');
         }
       })
-      .catch(err => { _dwarfToast('Bridge unreachable (' + err.message + ') — is astro_dwarf_session running?'); });
+      .catch(err => {
+        if (err.message.startsWith('DEVICE_SYNC_FAILED')) {
+          const reason = err.message.split(':')[1];
+          _dwarfToast(reason
+            ? 'Device rejected the schedule: ' + reason
+            : 'Sent to the bridge, but the device rejected the schedule — check the astro_dwarf_session log for the error code.');
+        } else {
+          _dwarfToast('Bridge unreachable (' + err.message + ') — is astro_dwarf_session running?');
+        }
+      });
   });
 }
 

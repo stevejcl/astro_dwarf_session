@@ -307,6 +307,7 @@ def build_camera_stream_section(session) -> None:
             # waiting for the next poll tick to notice.
             for preview in previews:
                 if preview.rtsp_started:
+                    print(f"Stop RTSP: {preview.rtsp_url}")
                     rtsp_worker.stop_worker(preview.rtsp_url)
                     preview.rtsp_started = False
 
@@ -322,7 +323,43 @@ def build_camera_stream_section(session) -> None:
 
         previews = [_build_preview(cfg, urls[cfg["url_key"]], urls[cfg["rtsp_key"]]) for cfg in _CAMERAS]
 
+        # Guards against a race with NiceGUI's own disconnect grace
+        # period (user-reported Sep 2026, via added debug prints:
+        # navigating to another page correctly fired on_disconnect
+        # below - "Stop RTSP" logged for both cameras - but was
+        # immediately followed by "Start RTSP" for both again).
+        # NiceGUI doesn't destroy a disconnected client (and cancel its
+        # ui.timer) the INSTANT on_disconnect fires - there's a grace
+        # window first, in case it's a brief reconnect rather than a
+        # real navigation-away. _poll() below can still tick once
+        # during that window, see the (unchanged) cached RTSP status
+        # and preview.rtsp_started now False (just reset by
+        # on_disconnect), and restart the very workers on_disconnect
+        # just stopped - which then have nothing left to stop them,
+        # since on_disconnect only fires once. This flag makes that
+        # restart impossible regardless of ordering.
+        _torn_down = False
+        def _stop_all_rtsp_workers() -> None:
+            # Explicit cleanup on client disconnect (user-reported Sep
+            # 2026: an RTSP worker kept running server-side, still
+            # holding the Dwarf's RTSP connection open, after
+            # navigating away from this page - NiceGUI does NOT
+            # automatically call stop_worker() on disconnect, only
+            # _on_expansion_change/_poll do that, and both require the
+            # browser client to still be alive to ever fire at all).
+            nonlocal _torn_down
+            _torn_down = True
+            for preview in previews:
+                if preview.rtsp_started:
+                    print(f"Stop RTSP: {preview.rtsp_url}")
+                    rtsp_worker.stop_worker(preview.rtsp_url)
+                    preview.rtsp_started = False
+
+        ui.context.client.on_disconnect(_stop_all_rtsp_workers)
+
         def _poll() -> None:
+            if _torn_down:
+                return
             if not expansion.value:
                 return
             if not session.is_connected:
@@ -333,6 +370,7 @@ def build_camera_stream_section(session) -> None:
                 # server busy once a reconnect attempt starts.
                 for preview in previews:
                     if preview.rtsp_started:
+                        print(f"Stop RTSP: {preview.rtsp_url}")
                         rtsp_worker.stop_worker(preview.rtsp_url)
                         preview.rtsp_started = False
                         preview.rtsp_container.set_visibility(False)
@@ -355,6 +393,7 @@ def build_camera_stream_section(session) -> None:
                 preview.rtsp_container.set_visibility(is_rtsp)
 
                 if is_rtsp and not preview.rtsp_started:
+                    print(f"Start RTSP : {preview.rtsp_url}")
                     rtsp_worker.start_worker(preview.rtsp_url)
                     # Set once - this is a continuous multipart stream,
                     # not a snapshot, so it never needs cache-busting
@@ -365,6 +404,7 @@ def build_camera_stream_section(session) -> None:
                     preview.rtsp_image.set_source(f"/video/rtsp_stream/{ip}/{preview.cam_id}")
                     preview.rtsp_started = True
                 elif not is_rtsp and preview.rtsp_started:
+                    print(f"Stop RTSP: {preview.rtsp_url}")
                     rtsp_worker.stop_worker(preview.rtsp_url)
                     preview.rtsp_started = False
 

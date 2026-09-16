@@ -110,6 +110,8 @@ from pages.programs import build_programs_page
 from pages.settings import build_settings_page
 from pages.pairing import build_pairing_page
 from pages.logs import build_logs_page
+from pages.manual_config import build_manual_config_page
+from pages.sites import build_sites_page
 
 
 def parse_args() -> argparse.Namespace:
@@ -224,6 +226,8 @@ def main() -> None:
     build_programs_page()
     build_settings_page()
     build_pairing_page()
+    build_sites_page()
+    build_manual_config_page()
     build_logs_page()
 
     # Global, client-independent (see components/scheduler_loop.py's

@@ -38,6 +38,8 @@ from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 from dwarf_python_api.lib.dwarf_utils import perform_get_all_shooting_schedule_full
+from dwarf_python_api.lib.dwarf_utils import perform_get_last_connection_error
+from dwarf_python_api.lib.dwarf_utils import perform_delete_shooting_schedule
 import pending_schedules
 from dwarf_python_api.lib.my_logger import (
     register_thread_device_label,
@@ -138,6 +140,29 @@ def _safe_ongoing_notification(message: str):
         return _NullNotification()
 
 
+def _finish_ongoing_notification(notification, message: str, type: str) -> None:  # noqa: A002
+    """Closes the ongoing/spinner popup IMMEDIATELY, then fires a fresh,
+    ordinary toast with the final result.
+
+    BUG FIX (Sep 2026, user-reported: "toujours pareil pour la notif du
+    delete" - persisted even after removing the delete handler's unrelated
+    sync-wrapper indirection): updating message/type on the SAME long-
+    lived "ongoing" notification and scheduling a LATER dismiss via
+    ui.timer(N, notification.dismiss) turned out unreliable for that
+    handler specifically - the delayed timer apparently doesn't always
+    fire/reach the notification correctly. Simplified to dismiss right
+    away and use _safe_notify() (the same already-proven-reliable
+    mechanism every other simple result toast in this file already
+    uses) for the final message, instead of trying to keep reusing and
+    later closing the original popup.
+     """
+    try:
+        notification.dismiss()
+    except RuntimeError:
+        pass
+    _safe_notify(message, type=type)
+
+
 async def _offer_pending_schedule_sync(session, dwarf_uid: str, pending: dict) -> None:
     """Called right after a successful (re)connect when
     pending_schedules.get_pending(dwarf_uid) returned something (i.e. a
@@ -182,6 +207,12 @@ _TASK_STATE_LABELS = {0: "Idle", 1: "Shooting", 2: "Success", 3: "Failed", 4: "I
 # _handle_refresh_schedules(). Module-level (like connection_health's own
 # state), not per-NiceGUI-client: the device's actual stored schedules
 # are shared truth regardless of which browser tab asked.
+# Which "conn_error_<code>" keys actually have a translation - a
+# code from dwarf_python_api with no mapped key here falls back to
+# the generic t("connection_failed") rather than showing a raw,
+# untranslated key string to the user.
+_known_conn_error_keys = {"conn_error_device_occupied"}
+
 _schedules_cache: dict[str, list[dict]] = {}
 _schedules_fetch_error: dict[str, str] = {}
 _schedules_last_fetch: dict[str, float] = {}
@@ -217,6 +248,62 @@ def _get_schedule_section_box(dwarf_uid: str) -> _BoolBox:
         box = _BoolBox(False)
         _schedule_section_open[dwarf_uid] = box
     return box
+
+
+async def _handle_delete_schedule(
+    session, dwarf_uid: str, schedule_id: str, schedule_name: str, refresh_view: Callable[[], None]
+) -> None:
+    """CMD_DELETE_SHOOTING_SCHEDULE (16108) - user-requested (Sep 2026):
+    a button to remove a not-yet-executed schedule from the device's own
+    list, distinct from the local "Discard" button on the Pending-
+    schedule banner (that one clears something never even sent yet; this
+    one removes something already sitting ON the device). perform_
+    delete_shooting_schedule() itself has existed since the very first
+    native-schedule integration but was never wired to any button until
+    now.
+
+    BUG FIX (Sep 2026, user-reported: notification never closes, list
+    doesn't refresh after delete): _do_delete() used to be a SYNC on_
+    click handler that deferred the real async work via ui.timer(0.01,
+    _run, once=True) - unlike every other handler here (Connect,
+    Reconnect, Sync pending), which are plain async functions given
+    directly to on_click (NiceGUI runs an async on_click natively, no
+    deferral needed). That extra indirection was losing the proper
+    client context by the time the LATER dismiss timer inside _finish_
+    ongoing_notification() fired, and apparently refresh_view() too.
+    Simplified to match the other three handlers' working pattern.
+    """
+    with ui.dialog() as dialog, ui.card():
+        ui.label(f"Delete “{schedule_name}” from the device? This cannot be undone.").classes("text-sm")
+
+        async def _do_delete() -> None:
+            dialog.close()
+            if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.delete_schedule"):
+                _safe_notify(t("device_busy"), type="warning")
+                return
+            notification = _safe_ongoing_notification(f"Deleting “{schedule_name}”…")
+            try:
+                ok = await run.io_bound(perform_delete_shooting_schedule, schedule_id, session=session)
+            finally:
+                connection_health.release_command_slot(dwarf_uid)
+            if ok:
+                _finish_ongoing_notification(notification, "Schedule deleted.", "positive")
+                # Drop it from the cached list immediately rather than
+                # waiting for the next manual Refresh - the device won't
+                # offer it back on a re-fetch anyway once deleted.
+                cached = _schedules_cache.get(dwarf_uid)
+                if cached:
+                    _schedules_cache[dwarf_uid] = [s for s in cached if s.get("scheduleId") != schedule_id]
+            else:
+                _finish_ongoing_notification(
+                    notification, "Delete failed - see the app log for the device's error code.", "negative"
+                )
+            refresh_view()
+
+        with ui.row().classes("w-full justify-end gap-2 mt-2"):
+            ui.button("Cancel", on_click=dialog.close).props("flat")
+            ui.button("Delete", on_click=_do_delete).props("color=negative")
+    dialog.open()
 
 
 async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
@@ -266,6 +353,7 @@ async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Calla
             # schedule with no updates yet still sorts sensibly.
             recency = sched.updated_time or sched.created_time or sched.schedule_time or 0
             parsed.append({
+                "scheduleId": sched.schedule_id,
                 "name": sched.schedule_name or sched.schedule_id,
                 "state": _SCHEDULE_STATE_LABELS.get(sched.state, str(sched.state)),
                 "tasks": tasks,
@@ -291,10 +379,21 @@ async def _handle_sync_pending(session, dwarf_uid: str, refresh_view: Callable[[
     schedule arriving while the device was BUSY (a manual/scheduled
     program running - see scheduler_runner's COMMAND SLOT note) rather
     than offline. No reconnect event fires when a run simply finishes, so
-    this is checked declaratively on every poll tick instead."""
+    this is checked declaratively on every poll tick instead.
+
+    BUG FIX (Sep 2026, user-reported: "je ne vois pas... envoi en cours,
+    erreur ou succès"): this had success/failure _safe_notify() calls
+    already, but nothing at all for "in progress" - unlike _handle_
+    connect()'s _safe_ongoing_notification (a single persistent, in-place-
+    updatable popup with its own spinner). Rebuilt on that same, already-
+    proven pattern instead of separate fire-and-forget toasts, which are
+    easy to miss individually if the person isn't looking at that exact
+    moment.
+    """
     if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.sync_pending"):
         _safe_notify(t("device_busy"), type="warning")
         return
+    notification = _safe_ongoing_notification("Syncing pending schedule…")
     pending = pending_schedules.get_pending(dwarf_uid)
     try:
         ok = await run.io_bound(perform_sync_shooting_schedule, pending, session=session) if pending else False
@@ -303,9 +402,9 @@ async def _handle_sync_pending(session, dwarf_uid: str, refresh_view: Callable[[
 
     if ok:
         pending_schedules.clear_pending(dwarf_uid)
-        _safe_notify("Schedule synced.", type="positive")
+        _finish_ongoing_notification(notification, "Schedule synced.", "positive")
     else:
-        _safe_notify("Schedule sync failed — left as pending, retry later.", type="negative")
+        _finish_ongoing_notification(notification, "Schedule sync failed — left as pending, retry later.", "negative")
     refresh_view()
 
 
@@ -326,13 +425,21 @@ async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], No
         _busy_uids.discard(dwarf_uid)
         connection_health.release_command_slot(dwarf_uid)
 
-    notification.spinner = False
     if not success:
-        notification.message = t("connection_failed")
-        notification.type = "negative"
+        # User-requested (Sep 2026): surface the REAL reason when one is
+        # known (currently: DEVICE_OCCUPIED, close code 4409 - another
+        # client, likely the official app, already connected) instead of
+        # always showing the generic "Connection failed". dwarf_python_
+        # api returns a stable CODE (not a hardcoded English sentence -
+        # it's a generic library, this app owns translation), mapped via
+        # a "conn_error_<code>" key so both languages work. Falls back
+        # to the generic message for any code without a mapped key.
+        error_code = perform_get_last_connection_error(session=session)
+        translation_key = f"conn_error_{error_code.lower()}" if error_code else None
+        specific_reason = t(translation_key) if translation_key and translation_key in _known_conn_error_keys else None
+        _finish_ongoing_notification(notification, specific_reason or t("connection_failed"), "negative")
     else:
-        notification.message = t("connected")
-        notification.type = "positive"
+        _finish_ongoing_notification(notification, t("connected"), "positive")
         connection_health.mark_just_connected(dwarf_uid)
         _label_thread_for_device(session)
 
@@ -340,18 +447,6 @@ async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], No
         if pending is not None:
             await _offer_pending_schedule_sync(session, dwarf_uid, pending)
     refresh_view()
-
-    # A direct asyncio.sleep + dismiss() call, NOT a ui.timer: dismiss()
-    # only needs the notification's own bound client (see Element.
-    # run_method, which reads self.client, never context.client), so
-    # it works fine here with no active UI slot at all. A ui.timer
-    # would instead be a NEW element created in whatever slot happens
-    # to be current at this point - if the periodic page refresh
-    # deletes that slot before the timer's first tick, dismiss() is
-    # simply never called and the popup is stuck forever (this is what
-    # was actually happening).
-    await asyncio.sleep(2.0)
-    notification.dismiss()
 
 
 async def _handle_disconnect(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
@@ -393,13 +488,21 @@ async def _handle_reconnect(session, dwarf_uid: str, refresh_view: Callable[[], 
         _busy_uids.discard(dwarf_uid)
         connection_health.release_command_slot(dwarf_uid)
 
-    notification.spinner = False
     if not success:
-        notification.message = t("connection_failed")
-        notification.type = "negative"
+        # User-requested (Sep 2026): surface the REAL reason when one is
+        # known (currently: DEVICE_OCCUPIED, close code 4409 - another
+        # client, likely the official app, already connected) instead of
+        # always showing the generic "Connection failed". dwarf_python_
+        # api returns a stable CODE (not a hardcoded English sentence -
+        # it's a generic library, this app owns translation), mapped via
+        # a "conn_error_<code>" key so both languages work. Falls back
+        # to the generic message for any code without a mapped key.
+        error_code = perform_get_last_connection_error(session=session)
+        translation_key = f"conn_error_{error_code.lower()}" if error_code else None
+        specific_reason = t(translation_key) if translation_key and translation_key in _known_conn_error_keys else None
+        _finish_ongoing_notification(notification, specific_reason or t("connection_failed"), "negative")
     else:
-        notification.message = t("connected")
-        notification.type = "positive"
+        _finish_ongoing_notification(notification, t("connected"), "positive")
         connection_health.mark_just_connected(dwarf_uid)
         _label_thread_for_device(session)
 
@@ -407,8 +510,6 @@ async def _handle_reconnect(session, dwarf_uid: str, refresh_view: Callable[[], 
         if pending is not None:
             await _offer_pending_schedule_sync(session, dwarf_uid, pending)
     refresh_view()
-    await asyncio.sleep(2.0)
-    notification.dismiss()
 
 
 def build_session_page() -> None:
@@ -583,19 +684,33 @@ def build_session_page() -> None:
                     # hook, hence checking state here rather than only at
                     # connect time in _handle_connect/_handle_reconnect. ---
                     pending_sched = pending_schedules.get_pending(dwarf_uid)
-                    if pending_sched and connected and not program_running and not capturing:
+                    if pending_sched:
+                        # BUG FIX (Sep 2026, user-reported: "il va falloir
+                        # un bouton pour supprimer les programmes en
+                        # attente"): Discard already existed but was
+                        # gated behind the SAME connected+idle condition
+                        # as Sync now - so a stale/wrong pending schedule
+                        # couldn't be cleared at all while offline or
+                        # busy, even though discarding is purely local
+                        # (pending_schedules.py) and needs no live
+                        # connection whatsoever. The banner (and Discard)
+                        # now always shows when something is pending;
+                        # only "Sync now" itself still needs the device
+                        # connected and idle.
+                        can_sync_now = connected and not program_running and not capturing
                         with ui.row().classes("items-center gap-2 w-full"):
                             ui.icon("schedule").classes("text-amber-6")
                             ui.label(
                                 f"Pending schedule: {pending_sched.get('scheduleName', '?')} "
                                 f"({len(pending_sched.get('shooting_tasks', []))} target(s))"
                             ).classes("text-sm flex-1")
-                            ui.button(
-                                "Sync now",
-                                on_click=lambda: _handle_sync_pending(
-                                    session, dwarf_uid, refresh_view_and_camera_settings
-                                ),
-                            ).props("dense flat color=primary")
+                            if can_sync_now:
+                                ui.button(
+                                    "Sync now",
+                                    on_click=lambda: _handle_sync_pending(
+                                        session, dwarf_uid, refresh_view_and_camera_settings
+                                    ),
+                                ).props("dense flat color=primary")
                             ui.button(
                                 "Discard",
                                 on_click=lambda: (
@@ -773,7 +888,14 @@ def build_session_page() -> None:
                         shown = _schedules_shown_count.get(dwarf_uid, 3)
                         for sc in cached_scheds[:shown]:
                             with ui.card().classes("w-full q-pa-sm q-mb-xs"):
-                                ui.label(f"{sc['name']} — {sc['state']}").classes("font-medium text-sm")
+                                with ui.row().classes("w-full items-center gap-2"):
+                                    ui.label(f"{sc['name']} — {sc['state']}").classes("font-medium text-sm flex-1")
+                                    ui.button(
+                                        icon="delete",
+                                        on_click=lambda _, sid=sc["scheduleId"], sname=sc["name"]: _handle_delete_schedule(
+                                            actions_session, dwarf_uid, sid, sname, shooting_schedule_view.refresh
+                                        ),
+                                    ).props("flat dense round size=sm color=negative")
                                 for tsk in sc["tasks"]:
                                     detail_bits = []
                                     if tsk.get("shutterName"):

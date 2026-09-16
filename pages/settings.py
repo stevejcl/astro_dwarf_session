@@ -169,6 +169,9 @@ def build_settings_page() -> None:
             shared_latitude = session.config.latitude
             if shared_latitude is None:
                 shared_latitude = find_shared_config_value(get_manager(), lambda c: c.latitude, exclude_uid=dwarf_uid)
+            shared_city_name = session.config.city_name or find_shared_config_value(
+                get_manager(), lambda c: c.city_name, exclude_uid=dwarf_uid
+            ) or ""
             shared_timezone = session.config.timezone or find_shared_config_value(
                 get_manager(), lambda c: c.timezone, exclude_uid=dwarf_uid
             ) or ""
@@ -188,6 +191,10 @@ def build_settings_page() -> None:
                 t("settings_latitude"),
                 value=shared_latitude,
                 format="%.6f",
+            ).classes("w-full")
+            city_name_input = ui.input(
+                t("settings_city_name"),
+                value=session.config.city_name or "",
             ).classes("w-full")
 
             async def handle_use_current_location() -> None:
@@ -269,6 +276,7 @@ def build_settings_page() -> None:
 
                 lon = float(longitude_input.value)
                 lat = float(latitude_input.value)
+                city_name = city_name_input.value.strip()
                 tz = timezone_input.value.strip()
                 stellarium_ip = stellarium_ip_input.value.strip() or "127.0.0.1"
                 stellarium_port = int(stellarium_port_input.value or 8090)
@@ -280,6 +288,7 @@ def build_settings_page() -> None:
                 ini = _read_ini(session.config.config_ini_path)
                 ini["CONFIG"]["longitude"] = str(lon)
                 ini["CONFIG"]["latitude"] = str(lat)
+                ini["CONFIG"]["city_name"] = city_name
                 ini["CONFIG"]["timezone"] = tz
                 ini["CONFIG"]["stellarium_ip"] = stellarium_ip
                 ini["CONFIG"]["stellarium_port"] = str(stellarium_port)
@@ -294,6 +303,7 @@ def build_settings_page() -> None:
                 # read session.config.* directly).
                 session.config.longitude = lon
                 session.config.latitude = lat
+                session.config.city_name = city_name
                 session.config.timezone = tz
                 session.config.stellarium_ip = stellarium_ip
                 session.config.stellarium_port = stellarium_port

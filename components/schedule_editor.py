@@ -40,6 +40,7 @@ editor.py is deliberately ABSENT here, not an oversight:
 """
 from __future__ import annotations
 
+import math
 import uuid
 from datetime import datetime, timedelta
 
@@ -53,6 +54,23 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 
 
+def _exposure_seconds(name: str) -> float | None:
+    """Parses an exposure name from _exposure_names() (e.g. "1/50",
+    "0.4", "60") into a plain float number of seconds. Returns None for
+    anything unparseable rather than raising, so a caller can fall back
+    to a safe default instead of crashing the UI on an unexpected name.
+    """
+    if not name:
+        return None
+    try:
+        if "/" in name:
+            numerator, denominator = name.split("/", 1)
+            return float(numerator) / float(denominator)
+        return float(name)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _new_task_defaults(dwarf_type: str) -> dict:
     exposures = _exposure_names("tele", dwarf_type)
     filters = _ir_filter_names(dwarf_type)
@@ -61,7 +79,7 @@ def _new_task_defaults(dwarf_type: str) -> dict:
         "name": "",
         "ra": "",
         "dec": "",
-        "shutterName": exposures[0] if exposures else "",
+        "shutterName": exposures[-3] if exposures else "",
         "gainName": str(gain_min),
         "filterModeName": filters[0] if filters else "",
         "count": 20,
@@ -70,7 +88,7 @@ def _new_task_defaults(dwarf_type: str) -> dict:
         "verticalScale": 1.0,
         "date": datetime.now().strftime("%Y-%m-%d"),
         "startTime": (datetime.now() + timedelta(minutes=5)).strftime("%H:%M"),
-        "durationMin": 30,
+        "durationMin": 60,
     }
 
 
@@ -136,7 +154,34 @@ def build_schedule_editor(session) -> None:
     with ui.row().classes("w-full gap-2"):
         date_input = ui.input(t("prog_date"), value=draft["date"]).classes("flex-1")
         start_time_input = ui.input(t("sched_start_time"), value=draft["startTime"]).classes("flex-1")
-        duration_input = ui.number(t("sched_duration_min"), value=draft["durationMin"], min=1).classes("w-32")
+        # Computed, not manually entered (user-reported Sep 2026: the
+        # schedule's end_time - which the device uses to know when to
+        # STOP - was a separate, independently-typed field, so it could
+        # silently disagree with what "count" images at "shutterName"
+        # exposure would actually take, ending the session early (cut
+        # off mid-sequence) or leaving it running well past the last
+        # planned exposure. Tying duration directly to count x exposure
+        # removes that gap - editing this number no longer does
+        # anything (see the on_value_change handlers on count_input/
+        # exposure_input below, which are the actual source of truth
+        # now), it only ever reflects them.
+        duration_input = ui.number(t("sched_duration_min"), value=draft["durationMin"], min=1).classes("w-32").props("readonly")
+
+    def _recompute_duration() -> None:
+        exposure_s = _exposure_seconds(exposure_input.value or "")
+        count = int(count_input.value or 0)
+        if exposure_s is None or count <= 0:
+            return
+        # Ceil, not floor/round: a device stopped by end_time mid-way
+        # through what would have been the last exposure of the
+        # sequence is worse than a session that runs a few seconds past
+        # its last completed exposure - rounding DOWN here would
+        # silently truncate the count the user actually asked for.
+        duration_input.value = math.ceil(1 + (count * exposure_s) / 60) or 1
+
+    count_input.on_value_change(lambda _e: _recompute_duration())
+    exposure_input.on_value_change(lambda _e: _recompute_duration())
+    _recompute_duration()
 
     task_list_container = ui.column().classes("w-full gap-1")
     add_status_label = ui.label("").classes("text-xs text-red-700")
@@ -184,7 +229,7 @@ def build_schedule_editor(session) -> None:
             "shutterName": exposure_input.value or "",
             "gainName": str(int(gain_input.value)),
             "filterModeName": filter_input.value or "",
-            "count": int(count_input.value or 0),
+            "count": 0, #int(count_input.value or 0),
             "mosaic": bool(mosaic_cb.value),
             "horizontalScale": float(h_scale_input.value or 1.0),
             "verticalScale": float(v_scale_input.value or 1.0),
@@ -224,6 +269,11 @@ def build_schedule_editor(session) -> None:
                 "gainName": tk["gainName"],
                 "filterModeName": tk["filterModeName"],
                 "count": tk["count"],
+                # stacked: 0, not None - matches count above and the
+                # official app's own convention (a real device dump
+                # always sends 0, never null) - same reasoning as the
+                # catalog page's fix for CODE_SHOOTING_SCHEDULE_INVALID_
+                # SHOOTING_DURATION (-16301).
                 "stacked": None,
                 # isMosaicMode/horizontalScale/verticalScale: field names
                 # match the real official-app dump exactly (see this
@@ -274,9 +324,9 @@ def build_schedule_editor(session) -> None:
             "params": {
                 "longitude": session.config.longitude,
                 "latitude": session.config.latitude,
-                # No city-name field exists on DwarfConfig at all (checked
-                # directly, Sep 2026) - left blank rather than guessing one.
-                "cityName": "",
+                # No city-name field existed at all on DwarfConfig until
+                # user-requested (Sep 2026) - now set in Settings, read
+                "cityName": "", #session.config.city_name or "",
                 "focusMode": 0,
             },
             "shooting_tasks": wire_tasks,

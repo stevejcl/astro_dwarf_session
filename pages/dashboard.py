@@ -83,6 +83,21 @@ def build_dashboard_page() -> None:
                     ui.button(
                         icon="add", on_click=lambda: ui.navigate.to("/pairing")
                     ).props("flat round")
+                    # No-Bluetooth manual config wizard (user-requested
+                    # Sep 2026: Bleak sometimes fails to detect the BLE
+                    # adapter outright) - a separate entry point from
+                    # "add" (BLE pairing) since it collects different
+                    # inputs (IP/UID read off the DwarfLab app instead
+                    # of a BLE scan) - see pages/manual_config.py.
+                    ui.button(
+                        icon="wifi", on_click=lambda: ui.navigate.to("/manual-config")
+                    ).props("flat round")
+                    # Sites management (user-requested Sep 2026): Wifi +
+                    # location profiles reusable across devices - see
+                    # site_registry.py / pages/sites.py.
+                    ui.button(
+                        icon="location_on", on_click=lambda: ui.navigate.to("/sites")
+                    ).props("flat round")
                     ui.button(
                         icon="article", on_click=lambda: ui.navigate.to("/logs")
                     ).props("flat round")

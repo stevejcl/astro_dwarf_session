@@ -1,28 +1,26 @@
 """RTSP-to-MJPEG bridge for embedding the Dwarf's live-view RTSP stream
 in-browser (browsers can't play RTSP natively - see camera_stream.py's
-own module docstring). Decodes with OpenCV/FFmpeg in a background
-thread per camera and re-serves the latest frame as a continuous
-multipart/x-mixed-replace HTTP stream, which any <img> tag can embed
-directly.
+own module docstring). Spawns FFmpeg as a subprocess per camera
+(REWRITTEN Sep 2026 - see point 4 below) and re-serves its MJPEG output
+as a continuous multipart/x-mixed-replace HTTP stream, which any <img>
+tag can embed directly.
 
 Kept SEPARATE from camera_stream.py (which only builds UI) - this
 module owns the worker threads and the FastAPI route, camera_stream.py
 just starts/stops workers and points an <img> at the route.
 
-DESIGN NOTES (user-reported Sep 2026, from a working proof-of-concept
-that had blocking/latency issues once merged in):
+DESIGN NOTES:
 
 1. NO per-frame stderr redirection. An earlier version wrapped every
-   cap.read() in os.dup2() calls to silence FFmpeg's native (C-level)
+   frame read in os.dup2() calls to silence FFmpeg's native (C-level)
    decode warnings - but os.dup2() rewrites the PROCESS-WIDE stderr
    file descriptor, not something thread-local. With more than one
    camera/device streaming at once, concurrent workers' redirect/
    restore cycles raced on the SAME file descriptor - a real source of
-   the reported blocking, and it also silenced this app's OWN logging
-   (via my_logger.py) for the duration, losing trace of everything
-   else. FFmpeg's own verbosity is controlled at the source instead,
-   via OPENCV_FFMPEG_CAPTURE_OPTIONS' "loglevel;quiet" (already set
-   below) - no process-wide file descriptor surgery needed.
+   blocking, and it also silenced this app's OWN logging (via
+   my_logger.py) for the duration. FFmpeg's own verbosity is
+   controlled via its -loglevel flag instead (see _ffmpeg_cmd()) - no
+   process-wide file descriptor surgery needed.
 
 2. ONE delivery mechanism only (continuous multipart stream), not a
    continuous stream AND a separately-polled single-snapshot endpoint
@@ -38,46 +36,41 @@ that had blocking/latency issues once merged in):
    servers on embedded devices only accept one client at a time, so a
    stale worker still holding the connection open would block a fresh
    one from connecting after a reconnect.
+
+4. FFmpeg driven directly via subprocess, NOT cv2.VideoCapture
+   (user-reported Sep 2026: persistent HEVC "Could not find ref with
+   POC 0" / "Duplicate POC" errors and grey/corrupted frames on the
+   Dwarf Mini's stream, reproduced even on a fast PC - ruling out both
+   Wi-Fi packet loss and CPU/decode speed as the cause. A whole series
+   of OPENCV_FFMPEG_CAPTURE_OPTIONS tuning attempts (max_delay,
+   fflags;discardcorrupt, thread_type;slice, reorder_queue_size,
+   rtsp_transport udp vs tcp, buffer_size) never fully resolved it.
+   Decisive test: running plain `ffmpeg -rtsp_transport tcp -i
+   <same rtsp url> -f null -` from the command line on the SAME
+   machine/network/stream produced ZERO POC errors - only 3 unrelated,
+   benign "invalid increasing DTS to muxer" warnings - while VLC (which
+   also doesn't go through OpenCV) played the same stream cleanly the
+   whole time. This isolated the bug to OpenCV's cv2.CAP_FFMPEG wrapper
+   itself, not FFmpeg, not the network, not decode speed. Spawning
+   FFmpeg exactly as the working CLI test did, and reading its MJPEG
+   output directly, sidesteps that wrapper entirely.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import os
+import shutil
+import subprocess
 import threading
 import time
 
-import cv2
 from fastapi import Response
 from fastapi.responses import StreamingResponse
 from nicegui import app
 
-os.environ.setdefault(
-    "OPENCV_FFMPEG_CAPTURE_OPTIONS",
-    # stimeout (microseconds): bounds how long FFmpeg's own native
-    # connection/read attempt can block before giving up with an error,
-    # rather than potentially hanging far longer against an address
-    # that never responds at all (confirmed by testing: an unreachable
-    # address left the native thread blocked long enough that a
-    # process exit while it was still in progress triggered a native
-    # abort - stop_worker()'s own _running flag can only be noticed
-    # BETWEEN native calls, not during one already in progress). 5s.
-    #
-    # max_delay lowered from 0, "nobuffer" flag REMOVED (user-reported
-    # Sep 2026, real hardware over Wi-Fi: stream was visibly choppy -
-    # "bouge mais peu" - with repeated HEVC decode errors: "Could not
-    # find ref with POC", "cu_qp_delta outside valid range", and RTP
-    # "bad cseq" sequence mismatches). Both settings existed purely to
-    # minimize latency, but left FFmpeg with ZERO tolerance for the
-    # normal jitter of a Wi-Fi link - a packet arriving even slightly
-    # late got dropped outright rather than buffered, corrupting the
-    # HEVC reference-frame chain and producing exactly these errors.
-    # 300ms of buffering is a deliberate trade: a bit more latency for
-    # a materially smoother, artifact-free picture - which matters more
-    # for framing/focus checks than shaving off a few hundred ms.
-    "rtsp_transport;tcp|max_delay;300000|stimeout;5000000|loglevel;quiet",
-)
-os.environ.setdefault("OPENCV_LOG_LEVEL", "OFF")
+from components.i18n import t
 
 _BLACK_1PX = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAA1JREFUGFdjYGBg"
@@ -85,9 +78,47 @@ _BLACK_1PX = (
 )
 _PLACEHOLDER_JPEG = base64.b64decode(_BLACK_1PX)
 
+_JPEG_SOI = b"\xff\xd8"
+_JPEG_EOI = b"\xff\xd9"
+
 _lock = threading.Lock()
 _latest_frames: dict[str, bytes] = {}
 _running: set[str] = set()
+
+_FFMPEG_INSTALL_URL = "https://www.gyan.dev/ffmpeg/builds/"
+
+
+def check_ffmpeg_available() -> bool:
+    """Call once at app startup (astro_dwarf_ui.py's own main()) - since
+    the rewrite from cv2.VideoCapture to a direct FFmpeg subprocess (see
+    module docstring point 4), the RTSP preview silently does nothing
+    useful if FFmpeg isn't on PATH: _spawn() would raise FileNotFoundError
+    only the FIRST time a camera preview is opened, buried inside a
+    background worker thread where the person would never see it. This
+    surfaces the problem immediately and clearly instead, with a direct
+    link to a working Windows build (the one confirmed during diagnosis
+    to decode this app's RTSP stream cleanly - see module docstring),
+    rather than leaving someone to guess why the live preview never
+    shows anything.
+
+    Deliberately NOT auto-downloading/installing FFmpeg (considered and
+    reverted, Sep 2026) - a manual install keeps the app's own package
+    small, needs no network access or extra write location at startup,
+    and avoids a packaged .exe silently downloading and running another
+    .exe on its own, which some antivirus/SmartScreen setups flag. The
+    app works fully otherwise; only the RTSP live preview is affected.
+
+    Uses t("ffmpeg_missing") (components/locales/) so the message
+    follows the app's configured language (get_language(), stored in
+    app.storage.general) rather than being hardcoded to one language -
+    this runs before ui.run() starts serving, but get_language() already
+    falls back safely to the default language if storage isn't ready
+    yet at that point.
+    """
+    if shutil.which("ffmpeg") is not None:
+        return True
+    logging.getLogger(__name__).error(t("ffmpeg_missing", url=_FFMPEG_INSTALL_URL))
+    return False
 
 
 def start_worker(rtsp_url: str) -> None:
@@ -104,9 +135,9 @@ def start_worker(rtsp_url: str) -> None:
 def stop_worker(rtsp_url: str) -> None:
     """Signals the worker for this URL to stop and releases its cached
     frame. The worker's own loop notices _running no longer contains
-    its url within one read cycle and exits, releasing the
-    VideoCapture - see this module's own docstring for why this
-    matters on reconnect."""
+    its url within one read cycle and exits, killing its FFmpeg
+    subprocess - see this module's own docstring for why this matters
+    on reconnect."""
     with _lock:
         _running.discard(rtsp_url)
         _latest_frames.pop(rtsp_url, None)
@@ -119,33 +150,153 @@ def stop_all() -> None:
         _latest_frames.clear()
 
 
+def _ffmpeg_cmd(rtsp_url: str) -> list[str]:
+    """Mirrors the exact CLI invocation confirmed clean of HEVC POC
+    errors during diagnosis (see module docstring point 4), with only
+    an output format change: MJPEG frames on stdout instead of -f null,
+    since those frames ARE the deliverable here. Deliberately minimal -
+    none of the OPENCV_FFMPEG_CAPTURE_OPTIONS tuning tried earlier
+    (max_delay, discardcorrupt, thread_type, reorder_queue_size,
+    buffer_size) proved necessary once the OpenCV wrapper itself was
+    removed from the picture; re-add here individually, only if a
+    specific symptom reappears against real hardware.
+
+    -stimeout (microseconds): bounds how long FFmpeg's own
+    connection/read attempt can block before giving up with an error,
+    rather than hanging indefinitely against an address that never
+    responds. Matches the value used throughout earlier diagnosis.
+
+    -q:v 5: MJPEG quality (FFmpeg scale: 1=best/largest,
+    31=worst/smallest) - moderate compression, roughly comparable to
+    the JPEG quality=70 used by the previous cv2.imencode() step.
+    """
+    return [
+        "ffmpeg",
+        "-rtsp_transport", "tcp",
+        "-stimeout", "5000000",
+        "-i", rtsp_url,
+        "-an",
+        "-f", "mjpeg",
+        "-q:v", "5",
+        "-loglevel", "quiet",
+        "pipe:1",
+    ]
+
+
+def _spawn(rtsp_url: str) -> subprocess.Popen:
+    kwargs = {}
+    if os.name == "nt":
+        # Suppress the console window FFmpeg would otherwise flash open
+        # on Windows (this app is Windows-deployed - see the VLC
+        # screenshot used during diagnosis).
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return subprocess.Popen(
+        _ffmpeg_cmd(rtsp_url),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        bufsize=0,
+        **kwargs,
+    )
+
+
+def _terminate(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=2.0)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def _extract_latest_jpeg(buffer: bytearray) -> bytes | None:
+    """Scans buffer for complete JPEG frames (SOI...EOI) and returns
+    only the LAST one found, discarding any earlier complete frames
+    and consuming everything up to the end of the one returned. This
+    is the direct replacement for the old cv2-based drain loop
+    (_DRAIN_MAX repeated cap.grab() calls) - same goal (never display
+    a stale, backlogged frame - see the Dwarf 3 growing-latency
+    diagnosis earlier in this project), simpler here since we're
+    parsing FFmpeg's own MJPEG byte stream directly rather than going
+    through a capture API. Incomplete trailing data is left in buffer
+    for the next read to complete."""
+    last_frame = None
+    while True:
+        start = buffer.find(_JPEG_SOI)
+        if start == -1:
+            buffer.clear()
+            break
+        end = buffer.find(_JPEG_EOI, start + 2)
+        if end == -1:
+            if start > 0:
+                del buffer[:start]
+            break
+        end += 2
+        last_frame = bytes(buffer[start:end])
+        del buffer[:end]
+    return last_frame
+
+
+# If no complete JPEG frame has been extracted for this long, force an
+# FFmpeg respawn rather than let the worker keep reading indefinitely
+# against a stalled process or connection.
+_MAX_STALL_S = 8.0
+
+# UNCONDITIONAL periodic respawn, separate from the stall watchdog
+# above. Forcing a fresh FFmpeg process (and therefore a fresh RTSP
+# session) on a fixed cadence guarantees a clean keyframe periodically
+# even if nothing LOOKS wrong - kept as a defensive measure carried
+# over from the pre-rewrite diagnosis, though the subprocess rewrite
+# (point 4 in the module docstring) may make this unnecessary in
+# practice now that the root cause looks fixed; re-evaluate against
+# real hardware over time.
+_FORCED_RESPAWN_S = 25.0
+
+_READ_CHUNK = 4096
+
+
 def _worker_loop(rtsp_url: str) -> None:
-    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    proc: subprocess.Popen | None = None
+    buffer = bytearray()
+    last_good = time.monotonic()
+    spawned_at = time.monotonic()
     try:
         while True:
             with _lock:
                 if rtsp_url not in _running:
                     return
-            if not cap.isOpened():
-                time.sleep(0.5)
-                cap.release()
-                cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            stalled = (time.monotonic() - last_good) > _MAX_STALL_S
+            due_for_respawn = (time.monotonic() - spawned_at) > _FORCED_RESPAWN_S
+            if proc is None or proc.poll() is not None or stalled or due_for_respawn:
+                if proc is not None:
+                    _terminate(proc)
+                proc = _spawn(rtsp_url)
+                buffer.clear()
+                last_good = time.monotonic()
+                spawned_at = time.monotonic()
                 continue
 
-            success, frame = cap.read()
-            if not success or frame is None:
+            chunk = proc.stdout.read(_READ_CHUNK)
+            if not chunk:
                 time.sleep(0.05)
                 continue
+            buffer.extend(chunk)
 
-            ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-            if not ok:
+            frame = _extract_latest_jpeg(buffer)
+            if frame is None:
                 continue
+
+            last_good = time.monotonic()
             with _lock:
-                _latest_frames[rtsp_url] = encoded.tobytes()
+                _latest_frames[rtsp_url] = frame
     finally:
-        cap.release()
+        if proc is not None:
+            _terminate(proc)
         with _lock:
             _running.discard(rtsp_url)
             _latest_frames.pop(rtsp_url, None)

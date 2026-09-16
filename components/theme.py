@@ -19,6 +19,7 @@ def apply_theme() -> None:
         dark.enable()
     else:
         dark.disable()
+    ui.query(".nicegui-content").style("padding-top: 0.25rem")                                                              
 
 
 def theme_toggle_button() -> None:

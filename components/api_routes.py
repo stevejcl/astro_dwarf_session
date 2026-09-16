@@ -1,33 +1,38 @@
 """
 components/api_routes.py
 
-Greffe deux routes REST sur le serveur FastAPI que NiceGUI fait déjà tourner
-(`from nicegui import app` — app EST l'instance FastAPI, voir
-astro_dwarf_ui.py qui l'utilise déjà pour app.add_static_files). Pas de
-second serveur, pas de second port, pas de re-lecture de devices.json à
-chaque appel : on lit l'état EN MÉMOIRE de get_manager(), le même que celui
-que la UI elle-même affiche.
+Add two REST routes to the FastAPI server that NiceGUI is already running
+(`from nicegui import app` — `app` IS the FastAPI instance; see
+`astro_dwarf_ui.py`, which already uses it for `app.add_static_files`).
 
-    GET  /api/dwarfs
-        -> {"devices": [{"name", "dwarfUid", "connected"}, ...]}
-        Nom depuis device_registry (devices.json), état "connected" depuis
-        la vraie DwarfSession en mémoire.
+No second server, no second port, and no re-reading of `devices.json` on
+every request: read the state IN MEMORY from `get_manager()`, the same state
+that the UI itself displays.
 
-    POST /api/schedule
-        body: {"dwarfUid": "...", "schedule": {...}}
-        - Si l'appareil est connecté : envoie tout de suite via
-          perform_sync_shooting_schedule() (déplacé sur un thread, voir
-          components/connection_health.py::connect_and_enter_astro_mode
-          pour le même pattern run.io_bound).
-        - Sinon : stocke via pending_schedules.set_pending() ; sera proposé
-          à la synchronisation la prochaine fois que CET appareil se
-          connectera (voir le hook dans pages/session.py::_handle_connect).
-        -> {"ok": true, "mode": "sent"|"pending", ...}
+```
+GET  /api/dwarfs
+    -> {"devices": [{"name", "dwarfUid", "connected"}, ...]}
+    Name comes from `device_registry` (`devices.json`), while the
+    "connected" state comes from the actual DwarfSession in memory.
 
-CORS : la page catalogue est une origine différente (fichier local ou autre
-port), donc CORSMiddleware est ajouté ici pour que fetch() depuis cette page
-fonctionne. Ouvert (allow_origins=["*"]) parce que c'est un usage local,
-LAN-only, comme le reste de cette app — resserrez si besoin.
+POST /api/schedule
+    body: {"dwarfUid": "...", "schedule": {...}}
+    - If the device is connected: send it immediately via
+      `perform_sync_shooting_schedule()` (run on a separate thread; see
+      `components/connection_health.py::connect_and_enter_astro_mode`
+      for the same `run.io_bound` pattern).
+    - Otherwise: store it via `pending_schedules.set_pending()`; it will
+      be offered for synchronization the next time THAT device connects
+      (see the hook in `pages/session.py::_handle_connect`).
+
+    -> {"ok": true, "mode": "sent"|"pending", ...}
+```
+
+CORS: the catalogue page has a different origin (a local file or another
+port), so `CORSMiddleware` is added here to allow `fetch()` requests from
+that page. It is intentionally open (`allow_origins=["*"]`) because this is
+a local, LAN-only use case, like the rest of this application — tighten it
+if needed.
 """
 from __future__ import annotations
 
@@ -42,6 +47,7 @@ from nicegui import app, run
 from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
+from dwarf_python_api.lib.dwarf_utils import perform_get_last_sync_error
 
 from device_registry import list_device_entries
 from components import connection_health
@@ -150,7 +156,18 @@ def register_api_routes() -> None:
             if ok:
                 pending_schedules.clear_pending(dwarf_uid)  # un envoi réussi rend l'attente obsolète
                 return JSONResponse({"ok": True, "mode": "sent"})
-            return JSONResponse({"ok": False, "mode": "sent", "error": "perform_sync_shooting_schedule failed"}, status_code=502)
+            # User-requested (Sep 2026): "ce message m'intéresse plus
+            # que... check the log" - the real DwarfErrorCode name
+            # (e.g. "CODE_SHOOTING_SCHEDULE_TIME_CONFLICT") is now
+            # available via perform_get_last_sync_error() right after a
+            # failed sync - included here so the catalog page's own
+            # toast can show it directly instead of sending the person
+            # to the log file.
+            reason = perform_get_last_sync_error(session=session)
+            return JSONResponse(
+                {"ok": False, "mode": "sent", "error": "perform_sync_shooting_schedule failed", "reason": reason},
+                status_code=502,
+            )
 
         log.info(f"[{dwarf_uid}] Device offline — storing schedule as pending.")
         pending_schedules.set_pending(dwarf_uid, schedule)

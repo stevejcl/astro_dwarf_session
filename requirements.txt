@@ -15,6 +15,3 @@ inputimeout
 nicegui
 
 pywebview
-
-
-

@@ -1,5 +1,39 @@
 # Changelog
 
+## [3.0.2test2] - 2026-09-16
+
+### Improvements
+    Rewrite RTSP handling to use FFmpeg subprocess (stable decoding, spawn/terminate, stall/respawn, JPEG extraction)
+    Add check_ffmpeg_available + i18n message.
+    Fix camera_stream disconnect race and add debug logs.
+    Enhance schedule editor: parse exposures, auto-compute duration from count×exposure, update defaults (shutter, duration, stacked).
+    Add new translation keys (en/fr) including device-occupied and ffmpeg-missing messages.
+    Surface specific connection error when device is occupied.
+    Minor UI/theme padding tweak
+    Update CHANGELOG and a NiceGUI storage entry.
+    Add Wifi Only Configuration Page to a Dwarf
+    Add Sites Management Page
+
+### Bug
+   Remove OpenCV : big latency problem
+
+## [3.0.2.test1] - 2026-09-14
+
+### Improvements
+   Add RTSP Viewer with OpenCV
+   Add Manual Motor Positionning Section
+   Add Specific Motor Action for Dwarf Mini
+   Add Native Schedule Support
+   Add Native Schedule Editor
+   Add Routes
+   /catalog: Serves the great DSO catalog page from JD Stefaniac to prepare your best options for your Astro Sessions
+   Add Api Routes
+       To Get Dwarfs Info and Post Schedule option to directly create session from catalog page
+   Use already known value for Wifi SSID, Password , Location and Stellarium port
+
+### Bug
+   Add Specific Motor Action for Dwarf Mini : no Rotation Reset for Mini
+
 ## [3.0.1] - 2026-09-09
 
 ### Bug

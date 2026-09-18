@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import math
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from nicegui import run, ui
 
@@ -177,7 +177,7 @@ def build_schedule_editor(session) -> None:
         # sequence is worse than a session that runs a few seconds past
         # its last completed exposure - rounding DOWN here would
         # silently truncate the count the user actually asked for.
-        duration_input.value = math.ceil(1 + (count * exposure_s) / 60) or 1
+        duration_input.value = math.ceil(2 + (count * exposure_s) / 60) or 0
 
     count_input.on_value_change(lambda _e: _recompute_duration())
     exposure_input.on_value_change(lambda _e: _recompute_duration())
@@ -251,39 +251,54 @@ def build_schedule_editor(session) -> None:
 
     sync_status_label = ui.label("").classes("text-sm")
 
+    import time
+
+    def generate_dwarf_uuid(suffix="Android"):
+        # Genère un UUID propre + timestamp ms + suffixe requis par le firmware DWARF 3
+        raw_uuid = str(uuid.uuid4()).replace("-", "")[:32]
+        ts_ms = int(time.time() * 1000)
+        return f"{raw_uuid}{ts_ms}.{suffix}"
+    
     def _build_wire_tasks() -> list[dict]:
         wire_tasks = []
         for tk in tasks:
-            start_dt = datetime.strptime(f"{tk['date']} {tk['startTime']}", "%Y-%m-%d %H:%M")
-            end_dt = start_dt + timedelta(minutes=tk["durationMin"])
-            start_ms = int(start_dt.timestamp() * 1000)
-            end_ms = int(end_dt.timestamp() * 1000)
-            is_mosaic = tk["mosaic"] and not (tk["horizontalScale"] == 1.0 and tk["verticalScale"] == 1.0)
+            # 1. Parsing UTC strict
+            print(f"{tk['date']} {tk['startTime']}")
+            start_dt = datetime.strptime(
+                f"{tk['date']} {tk['startTime']}", "%Y-%m-%d %H:%M"
+            ).replace(tzinfo=timezone.utc)
+            print(f"start_dt: {start_dt}")
+            # 2. Timestamps POSIX en SECONDES (10 chiffres)
+            start_s = int(start_dt.timestamp())
+            end_s = start_s + int(tk["durationMin"] * 60)
+            print(f"start_s: {start_s}")
+
+            is_mosaic = tk["mosaic"] and not (
+                tk["horizontalScale"] == 1.0 and tk["verticalScale"] == 1.0
+            )
+
             wire_tasks.append({
                 "name": tk["name"],
+                "wellknownName": tk["name"],
                 "ra": tk["ra"],
                 "dec": tk["dec"],
-                "startTime": start_ms,
-                "endTime": end_ms,
+                "startTime": start_s,
+                "endTime": end_s,
                 "shutterName": tk["shutterName"],
                 "gainName": tk["gainName"],
                 "filterModeName": tk["filterModeName"],
-                "count": tk["count"],
-                # stacked: 0, not None - matches count above and the
-                # official app's own convention (a real device dump
-                # always sends 0, never null) - same reasoning as the
-                # catalog page's fix for CODE_SHOOTING_SCHEDULE_INVALID_
-                # SHOOTING_DURATION (-16301).
-                "stacked": None,
-                # isMosaicMode/horizontalScale/verticalScale: field names
-                # match the real official-app dump exactly (see this
-                # module's own docstring) - percentages (100-180), same
-                # convention program_editor.py already uses for framingX/Y.
+                "count": 0,  
+                "stacked": 0,
+                "rotation": -1,
                 "isMosaicMode": is_mosaic,
-                "horizontalScale": int(round(tk["horizontalScale"] * 100)) if is_mosaic else 100,
-                "verticalScale": int(round(tk["verticalScale"] * 100)) if is_mosaic else 100,
-                "schedule_task_id": str(uuid.uuid4()),
-                "createFrom": 0,
+                "horizontalScale": int(round(tk["horizontalScale"] * 100))
+                if is_mosaic
+                else 100,
+                "verticalScale": int(round(tk["verticalScale"] * 100))
+                if is_mosaic
+                else 100,
+                "schedule_task_id": generate_dwarf_uuid("Android"),
+                "createFrom": 2,
             })
         return wire_tasks
 
@@ -296,7 +311,8 @@ def build_schedule_editor(session) -> None:
         wire_tasks = _build_wire_tasks()
         starts = [tk["startTime"] for tk in wire_tasks]
         ends = [tk["endTime"] for tk in wire_tasks]
-
+        print(f"_handle_sync: starts {starts}")
+        print(f"_handle_sync: ends {ends}")
         # STALENESS CHECK (user-reported Sep 2026: got -16308 CODE_
         # SHOOTING_SCHEDULE_START_TIME_TOO_FAR on a manual entry test) -
         # mirrors the same check already added to the DSO catalog page
@@ -306,15 +322,17 @@ def build_schedule_editor(session) -> None:
         # message, instead of surfacing the device's bare error code -
         # a manually-typed date/time is an easy way to hit this by
         # mistake (unlike the catalog page's auto-computed "tonight").
-        now_ms = datetime.now().timestamp() * 1000
-        twelve_h_ms = 12 * 60 * 60 * 1000
-        if min(starts) - twelve_h_ms > now_ms or max(ends) + twelve_h_ms < now_ms:
+        # Comparaison basée sur des SECONDES
+        now_s = int(datetime.now(timezone.utc).timestamp())
+        twelve_h_s = 12 * 3600
+
+        if min(starts) - twelve_h_s > now_s or max(ends) + twelve_h_s < now_s:
             sync_status_label.set_text(t("sched_stale"))
             sync_status_label.classes(replace="text-sm text-red-700")
             return
-
+    
         schedule = {
-            "scheduleId": str(uuid.uuid4()),
+            "scheduleId": generate_dwarf_uuid(), #str(uuid.uuid4()),
             "scheduleName": schedule_name_input.value.strip() or "Schedule",
             "startTime": min(starts),
             "endTime": max(ends),

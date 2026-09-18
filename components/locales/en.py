@@ -48,7 +48,7 @@ TRANSLATIONS: dict[str, str] = {
     "free_storage":                 "Free storage",
     "total_storage":                "Total storage",
     "actions":                      "Actions",
-    "start_astro_capture":          "Start astro capture",
+    "start_astro_capture":          "Astro capture",
     "stop_capture":                 "Stop capture",
     "stop_goto":                    "Stop goto",
     "camera_settings":              "Camera settings",
@@ -251,7 +251,7 @@ TRANSLATIONS: dict[str, str] = {
 
     # -- Pairing page ----------------------------------------------------
     "add_dwarf":                    "Add a Dwarf",
-    "pairing_instructions":         "Bring the device close, power it on, then fill in the WiFi network it should join.",
+    "pairing_instructions":         "Bring the device close, power it on, then pick the Site it should join (Wifi network + location).",
     "device_name":                  "Device name",
     "device_name_placeholder":      "Dwarf 3",
     "bluetooth_password":           "Bluetooth password",
@@ -275,7 +275,7 @@ TRANSLATIONS: dict[str, str] = {
 
     # -- Sites page --------------------------------------------------------
     "sites_title":                  "Sites",
-    "sites_hint":                   "A Site bundles a Wifi network and a location, reusable across every Dwarf observing from there.",
+    "sites_hint":                   "A Site bundles a Wifi network and a location, reusable across every Dwarf observing from there. Its name is also used as the city name sent with shooting schedules.",
     "sites_name":                   "Site name",
     "sites_notes":                  "Notes",
     "sites_add":                    "Add a site",
@@ -297,4 +297,10 @@ TRANSLATIONS: dict[str, str] = {
     "manual_config_uid":            "Device UID",
     "manual_config_ip_uid_required": "IP and UID are required.",
     "manual_config_success":        "{device_name} configured.",
+
+    # -- Site picker (shared by pairing / manual config / settings) ------
+    "site_picker_label":            "Site",
+    "settings_apply_site_hint":     "Pick a Site and apply it to fill in location and Wifi below.",
+    "settings_apply_site":          "Apply from site",
+    "settings_site_applied":        "{name} applied.",
 }

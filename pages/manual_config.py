@@ -12,9 +12,12 @@ Built as a direct workaround for pages/pairing.py's Bluetooth scan
 failing outright on some machines (bleak not detecting the adapter at
 all) - this path never touches Bluetooth, so it works regardless.
 
-The IP and UID fields are the two values BLE would normally have
-discovered on its own - the user reads them off the DwarfLab app's own
-"My Device" screen instead."""
+Wifi credentials and location come ENTIRELY from the chosen Site (user-
+requested Sep 2026: Sites are the single source of truth for these) -
+this page no longer asks for them directly. The IP and UID fields are
+the two values BLE would normally have discovered on its own - the
+user reads them off the DwarfLab app's own "My Device" screen
+instead."""
 from __future__ import annotations
 
 from nicegui import ui
@@ -24,15 +27,10 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
+from components.site_picker import site_picker
 from components.theme import apply_theme
-from device_provisioning import (
-    DEFAULT_BLE_PSD,
-    DEVICE_MODELS,
-    ManualDeviceInput,
-    write_manual_config,
-)
+from device_provisioning import DEFAULT_BLE_PSD, DEVICE_MODELS, ManualDeviceInput, write_manual_config
 from device_registry import add_device_entry
-from site_registry import list_site_entries
 
 
 def build_manual_config_page() -> None:
@@ -41,20 +39,10 @@ def build_manual_config_page() -> None:
         add_pwa_head_tags()
         apply_theme()
 
-        sites = list_site_entries()
-        site_names = [s.name for s in sites]
-
         with ui.column().classes("w-full max-w-md mx-auto gap-3 p-4"):
             ui.button(icon="arrow_back", on_click=lambda: ui.navigate.to("/")).props("flat round")
             ui.label(t("manual_config_title")).classes("text-xl")
             ui.label(t("manual_config_hint")).classes("text-sm text-grey-6")
-
-            if not sites:
-                ui.label(t("manual_config_no_sites")).classes("text-sm text-orange-700")
-                ui.button(
-                    t("sites_add"), icon="add", on_click=lambda: ui.navigate.to("/sites")
-                ).props("flat")
-                return
 
             device_name = ui.input(
                 t("device_name"), placeholder=t("device_name_placeholder")
@@ -62,9 +50,12 @@ def build_manual_config_page() -> None:
             model_select = ui.select(
                 DEVICE_MODELS, value=DEVICE_MODELS[0], label=t("manual_config_model")
             ).classes("w-full")
-            site_select = ui.select(
-                site_names, value=site_names[0], label=t("manual_config_site")
-            ).classes("w-full")
+
+            # The "+" next to the dropdown lets a first Site be created
+            # right here, without leaving the page - a Site must exist
+            # before a device can be configured, but that no longer
+            # means a forced detour to /sites first.
+            site_select, get_selected_site = site_picker()
 
             ui.label(t("manual_config_ip_hint")).classes("text-xs text-grey-6")
             ip_input = ui.input(t("manual_config_ip")).classes("w-full")
@@ -79,25 +70,20 @@ def build_manual_config_page() -> None:
                 if not device_name.value.strip():
                     ui.notify(t("pairing_name_required"), type="negative")
                     return
-                if not site_select.value:
+                site = get_selected_site()
+                if not site:
                     ui.notify(t("manual_config_site_required"), type="negative")
                     return
                 if not ip_input.value.strip() or not uid_input.value.strip():
                     ui.notify(t("manual_config_ip_uid_required"), type="negative")
                     return
 
-                site = next(s for s in sites if s.name == site_select.value)
-
                 data = ManualDeviceInput(
                     device_name=device_name.value.strip(),
                     model=model_select.value,
                     dwarf_ip=ip_input.value.strip(),
                     dwarf_uid=uid_input.value.strip(),
-                    wifi_ssid=site.wifi_ssid,
-                    wifi_password=site.wifi_password,
-                    longitude=site.longitude,
-                    latitude=site.latitude,
-                    timezone=site.timezone,
+                    site=site,
                     ble_psd=ble_psd_input.value.strip() or DEFAULT_BLE_PSD,
                 )
 

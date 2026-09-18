@@ -79,11 +79,11 @@ def _build_eq_result_panel(session) -> Callable[[], None]:
 
     Returns an `update()` callback the caller runs after each EQ
     Solving attempt completes."""
-    with ui.row().classes("items-center gap-4 flex-wrap") as panel:
-        with ui.row().classes("items-center gap-2") as azi_row:
+    with ui.row().classes("w-full items-center gap-4") as panel:
+        with ui.row().classes("items-center justify-center gap-2  flex-1") as azi_row:
             azi_icon = ui.icon("rotate_right").classes("text-lg")
             azi_label = ui.label("")
-        with ui.row().classes("items-center gap-2") as alt_row:
+        with ui.row().classes("items-center justify-center gap-2 flex-1") as alt_row:
             alt_icon = ui.icon("arrow_upward").classes("text-lg")
             alt_label = ui.label("")
     panel.set_visibility(False)
@@ -260,7 +260,7 @@ def build_actions_section(session, refresh_view) -> None:
     eq_result_update: Callable[[], None] = lambda: None
 
     with ui.expansion(t("actions"), icon="tune", value=False).classes("w-full"):
-        with ui.row().classes("w-full gap-2 flex-wrap"):
+        with ui.grid().classes("w-full grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-1"):
             ui.button(
                 t("start_astro_capture"),
                 icon="play_arrow",
@@ -271,7 +271,7 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("astro_capture_started"),
                     refresh_view=refresh_view,
                 ),
-            ).props("flat")
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("stop_capture"),
                 icon="stop",
@@ -282,7 +282,7 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("astro_capture_stopped"),
                     refresh_view=refresh_view,
                 ),
-            ).props("flat")
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("stop_goto"),
                 icon="gps_off",
@@ -293,12 +293,12 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("goto_stopped"),
                     refresh_view=refresh_view,
                 ),
-            ).props("flat")
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_toggle_lights"),
                 icon="lightbulb",
                 on_click=lambda: _handle_toggle_lights(session, dwarf_uid),
-            ).props("flat")
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_focus_infinite"),
                 icon="all_out",
@@ -309,7 +309,7 @@ def build_actions_section(session, refresh_view) -> None:
                     infinite=True,
                     success_message=t("action_focus_infinite_done"),
                 ),
-            ).props("flat")
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_calibrate"),
                 icon="tune",
@@ -319,7 +319,7 @@ def build_actions_section(session, refresh_view) -> None:
                     perform_calibration,
                     success_message=t("action_calibrate_done"),
                 ),
-            ).props("flat")
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_polar_position"),
                 icon="explore",
@@ -329,7 +329,7 @@ def build_actions_section(session, refresh_view) -> None:
                     _polar_position_sequence,
                     success_message=t("action_polar_position_done"),
                 ),
-            ).props("flat")
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_eq_solving"),
                 icon="my_location",
@@ -340,11 +340,11 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("action_eq_solving_done"),
                     refresh_view=eq_result_update,
                 ),
-            ).props("flat")
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_reboot"),
                 icon="restart_alt",
                 on_click=lambda: _handle_reboot(session, dwarf_uid),
-            ).props("flat color=negative")
+            ).props("flat align=left color=negative").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
 
-        eq_result_update = _build_eq_result_panel(session)
+            eq_result_update = _build_eq_result_panel(session)

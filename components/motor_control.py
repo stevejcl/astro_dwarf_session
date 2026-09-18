@@ -159,7 +159,7 @@ def build_motor_position_tool(session) -> None:
     dwarf_uid = session.dwarf_uid
     status_label = ui.label("").classes("text-xs").style("min-height: 1.2em")
 
-    with ui.row().classes("w-full gap-2 items-end"):
+    with ui.row().classes("w-full justify-between gap-2 items-end"):
         motor_select = ui.select({1: "Rotation (id=1)", 2: "Pitch (id=2)"}, value=1, label="Axis").classes("flex-1")
         angle_input = ui.number("Target angle (°)", value=0.0, step=0.1, format="%.1f").classes("flex-1")
         speed_input = ui.number("Speed (°/s)", value=5.0, min=0.1, max=30.0, step=0.5).classes("w-28")
@@ -212,7 +212,7 @@ def build_motor_position_tool(session) -> None:
         status_label.set_text("Reset sent." if ok else "Reset failed - see app log.")
         status_label.classes(replace="text-xs text-grey-6" if ok else "text-xs text-red-700")
 
-    with ui.row().classes("w-full gap-2"):
+    with ui.row().classes("w-full justify-between gap-2"):
         ui.button("Run to", icon="place", on_click=_run_to).props("color=primary")
         ui.button("Get position", icon="my_location", on_click=_get_position).props("flat")
         ui.button("Reset axis", icon="restart_alt", on_click=_reset).props("flat color=negative")

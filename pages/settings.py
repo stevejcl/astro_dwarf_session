@@ -13,14 +13,28 @@ here mutates session.config directly, so the change is live immediately
 for the current session, in addition to being persisted to config.ini
 for next time.
 
+SITE AS SOURCE OF TRUTH (user-requested Sep 2026): the fields below can
+still be edited by hand for a one-off tweak, but the normal path is
+now picking a Site (components/site_picker.py) and clicking "Apply" -
+that copies the Site's Wifi/location straight into the form fields
+below (longitude/latitude/timezone/city_name AND the Force Bluetooth
+section's SSID/password), which are then saved/applied exactly as
+before by this page's own Save / Force Bluetooth buttons. This page
+intentionally does NOT try to auto-detect which Site is "currently
+applied" - there's no stored link between a device and a Site (config.
+ini has no such field), so re-selecting one each time is a deliberate,
+explicit action rather than a guess based on matching ble_sta_ssid.
+
 LOCATION AUTO-FILL: uses the BROWSER's own Geolocation API
-(navigator.geolocation) rather than requiring an address lookup - no
-typing needed, just a one-time permission prompt, and it's already
-running on the same machine/network as the telescope in the normal
-case. Deliberately NOT IP-based geolocation (too coarse - city-level at
-best) and NOT an address-to-coordinates lookup (would need typing an
-address AND a third-party geocoding service for no real benefit over
-just asking the browser directly).
+(navigator.geolocation) via components/geolocation.py, shared with
+pages/sites.py (Sites are the natural place to set this now, but a
+device's fields can still be nudged individually here without going
+through its Site) - no typing needed, just a one-time permission
+prompt, and it's already running on the same machine/network as the
+telescope in the normal case. Deliberately NOT IP-based geolocation
+(too coarse - city-level at best) and NOT an address-to-coordinates
+lookup (would need typing an address AND a third-party geocoding
+service for no real benefit over just asking the browser directly).
 
 CAVEAT: in native mode (ui.run(native=True), pywebview), geolocation
 support depends on the underlying embedded engine (WebView2 on Windows,
@@ -32,7 +46,6 @@ app), or coordinates can simply be typed in by hand."""
 from __future__ import annotations
 
 import configparser
-import json
 
 from nicegui import run, ui
 
@@ -45,23 +58,11 @@ from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
 from components import connection_health
 from components.ble_pairing import connect_ble, scan_dwarf_devices, write_ble_credentials
+from components.geolocation import fetch_current_location
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
+from components.site_picker import site_picker
 from components.theme import apply_theme
-
-_GEOLOCATION_JS = """
-return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-        resolve(JSON.stringify({error: 'unsupported'}));
-        return;
-    }
-    navigator.geolocation.getCurrentPosition(
-        (pos) => resolve(JSON.stringify({lat: pos.coords.latitude, lon: pos.coords.longitude})),
-        (err) => resolve(JSON.stringify({error: err.message})),
-        {timeout: 15000, enableHighAccuracy: true}
-    );
-});
-"""
 
 
 def _read_ini(path: str) -> configparser.ConfigParser:
@@ -198,25 +199,12 @@ def build_settings_page() -> None:
             ).classes("w-full")
 
             async def handle_use_current_location() -> None:
-                geolocation_status.set_text(t("settings_location_fetching"))
-                geolocation_status.classes(replace="text-xs text-grey-6")
-                try:
-                    raw = await ui.run_javascript(_GEOLOCATION_JS, timeout=20.0)
-                    result = json.loads(raw)
-                except Exception as exc:
-                    geolocation_status.set_text(t("settings_location_error", error=str(exc)))
-                    geolocation_status.classes(replace="text-xs text-red-700")
+                result = await fetch_current_location(geolocation_status)
+                if result is None:
                     return
-
-                if "error" in result:
-                    geolocation_status.set_text(t("settings_location_error", error=result["error"]))
-                    geolocation_status.classes(replace="text-xs text-red-700")
-                    return
-
-                longitude_input.value = result["lon"]
-                latitude_input.value = result["lat"]
-                geolocation_status.set_text(t("settings_location_fetched"))
-                geolocation_status.classes(replace="text-xs text-green-700")
+                lat, lon = result
+                longitude_input.value = lon
+                latitude_input.value = lat
 
             ui.button(
                 t("settings_use_current_location"),
@@ -227,6 +215,37 @@ def build_settings_page() -> None:
             timezone_input = ui.input(
                 t("settings_timezone"), value=shared_timezone
             ).classes("w-full")
+
+            # --- Apply from a Site (user-requested Sep 2026) ------------
+            # Sites (pages/sites.py) are now the source of truth for
+            # Wifi/location - this fills the fields above (and the Force
+            # Bluetooth section's SSID/password further below) from the
+            # chosen Site's saved values. Deliberately a separate
+            # "Apply" click rather than auto-applying on selection - the
+            # fields above may already hold a device-specific tweak the
+            # user doesn't want silently overwritten just by opening the
+            # dropdown.
+            ui.label(t("settings_apply_site_hint")).classes("text-sm text-grey-6 mt-2")
+            site_select, get_selected_site = site_picker()
+
+            def handle_apply_site() -> None:
+                site = get_selected_site()
+                if site is None:
+                    return
+                if site.longitude is not None:
+                    longitude_input.value = site.longitude
+                if site.latitude is not None:
+                    latitude_input.value = site.latitude
+                city_name_input.value = site.name
+                if site.timezone:
+                    timezone_input.value = site.timezone
+                ble_ssid_input.value = site.wifi_ssid
+                ble_pwd_input.value = site.wifi_password
+                ui.notify(t("settings_site_applied", name=site.name), type="positive")
+
+            ui.button(
+                t("settings_apply_site"), icon="content_copy", on_click=handle_apply_site
+            ).props("flat")
 
             ui.label(t("settings_stellarium_hint")).classes("text-sm text-grey-6 mt-2")
             with ui.row().classes("w-full gap-2"):
@@ -324,7 +343,8 @@ def build_settings_page() -> None:
             # working. Pre-fills from whatever was persisted at the last
             # successful pairing/force-reconnect (see components/
             # ble_pairing.py's write_ble_credentials()) - blank the
-            # first time this device was paired before that existed.
+            # first time this device was paired before that existed, or
+            # filled from the Site above via "Apply".
             with ui.expansion(t("settings_force_ble_title"), icon="bluetooth_searching", value=False).classes("w-full mt-2"):
                 ui.label(t("settings_force_ble_hint")).classes("text-xs text-grey-6")
 

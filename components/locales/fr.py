@@ -251,7 +251,7 @@ TRANSLATIONS: dict[str, str] = {
 
     # -- Pairing page ----------------------------------------------------
     "add_dwarf":                    "Ajouter un Dwarf",
-    "pairing_instructions":         "Approchez l'appareil, mettez-le sous tension, puis renseignez le WiFi auquel il doit se connecter.",
+    "pairing_instructions":         "Approchez l'appareil, mettez-le sous tension, puis choisissez le Site auquel il doit se connecter (r\u00e9seau Wifi + localisation).",
     "device_name":                  "Nom de l'appareil",
     "device_name_placeholder":      "Dwarf 3",
     "bluetooth_password":           "Mot de passe Bluetooth",
@@ -275,7 +275,7 @@ TRANSLATIONS: dict[str, str] = {
 
     # -- Sites page --------------------------------------------------------
     "sites_title":                  "Sites",
-    "sites_hint":                   "Un Site regroupe un r\u00e9seau Wifi et une localisation, r\u00e9utilisable par tous les Dwarf qui observent depuis cet endroit.",
+    "sites_hint":                   "Un Site regroupe un r\u00e9seau Wifi et une localisation, r\u00e9utilisable par tous les Dwarf qui observent depuis cet endroit. Son nom sert aussi de nom de ville envoy\u00e9 avec les plannings de prise de vue.",
     "sites_name":                   "Nom du site",
     "sites_notes":                  "Notes",
     "sites_add":                    "Ajouter un site",
@@ -297,4 +297,10 @@ TRANSLATIONS: dict[str, str] = {
     "manual_config_uid":            "UID de l'appareil",
     "manual_config_ip_uid_required": "IP et UID sont requis.",
     "manual_config_success":        "{device_name} configur\u00e9.",
+
+    # -- Site picker (shared by pairing / manual config / settings) ------
+    "site_picker_label":            "Site",
+    "settings_apply_site_hint":     "Choisissez un site et appliquez-le pour pr\u00e9-remplir la localisation et le Wifi ci-dessous.",
+    "settings_apply_site":          "Appliquer depuis le site",
+    "settings_site_applied":        "{name} appliqu\u00e9.",
 }

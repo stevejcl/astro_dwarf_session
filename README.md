@@ -1,5 +1,7 @@
-
 # Astro Dwarf Session
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 
 Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 3, and Dwarf Mini telescopes. It runs as a lightweight local web app (built with [NiceGUI](https://nicegui.io)) that you open in a browser or as a native desktop window — and, since it's a web app, from your phone or tablet too, on the same network.
 
@@ -126,3 +128,7 @@ Issues and pull requests welcome — this project leans heavily on real-hardware
 ## Notes
 
 Clear skies and good luck — the Dwarf will work for you.
+
+## License
+
+MIT -- see [LICENSE](LICENSE).

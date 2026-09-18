@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from nicegui import ui
 
+from components.geolocation import fetch_current_location
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
@@ -83,6 +84,23 @@ def build_sites_page() -> None:
                         value=site.latitude if site else None,
                         format="%.6f",
                     ).classes("w-full")
+
+                    geolocation_status = ui.label("").classes("text-xs")
+
+                    async def handle_use_current_location() -> None:
+                        result = await fetch_current_location(geolocation_status)
+                        if result is None:
+                            return
+                        lat, lon = result
+                        lon_input.value = lon
+                        lat_input.value = lat
+
+                    ui.button(
+                        t("settings_use_current_location"),
+                        icon="my_location",
+                        on_click=handle_use_current_location,
+                    ).props("flat")
+
                     tz_input = ui.input(
                         t("settings_timezone"), value=site.timezone if site else "Europe/Paris"
                     ).classes("w-full")

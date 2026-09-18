@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.2] - 2026-09-18
+
+### Improvements
+    Introduces reusable Site management and a shared Site picker across pairing, manual config, and settings.
+    Wi‑Fi, location, timezone, and city data are now sourced from Sites, with a browser geolocation helper and inline Site creation flow.
+    This also updates scheduler payloads and safety checks
+    Adds MIT licensing, and refreshes related UI text/layouts.
+
+### Bug
+    Correction for Scheduling Import
+
 ## [3.0.2test2] - 2026-09-16
 
 ### Improvements

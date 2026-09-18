@@ -341,6 +341,8 @@ async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Calla
                 tasks.append({
                     "name": p.get("name", "?"),
                     "state": _TASK_STATE_LABELS.get(task.state, str(task.state)),
+                    "startTime": p.get("startTime"),
+                    "endTime": p.get("endTime"),
                     "shutterName": p.get("shutterName"),
                     "gainName": p.get("gainName"),
                     "filterModeName": p.get("filterModeName"),
@@ -898,6 +900,12 @@ def build_session_page() -> None:
                                     ).props("flat dense round size=sm color=negative")
                                 for tsk in sc["tasks"]:
                                     detail_bits = []
+                                    if tsk.get("startTime"):
+                                        dt = datetime.fromtimestamp(tsk["startTime"])
+                                        detail_bits.append(f"[{dt:%Y-%m-%d %H:%M}")
+                                    if tsk.get("endTime"):
+                                        dt = datetime.fromtimestamp(tsk["endTime"])
+                                        detail_bits.append(f" - {dt:%H:%M}]")
                                     if tsk.get("shutterName"):
                                         detail_bits.append(f"{tsk['shutterName']}s")
                                     if tsk.get("gainName"):

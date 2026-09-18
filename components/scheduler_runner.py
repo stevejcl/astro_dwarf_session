@@ -269,6 +269,37 @@ def device_is_actively_capturing(session) -> bool:
         return False
     return perform_is_camera_actually_busy(session=session)
 
+def _run_starting_blocking(
+    dwarf_uid,
+    program,
+    session,
+    state,
+    source_filepath,
+):
+    # This is now running in the io_bound worker thread.
+
+    if device_is_actively_capturing(session):
+        state.running = False
+        state.error = (
+            "The Dwarf is already capturing - "
+            "refusing to start a new session."
+        )
+        return
+
+    if not connection_health.try_acquire_command_slot(
+        dwarf_uid,
+        caller="scheduler_runner.start_run",
+    ):
+        state.running = False
+        state.error = "A command is already in progress for this device."
+        return
+
+    _run_blocking(
+        program,
+        session,
+        state,
+        source_filepath,
+    )
 
 def _run_blocking(
     program: dict, session, state: RunState, source_filepath: str | None
@@ -416,6 +447,7 @@ def _run_blocking(
 
     finally:
         state.running = False
+        #clear_run(session.dwarf_uid)
         connection_health.release_command_slot(session.dwarf_uid)
 
 
@@ -435,10 +467,11 @@ def start_run(
     relaunch()) so this run's progress/outcome gets tracked into Current
     then Done/Error, same as astro_dwarf_scheduler.py would - omit only
     for a throwaway run with nothing to track."""
+    print("start_run")
+
     if is_running(dwarf_uid):
         raise RuntimeError("A program is already running for this device.")
-    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="scheduler_runner.start_run"):
-        raise RuntimeError("A command is already in progress for this device.")
+
     # Neither check above knows about activity astro_dwarf_session didn't
     # itself start (a manual session from the official Dwarf app, or an
     # on-device native shooting-schedule task currently running) - without
@@ -449,21 +482,23 @@ def start_run(
     # that graceful handling is on the RECEIVING end for a schedule sync,
     # not for a full manual start_dwarf_session() run, which actively
     # drives goto/calibration/capture from the first step.
-    if device_is_actively_capturing(session):
-        connection_health.release_command_slot(dwarf_uid)
-        raise RuntimeError(
-            "The Dwarf is already capturing (started elsewhere - official "
-            "app or an on-device schedule) - refusing to start a new "
-            "session on top of it."
-        )
 
     state = RunState()
     state.program_name = program.get("id_command", {}).get("description") or ""
     _runs[dwarf_uid] = state
+    
     background_tasks.create(
-        run.io_bound(_run_blocking, program, session, state, source_filepath),
+        run.io_bound(
+            _run_starting_blocking,
+            dwarf_uid,
+            program,
+            session,
+            state,
+            source_filepath,
+        ),
         name=f"scheduler-{dwarf_uid}",
     )
+
     return state
 
 

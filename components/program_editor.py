@@ -125,7 +125,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             wait_after_input = ui.number(t("prog_wait_after"), value=cmd["auto_focus"]["wait_after"], min=0).classes("flex-1")
 
         ui.label(t("prog_actions")).classes("text-sm text-grey-6 mt-2")
-        with ui.row().classes("w-full gap-4"):
+        with ui.row().classes("w-full justify-between gap-4"):
             auto_focus_cb = ui.checkbox(t("prog_auto_focus"), value=cmd["auto_focus"]["do_action"])
             infinite_focus_cb = ui.checkbox(t("prog_infinite_focus"), value=cmd["infinite_focus"]["do_action"])
             eq_solving_cb = ui.checkbox(t("prog_eq_solving"), value=cmd["eq_solving"]["do_action"])
@@ -159,7 +159,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             solar_target = ui.select(_SOLAR_TARGETS, value=cmd["goto_solar"]["target"], label=t("prog_solar_target")).classes("w-full")
 
         with ui.column().classes("w-full gap-2") as manual_section:
-            with ui.row().classes("w-full gap-2"):
+            with ui.row().classes("w-full justify-between gap-2"):
                 manual_target = ui.input(t("prog_target_name"), value=cmd["goto_manual"]["target"]).classes("flex-1")
                 ra_input = ui.input(t("prog_ra"), value=str(cmd["goto_manual"]["ra_coord"] or "")).classes("w-32")
                 dec_input = ui.input(t("prog_dec"), value=str(cmd["goto_manual"]["dec_coord"] or "")).classes("w-32")
@@ -212,7 +212,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
         camera_choice = ui.radio(
             {"none": t("prog_camera_none"), "tele": t("camera_tele"), "wide": t("camera_wide")},
             value=_initial_camera,
-        ).props("inline")
+        ).props("inline").classes("gap-6")
 
         # Cross-device import validation (point B): a program authored
         # for a different Dwarf model can carry an exposure/gain value

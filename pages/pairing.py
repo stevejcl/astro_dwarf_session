@@ -24,6 +24,16 @@ the astro_dwarf_session side:
    probably deserves the same fix so setupBLE.py etc. aren't hit by the
    same gap.
 
+SITE AS SOURCE OF TRUTH (user-requested Sep 2026): Wifi SSID/password
+are no longer typed here directly - they come from the chosen Site
+(components/site_picker.py), same as pages/manual_config.py. Once BLE
+pairing itself succeeds, the Site's location/city_name are ALSO written
+into the fresh config.ini (device_provisioning.apply_site_to_ini(),
+include_wifi=False since write_ble_credentials() below already covers
+the Wifi fields) - previously this page only ever wrote Wifi
+credentials, leaving location to be filled in by hand afterward on
+pages/settings.py.
+
 CONCURRENCY: set_config_data() redirects a GLOBAL state at the
 get_config_data module level (not per-session) - two simultaneous
 pairing operations would write into each other's target file.
@@ -42,9 +52,11 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from components.ble_pairing import connect_ble, scan_dwarf_devices, write_ble_credentials
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
+from components.site_picker import site_picker
 from components.theme import apply_theme
-from device_provisioning import ensure_config_files, slugify
-from device_registry import add_device_entry, find_shared_config_value
+from device_provisioning import apply_site_to_ini, ensure_config_files, slugify
+from device_registry import add_device_entry
+from site_registry import SiteEntry
 
 # IMPORTANT (found while wiring this screen, needs an upstream fix):
 # dwarf_ble_connect/lib/connect_direct_bluetooth.py unconditionally
@@ -61,7 +73,7 @@ _pairing_lock = threading.Lock()
 
 
 def _do_pairing(
-    device_name: str, ble_psd: str, wifi_ssid: str, wifi_pwd: str, auto_select: str = ""
+    device_name: str, ble_psd: str, site: SiteEntry, auto_select: str = ""
 ) -> tuple[bool, str]:
     """All the blocking work (files + BLE scan + WiFi handoff), run
     outside the NiceGUI event loop via run.io_bound(). Returns
@@ -94,7 +106,7 @@ def _do_pairing(
         lock_file=config_py + ".lock",
     )
 
-    connected = connect_ble(ble_psd, wifi_ssid, wifi_pwd, auto_select)
+    connected = connect_ble(ble_psd, site.wifi_ssid, site.wifi_password, auto_select)
     if not connected:
         return False, t("pairing_connection_failed")
 
@@ -105,7 +117,10 @@ def _do_pairing(
     # Persisted for later reuse by settings.py's "Force Bluetooth"
     # (user-requested Sep 2026) - config.ini already had ble_psd/
     # ble_sta_ssid/ble_sta_pwd fields, just never actually written here.
-    write_ble_credentials(config_ini, ble_psd, wifi_ssid, wifi_pwd)
+    write_ble_credentials(config_ini, ble_psd, site.wifi_ssid, site.wifi_password)
+    # Location + city_name, from the same Site - include_wifi=False
+    # since write_ble_credentials() just covered ble_sta_ssid/pwd.
+    apply_site_to_ini(config_ini, site, include_wifi=False)
 
     get_manager().add(cfg)
     add_device_entry(name=device_name, config_py=config_py, config_ini=config_ini)
@@ -117,8 +132,7 @@ def _do_pairing(
 async def _handle_pair(
     device_name: str,
     ble_psd: str,
-    wifi_ssid: str,
-    wifi_pwd: str,
+    site: SiteEntry | None,
     status_label: ui.label,
     pair_button: ui.button,
     choice_container: ui.column,
@@ -126,8 +140,8 @@ async def _handle_pair(
     if not device_name.strip():
         ui.notify(t("pairing_name_required"), type="negative")
         return
-    if not wifi_ssid.strip() or not wifi_pwd.strip():
-        ui.notify(t("pairing_wifi_required"), type="negative")
+    if site is None:
+        ui.notify(t("manual_config_site_required"), type="negative")
         return
 
     if not _pairing_lock.acquire(blocking=False):
@@ -163,9 +177,7 @@ async def _handle_pair(
         # reported Sep 2026) - not an actually-stuck lock from a prior
         # crash, just this call site never releasing first.
         _pairing_lock.release()
-        await _finish_pairing(
-            device_name, ble_psd, wifi_ssid, wifi_pwd, "", status_label, pair_button
-        )
+        await _finish_pairing(device_name, ble_psd, site, "", status_label, pair_button)
         return
 
     # outcome == "multiple": show a real choice instead of connect_ble_
@@ -179,9 +191,7 @@ async def _handle_pair(
 
         async def _connect_chosen() -> None:
             choice_container.clear()
-            await _finish_pairing(
-                device_name, ble_psd, wifi_ssid, wifi_pwd, choice.value, status_label, pair_button
-            )
+            await _finish_pairing(device_name, ble_psd, site, choice.value, status_label, pair_button)
 
         ui.button(t("pairing_connect_to_selected"), on_click=_connect_chosen).props(
             "color=primary"
@@ -193,8 +203,7 @@ async def _handle_pair(
 async def _finish_pairing(
     device_name: str,
     ble_psd: str,
-    wifi_ssid: str,
-    wifi_pwd: str,
+    site: SiteEntry,
     auto_select: str,
     status_label: ui.label,
     pair_button: ui.button,
@@ -213,7 +222,7 @@ async def _finish_pairing(
     )
     try:
         success, message = await run.io_bound(
-            _do_pairing, device_name, ble_psd or "DWARF_12345678", wifi_ssid, wifi_pwd, auto_select
+            _do_pairing, device_name, ble_psd or "DWARF_12345678", site, auto_select
         )
     finally:
         _pairing_lock.release()
@@ -245,19 +254,12 @@ def build_pairing_page() -> None:
             ble_psd = ui.input(
                 t("bluetooth_password"), value="DWARF_12345678"
             ).classes("w-full")
-            # Pre-filled from another already-paired device's own
-            # config, if any (user-requested Sep 2026) - same home Wi-Fi
-            # for every Dwarf is the overwhelmingly common case, so
-            # pre-filling saves re-typing it for every new pairing. The
-            # user can still freely edit/clear either field.
-            wifi_ssid = ui.input(
-                t("wifi_ssid"), value=find_shared_config_value(get_manager(), lambda c: c.ble_sta_ssid)
-            ).classes("w-full")
-            wifi_pwd = ui.input(
-                t("wifi_password"),
-                password=True,
-                value=find_shared_config_value(get_manager(), lambda c: c.ble_sta_pwd),
-            ).classes("w-full")
+
+            # Site picks Wifi SSID/password for the BLE handoff below
+            # (and, once pairing succeeds, location/city_name too - see
+            # module docstring) - the "+" lets a first Site be created
+            # right here if none exist yet.
+            site_select, get_selected_site = site_picker()
 
             status_label = ui.label("").classes("text-sm text-grey-6")
             choice_container = ui.column().classes("w-full gap-1")
@@ -268,8 +270,7 @@ def build_pairing_page() -> None:
                 lambda: _handle_pair(
                     device_name.value,
                     ble_psd.value,
-                    wifi_ssid.value,
-                    wifi_pwd.value,
+                    get_selected_site(),
                     status_label,
                     pair_button,
                     choice_container,

@@ -48,6 +48,7 @@ from nicegui import run, ui
 
 from components import connection_health
 from components.camera_settings import _exposure_names, _gain_range, _GAIN_STEP, _ir_filter_names
+from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.stellarium import get_target_from_stellarium
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
@@ -151,9 +152,9 @@ def build_schedule_editor(session) -> None:
     mosaic_fields.set_visibility(False)
     mosaic_cb.on_value_change(lambda e: mosaic_fields.set_visibility(e.value))
 
-    with ui.row().classes("w-full gap-2"):
-        date_input = ui.input(t("prog_date"), value=draft["date"]).classes("flex-1")
-        start_time_input = ui.input(t("sched_start_time"), value=draft["startTime"]).classes("flex-1")
+    with ui.row().classes("w-full gap-2 items-end"):
+        date_input = date_picker_input(t("prog_date"), draft["date"]).classes("flex-1")
+        start_time_input = time_picker_input(t("sched_start_time"), draft["startTime"]).classes("flex-1")
         # Computed, not manually entered (user-reported Sep 2026: the
         # schedule's end_time - which the device uses to know when to
         # STOP - was a separate, independently-typed field, so it could
@@ -166,6 +167,18 @@ def build_schedule_editor(session) -> None:
         # exposure_input below, which are the actual source of truth
         # now), it only ever reflects them.
         duration_input = ui.number(t("sched_duration_min"), value=draft["durationMin"], min=1).classes("w-32").props("readonly")
+
+    def _set_start_now_plus_5() -> None:
+        """User-requested Sep 2026: quick \"Now + 5min\" button - the
+        date/time fields above don't reset themselves between targets
+        (deliberately: a second target usually starts later THE SAME
+        night, not \"now\" again), so re-basing them to the current time
+        is otherwise a fully manual re-type of both fields."""
+        now_plus_5 = datetime.now() + timedelta(minutes=5)
+        date_input.value = now_plus_5.strftime("%Y-%m-%d")
+        start_time_input.value = now_plus_5.strftime("%H:%M")
+
+    ui.button(t("sched_now_plus_5"), icon="schedule", on_click=_set_start_now_plus_5).props("flat dense")
 
     def _recompute_duration() -> None:
         exposure_s = _exposure_seconds(exposure_input.value or "")

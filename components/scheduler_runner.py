@@ -116,6 +116,34 @@ class RunState:
     # direct upload here, or a relaunch from pages/programs.py's Scripts/
     # Results tabs) - populated once in start_run() from the program's
     # own id_command.description, not tracked separately by each caller.
+    shots_taken: int | None = None  # user-requested Sep 2026: same numbers
+    shots_stacked: int | None = None  # _capture_shots_result() writes into
+    # id_command (for the Results tab's card - see pages/programs.py),
+    # mirrored here too so program_section.py's LIVE view can show them
+    # right after a run finishes without re-reading the just-written
+    # Done/Error JSON file back off disk.
+    end_time_display: str = ""  # "" when no scheduled end time was set for this run
+    # user-reported Sep 2026: the device's own progress notification
+    # carries a total_count field, but dwarf_python_api only logs it
+    # (websockets_utils.py) and never stores it - current_count
+    # (confusingly cached as "takePhotoCount"/"takeWidePhotoCount") is
+    # the only number that survives into get_client_status(), and it's
+    # "captured so far", not the target. The target IS available here
+    # though - it's simply what the program itself asked for
+    # (setup_camera/setup_wide_camera's own "count" field) - so
+    # device_card.py's capturing banner and pages/watch_device.py read
+    # it from here instead of needing a dwarf_python_api change.
+    #
+    # Kept as TWO separate fields, one per camera (user-reported Sep
+    # 2026, second report: a single shared field applied to whichever
+    # camera actually ran, wrongly showed "0/20" on the OTHER camera
+    # too - e.g. Wide showing a target of 20 it was never actually
+    # asked to shoot, just because Tele's setup_camera.count was 20 and
+    # this field didn't distinguish which section was do_action=True) -
+    # each defaults to "" when that camera's do_action is False, so a
+    # camera that was never part of this run shows no total at all.
+    requested_count_tele: str = ""
+    requested_count_wide: str = ""
 
 
 # One RunState per dwarf_uid - a given device can only run one program at
@@ -406,6 +434,8 @@ def _run_blocking(
             _capture_actual_camera_settings(id_command, session)
             _capture_eq_solving_result(id_command, session)
             _capture_shots_result(id_command, session)
+            state.shots_taken = id_command.get("shots_taken")
+            state.shots_stacked = id_command.get("shots_stacked")
 
             if current_path is not None:
                 dirs = session_dirs_for(session)
@@ -485,6 +515,26 @@ def start_run(
 
     state = RunState()
     state.program_name = program.get("id_command", {}).get("description") or ""
+    # Surfaced by device_card.py's "capturing"/"program_running" banner
+    # (user-requested Sep 2026: "peut etre l'heure final si presente") -
+    # whichever camera section is actually active carries the optional
+    # end_time (see program_editor.py's prog_end_time field); "" if
+    # neither is set, in which case the banner just omits it.
+    state.end_time_display = (
+        program.get("setup_camera", {}).get("end_time")
+        or program.get("setup_wide_camera", {}).get("end_time")
+        or ""
+    )
+    state.requested_count_tele = (
+        program.get("setup_camera", {}).get("count")
+        if program.get("setup_camera", {}).get("do_action")
+        else ""
+    ) or ""
+    state.requested_count_wide = (
+        program.get("setup_wide_camera", {}).get("count")
+        if program.get("setup_wide_camera", {}).get("do_action")
+        else ""
+    ) or ""
     _runs[dwarf_uid] = state
     
     background_tasks.create(

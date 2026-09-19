@@ -112,7 +112,8 @@ from pages.pairing import build_pairing_page
 from pages.logs import build_logs_page
 from pages.manual_config import build_manual_config_page
 from pages.sites import build_sites_page
-
+from pages.watch_dashboard import build_watch_dashboard_page
+from pages.watch_device import build_watch_device_page
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Astro Dwarf UI")
@@ -229,6 +230,8 @@ def main() -> None:
     build_sites_page()
     build_manual_config_page()
     build_logs_page()
+    build_watch_dashboard_page()
+    build_watch_device_page()
 
     # Global, client-independent (see components/scheduler_loop.py's
     # module docstring for why app.timer, not ui.timer) - a scheduled

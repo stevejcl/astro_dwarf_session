@@ -27,6 +27,55 @@ def _open_device(dwarf_uid: str) -> None:
     ui.navigate.to(f"/session/{dwarf_uid}")
 
 
+async def _handle_connect_all(button: ui.button | None = None) -> None:
+    """Connects every currently-disconnected device, one at a time -
+    sequential rather than concurrent so several Dwarfs don't compete
+    for network/BLE resources at the exact same moment (matches
+    clicking each card's own \"Connect\" button one after another, just
+    without the clicking). A device already connected, or already mid-
+    command from something else, is skipped rather than treated as a
+    failure - this is a convenience for the common \"just powered on
+    several Dwarfs together\" case, not a strict all-or-nothing action.
+    Card states pick up the result on their own via dashboard_page()'s
+    existing 2s poll() - no manual refresh needed here.
+
+    `button`: disabled for the duration so a second click can't start
+    an overlapping run while this one is still going through devices."""
+    manager = get_manager()
+    targets = [s for s in manager.all() if not s.is_connected]
+    if not targets:
+        ui.notify(t("connect_all_none"), type="info")
+        return
+
+    if button:
+        button.disable()
+    try:
+        connected = 0
+        skipped = 0
+        failed = 0
+        for session in targets:
+            if not connection_health.try_acquire_command_slot(session.dwarf_uid, caller="dashboard.connect_all"):
+                skipped += 1
+                continue
+            try:
+                success = await connection_health.connect_and_enter_astro_mode(session)
+            finally:
+                connection_health.release_command_slot(session.dwarf_uid)
+            if success:
+                connected += 1
+                connection_health.mark_just_connected(session.dwarf_uid)
+            else:
+                failed += 1
+    finally:
+        if button:
+            button.enable()
+
+    ui.notify(
+        t("connect_all_result", connected=connected, failed=failed, skipped=skipped),
+        type="positive" if failed == 0 else "warning",
+    )
+
+
 def build_dashboard_page() -> None:
     @ui.page("/", title="Astro Dwarf Session")
     def dashboard_page() -> None:
@@ -79,7 +128,7 @@ def build_dashboard_page() -> None:
                         SUPPORTED_LANGUAGES,
                         value=get_language(),
                         on_change=lambda e: (set_language(e.value), ui.navigate.reload()),
-                    ).props("dense borderless").classes("w-16")
+                    ).props("dense borderless options-dense").classes("w-12 text-xs")
                     ui.button(
                         icon="add", on_click=lambda: ui.navigate.to("/pairing")
                     ).props("flat round")
@@ -98,6 +147,18 @@ def build_dashboard_page() -> None:
                     ui.button(
                         icon="location_on", on_click=lambda: ui.navigate.to("/sites")
                     ).props("flat round")
+                    # Connect All (user-requested Sep 2026): a single
+                    # click to connect every currently-disconnected
+                    # device instead of opening each one's own page -
+                    # useful right after several Dwarfs are powered on
+                    # together at the start of a session. Reuses the
+                    # exact same connect_and_enter_astro_mode() +
+                    # command-slot guard pages/session.py's own per-
+                    # device "Connect" button already goes through -
+                    # see _handle_connect_all() below.
+                    connect_all_button = ui.button(icon="power", on_click=lambda: _handle_connect_all(connect_all_button))
+                    connect_all_button.props("flat round")
+                    connect_all_button.tooltip(t("connect_all"))
                     ui.button(
                         icon="article", on_click=lambda: ui.navigate.to("/logs")
                     ).props("flat round")

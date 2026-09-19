@@ -177,40 +177,66 @@ class DeviceCardView:
                     self._disconnected_name_label = ui.label("").classes(
                         "text-sm font-medium text-grey-7 truncate"
                     )
-                with ui.row().classes(
-                    "flex-wrap justify-center sm:justify-between items-center gap-3 w-full"
-                ) as self._idle_content:
-                    self._idle_icon = ui.image("").classes(_LARGE_VISUAL_CLASSES).props(
-                        "fit=contain"
-                    )
-                    # centered when wrapped below the icon on a narrow/
-                    # portrait phone (user-requested Sep 2026), right-
-                    # aligned next to the icon once there's room for a
-                    # single row (sm: 640px+) - justify-between on the
-                    # parent row above already pushes this column to the
-                    # far right in that wider case, so no ml-auto needed
-                    # here anymore.
-                    with ui.column().classes(
-                        "gap-2 items-center sm:items-end"
-                    ) as self._idle_info_column:
-                        self._idle_name_label = ui.label("").classes(
-                            f"font-medium text-grey-8 {_INFO_TEXT_CLASSES}"
+                with ui.column().classes("gap-2 w-full") as self._idle_content:
+                    with ui.row().classes(
+                        "flex-wrap justify-center sm:justify-between items-center gap-3 w-full"
+                    ):
+                        self._idle_icon = ui.image("").classes(_LARGE_VISUAL_CLASSES).props(
+                            "fit=contain"
                         )
-                        with ui.row().classes("items-center gap-1"):
-                            ui.icon("battery_full").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
-                            self._idle_battery_label = ui.label("").classes(
-                                f"text-grey-7 {_INFO_TEXT_CLASSES}"
+                        # centered when wrapped below the icon on a narrow/
+                        # portrait phone (user-requested Sep 2026), right-
+                        # aligned next to the icon once there's room for a
+                        # single row (sm: 640px+) - justify-between on the
+                        # parent row above already pushes this column to the
+                        # far right in that wider case, so no ml-auto needed
+                        # here anymore.
+                        with ui.column().classes(
+                            "gap-2 items-center sm:items-end"
+                        ) as self._idle_info_column:
+                            self._idle_name_label = ui.label("").classes(
+                                f"font-medium text-grey-8 {_INFO_TEXT_CLASSES}"
                             )
-                        with ui.row().classes("items-center gap-1"):
-                            ui.icon("thermostat").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
-                            self._idle_temperature_label = ui.label("").classes(
-                                f"text-grey-7 {_INFO_TEXT_CLASSES}"
-                            )
-                        with ui.row().classes("items-center gap-1"):
-                            ui.icon("sd_card").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
-                            self._idle_disk_label = ui.label("").classes(
-                                f"text-grey-7 {_INFO_TEXT_CLASSES}"
-                            )
+                            with ui.row().classes("items-center gap-1"):
+                                ui.icon("battery_full").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
+                                self._idle_battery_label = ui.label("").classes(
+                                    f"text-grey-7 {_INFO_TEXT_CLASSES}"
+                                )
+                            with ui.row().classes("items-center gap-1"):
+                                ui.icon("thermostat").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
+                                self._idle_temperature_label = ui.label("").classes(
+                                    f"text-grey-7 {_INFO_TEXT_CLASSES}"
+                                )
+                            with ui.row().classes("items-center gap-1"):
+                                ui.icon("sd_card").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
+                                self._idle_disk_label = ui.label("").classes(
+                                    f"text-grey-7 {_INFO_TEXT_CLASSES}"
+                                )
+                    # Last completed run's result (user-reported Sep
+                    # 2026: the card reverts straight back to this idle
+                    # view the moment a program finishes, with no
+                    # lasting sign of whether it actually succeeded -
+                    # easy to miss if nobody was watching at that exact
+                    # moment, which is the whole point of the scheduled-
+                    # end-time feature). scheduler_runner.get_run_state()
+                    # keeps the LAST RunState around (only overwritten by
+                    # the next run, never cleared on its own), so this is
+                    # populated from that, not tracked separately here -
+                    # hidden entirely until a run has actually finished
+                    # at least once.
+                    #
+                    # OWN full-width row below the icon+info row (user-
+                    # reported Sep 2026: squeezed into the narrow info
+                    # column next to the icon, it crowded battery/temp/
+                    # disk on a small/portrait screen) - self._idle_content
+                    # is now a column precisely so this can sit on its
+                    # own line without competing for space with the icon.
+                    with ui.row().classes("items-center gap-1 w-full") as self._idle_last_run_row:
+                        self._idle_last_run_icon = ui.icon("").classes(_INFO_ICON_CLASSES)
+                        self._idle_last_run_label = ui.label("").classes(
+                            f"text-grey-7 {_INFO_TEXT_CLASSES}"
+                        )
+                    self._idle_last_run_row.set_visibility(False)
                 with ui.column().classes("gap-2 w-full") as self._active_content:
                     self._thumbnail, self._thumbnail_open_button = build_dashboard_thumbnail(session)
                     # Small icon + Battery/Temperature/Disk, all in a
@@ -316,6 +342,24 @@ class DeviceCardView:
                 if available is not None and total is not None
                 else ""
             )
+            run_state = scheduler_runner.get_run_state(self.dwarf_uid)
+            if run_state is not None and run_state.finished_ok is not None:
+                self._idle_last_run_row.set_visibility(True)
+                if run_state.finished_ok:
+                    self._idle_last_run_icon.props("name=check_circle").classes(
+                        replace=f"text-green-6 {_INFO_ICON_CLASSES}"
+                    )
+                    text = t("card_last_run_ok")
+                    if run_state.shots_taken:
+                        text += f" \u00b7 {run_state.shots_stacked or 0}/{run_state.shots_taken} {t('prog_shots_stacked')}"
+                    self._idle_last_run_label.set_text(text)
+                else:
+                    self._idle_last_run_icon.props("name=error").classes(
+                        replace=f"text-red-6 {_INFO_ICON_CLASSES}"
+                    )
+                    self._idle_last_run_label.set_text(t("card_last_run_failed"))
+            else:
+                self._idle_last_run_row.set_visibility(False)
         else:
             battery = full_status.get("BatteryLevelDwarf")
             self._battery_label.set_text(f"{battery}%" if battery is not None else "")
@@ -376,19 +420,40 @@ class DeviceCardView:
         # Same kind as last tick: only refresh the bit of text that can
         # legitimately change on its own - no DOM rebuild.
         if kind == "capturing" and self._dynamic_label is not None:
-            stacked = full_status.get("takePhotoStacked") or full_status.get(
-                "takeWidePhotoStacked", 0
-            )
-            count = full_status.get("takePhotoCount") or full_status.get(
-                "takeWidePhotoCount", 0
-            )
-            self._dynamic_label.set_text(t("capture_in_progress", stacked=stacked, count=count))
+            # Which camera is actually capturing - by KEY PRESENCE, not
+            # truthiness (a currently-active capture at current_count==0
+            # still has the key; "or" on the values alone would wrongly
+            # fall through to Wide's fields for a moment at Tele's very
+            # first tick). Determines both which raw counters to read
+            # AND which of the two per-camera totals below applies.
+            is_tele = full_status.get("takePhotoCount") is not None
+            stacked = full_status.get("takePhotoStacked" if is_tele else "takeWidePhotoStacked", 0)
+            # NOT the requested total - see RunState's own per-camera
+            # requested_count_tele/wide docstring (scheduler_runner.py):
+            # this is current_count under a misleading cache key, i.e.
+            # "captured so far", not the target.
+            current = full_status.get("takePhotoCount" if is_tele else "takeWidePhotoCount", 0)
+            run_state = scheduler_runner.get_run_state(self.dwarf_uid)
+            total = (
+                (run_state.requested_count_tele if is_tele else run_state.requested_count_wide)
+                if run_state else ""
+            ) or ""
+            if total:
+                text = t("capture_progress_with_total", current=current, total=total, stacked=stacked)
+            else:
+                text = t("capture_progress_no_total", current=current, stacked=stacked)
+            if run_state and run_state.end_time_display:
+                text += " \u00b7 " + t("card_end_time", time=run_state.end_time_display)
+            self._dynamic_label.set_text(text)
         elif kind == "program_running" and self._dynamic_label is not None:
             run_state = scheduler_runner.get_run_state(self.dwarf_uid)
             name = (run_state.program_name if run_state else "") or t("program_untitled")
             self._dynamic_label.set_text(name)
             if self._dynamic_detail is not None:
                 last_step = run_state.steps[-1].label if run_state and run_state.steps else ""
+                if run_state and run_state.end_time_display:
+                    end_bit = t("card_end_time", time=run_state.end_time_display)
+                    last_step = f"{last_step} \u00b7 {end_bit}" if last_step else end_bit
                 self._dynamic_detail.set_text(last_step)
 
     @staticmethod

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timedelta
 
@@ -27,6 +28,7 @@ from components.camera_settings import (
     _ir_filter_names,
     _ir_filter_table,
 )
+from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.session_dirs import ensure_dirs
 from components.stellarium import get_target_from_stellarium
@@ -75,6 +77,7 @@ def _blank_program() -> dict:
                 "ircut": "1",
                 "count": "20",
                 "wait_after": 30,
+                "end_time": "",
             },
             "setup_wide_camera": {
                 "do_action": False,
@@ -82,6 +85,7 @@ def _blank_program() -> dict:
                 "gain": "90",
                 "count": "10",
                 "wait_after": 30,
+                "end_time": "",
             },
         }
     }
@@ -114,8 +118,10 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
         description = ui.input(t("prog_description"), value=cmd["id_command"]["description"]).classes("w-full")
 
         with ui.row().classes("w-full gap-2"):
-            date_input = ui.input(t("prog_date"), value=cmd["id_command"]["date"]).classes("flex-1")
-            time_input = ui.input(t("prog_time"), value=cmd["id_command"]["time"]).classes("flex-1")
+            date_input = date_picker_input(t("prog_date"), cmd["id_command"]["date"]).classes("flex-1")
+            time_input = time_picker_input(
+                t("prog_time"), cmd["id_command"]["time"], with_seconds=True
+            ).classes("flex-1")
             retries_input = ui.number(
                 t("prog_max_retries"), value=cmd["id_command"]["max_retries"], min=1, max=10
             ).classes("w-32")
@@ -285,6 +291,23 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             wait_after_camera_input = ui.number(
                 t("prog_wait_after_camera"), value=cmd["setup_camera"]["wait_after"], min=0
             ).classes("w-32")
+
+        # Optional scheduled end time (user-requested Sep 2026): if the
+        # image count set above isn't reached by this time, the capture
+        # is stopped early (CMD_ASTRO_STOP_CAPTURE_RAW_LIVE_STACKING -
+        # see dwarf_session.py's _wait_for_astro_end()) rather than
+        # running indefinitely toward a count that won't be reached in
+        # the available window. Blank (the default) means unchanged
+        # behavior - wait for the full count, however long that takes.
+        with ui.row().classes("w-full gap-2") as end_time_section:
+            initial_end_time = (
+                cmd["setup_wide_camera"].get("end_time", "")
+                if cmd["setup_wide_camera"]["do_action"]
+                else cmd["setup_camera"].get("end_time", "")
+            )
+            end_time_input = time_picker_input(t("prog_end_time"), initial_end_time)
+            end_time_input.classes("w-32")
+            ui.label(t("prog_end_time_hint")).classes("text-xs text-grey-6 self-center")
 
         with ui.row().classes("w-full gap-2") as ir_filter_section:
             ir_filter_input = ui.select(
@@ -465,9 +488,11 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
 
         def _update_camera_visibility() -> None:
             camera_settings_section.set_visibility(camera_choice.value != "none")
+            end_time_section.set_visibility(camera_choice.value != "none")
             # IR filter is TELE ONLY - no wide-camera equivalent command
             # exists at all (see camera_settings.py's own note on this).
             ir_filter_section.set_visibility(camera_choice.value == "tele")
+            binning_section.set_visibility(camera_choice.value != "none" and dwarf_type == "3")
 
         camera_choice.on_value_change(
             lambda _: (_update_camera_visibility(), _refresh_camera_validation())
@@ -522,6 +547,17 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 missing.append(t("prog_solar_target"))
             if goto_mode.value == "manual" and not (manual_target.value and ra_input.value and dec_input.value):
                 missing.append(t("prog_goto_manual"))
+            # Optional "end_time" (HH:MM, 24h) - blank is valid (no
+            # scheduled early stop at all, the default), so this only
+            # rejects a NON-blank value that isn't actually HH:MM -
+            # doesn't check it's still in the future, same reasoning as
+            # _parse_end_time()'s own docstring in dwarf_session.py (an
+            # already-past time is a user mistake handled gracefully at
+            # run time, not something worth blocking Save over here).
+            if end_time_input.value.strip() and not re.fullmatch(
+                r"([01]?\d|2[0-3]):[0-5]\d", end_time_input.value.strip()
+            ):
+                missing.append(t("prog_end_time"))
             # Mosaic requires a prior goto - confirmed by real testing
             # (Sep 2026): without one, the device rejects the mosaic
             # start with CODE_ASTRO_NEED_GOTO_DSO (-11518). Unlike a
@@ -622,6 +658,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                     "framingX": framing_x_pct,
                     "framingY": framing_y_pct,
                     "mosaic_count": int(mosaic_count_input.value or 45),
+                    "end_time": end_time_input.value.strip() if not is_wide else cmd["setup_camera"].get("end_time", ""),
                 },
                 "setup_wide_camera": {
                     "do_action": is_wide and int(count_input.value or 0) != 0,
@@ -629,6 +666,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                     "gain": str(int(gain_input.value)) if is_wide else cmd["setup_wide_camera"]["gain"],
                     "count": str(int(count_input.value or 0)) if is_wide else cmd["setup_wide_camera"]["count"],
                     "wait_after": wait_after_cam,
+                    "end_time": end_time_input.value.strip() if is_wide else cmd["setup_wide_camera"].get("end_time", ""),
                 },
             }
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.3] - 2026-09-19
+
+### Improvements
+    New /watch read-only dashboard and per-device spectator pages
+    New site-based setup flow and manual Wi-Fi configuration path
+    Add on-device shooting schedule management
+    Better date/time pickers
+    Optional capture end times for Manual Programs
+    Dashboard improvements for last-run status, connect-all actions, and richer capture progress reporting.
+    Updated Read Me
+
 ## [3.0.2] - 2026-09-18
 
 ### Improvements

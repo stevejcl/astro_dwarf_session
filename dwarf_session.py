@@ -1,5 +1,6 @@
 import json
 import time
+from datetime import datetime, timedelta
 
 from dwarf_python_api.lib.dwarf_utils import perform_GoLive
 from dwarf_python_api.lib.dwarf_utils import perform_enter_astro_mode
@@ -19,6 +20,8 @@ from dwarf_python_api.lib.dwarf_utils import perform_continue_shooting
 from dwarf_python_api.lib.dwarf_utils import perform_clear_needs_continue_shooting
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto, perform_waitRetryEndAstroPhoto
+from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_stopAstroWidePhoto
+from dwarf_python_api.lib.dwarf_utils import perform_read_astro_stacking_status_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_exposure_by_name_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_gain_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_ir_filter_v3
@@ -113,6 +116,82 @@ STEP_DESCRIPTIONS = {
     "step_16": "Stop Tele and Wide Astro photo Session",
 }
 
+def _parse_end_time(value):
+    """'HH:MM' (24h, program_editor.py's prog_end_time field) -> a
+    datetime for the NEXT occurrence of that clock time, or None if
+    blank/unset/unparseable.
+
+    MIDNIGHT ROLLOVER (fixed - was a known limitation): a session
+    started at 22:00 with end_time="01:30" means "1:30 AM tomorrow",
+    not "01:30 earlier today" - if the naive "today at HH:MM" has
+    already passed relative to right now, this rolls it to tomorrow
+    instead. Without this, the very first check in
+    _wait_for_astro_end() below would see an already-past deadline and
+    stop the capture almost immediately, instead of after actually
+    crossing midnight."""
+    if not value:
+        return None
+    try:
+        hour, minute = str(value).strip().split(":")
+        candidate = datetime.now().replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
+        if candidate <= datetime.now():
+            candidate += timedelta(days=1)
+        return candidate
+    except (ValueError, AttributeError):
+        log.warning(f"Invalid end_time value ignored: {value!r}")
+        return None
+
+def _wait_for_astro_end(stop_fn, end_time, interrupted, session, camera_type="Tele", progress_callback=None):
+    """User-requested Sep 2026: \"Finish at specified time (optional, if
+    number of images not yet finished))\". SECOND DESIGN (the first,
+    thread-based one - see git history - had a confirmed bug, also
+    user-reported Sep 2026): running perform_waitEndAstroPhoto() on a
+    background thread WHILE calling stop_fn() (perform_stopAstroPhoto /
+    perform_stopAstroWidePhoto) concurrently raced two consumers against
+    the SAME session.client_instance.result_queue - that queue has no
+    notion of "this message belongs to that specific caller", so two
+    simultaneous reads of it can steal each other's response. In a real
+    test this left an orphaned wait running for several more minutes
+    after the capture had already stopped cleanly, eventually timing
+    out and firing a spurious retry.
+
+    This version never has more than ONE consumer of that queue at a
+    time. Instead of blocking on perform_waitEndAstroPhoto()
+    continuously, it polls perform_read_astro_stacking_status_v3() -
+    confirmed (see that function's own docstring) to read a passively-
+    updated LOCAL cache and send NO network request at all, so it never
+    touches the shared queue - to detect natural completion. Once the
+    cache says the device is no longer capturing, that IS the
+    confirmation (the same device notification perform_waitEndAstroPhoto()
+    would otherwise have consumed fed this cache too) - no separate
+    "confirm" call is made or needed.
+
+    If `end_time` is reached first, stop_fn() is called - and awaited -
+    on THIS thread, with nothing else reading the queue concurrently.
+
+    Only called when `end_time` is not None - see this function's two
+    call sites below, which call perform_waitEndAstroPhoto()/
+    perform_waitEndAstroWidePhoto() directly instead (unchanged from
+    before this feature existed) when no end time was set."""
+    while True:
+        if interrupted():
+            return False
+
+        status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
+        if status and not status.get("capturing"):
+            return True
+
+        if datetime.now() >= end_time:
+            log.notice(
+                f"Reached scheduled end time ({end_time:%H:%M}) - image count not finished, stopping capture now"
+            )
+            if progress_callback:
+                progress_callback("step_16", "success")
+            stop_fn(session=session)
+            return True
+
+        time.sleep(2)
+
 def try_attemps (function, function_succeed_message, max_attempts = 3, interrupted=lambda: False):
     # Try to perform the action up to 3 times by default
     attempts = 0
@@ -141,8 +220,8 @@ def try_attemps (function, function_succeed_message, max_attempts = 3, interrupt
 
 
 def _ir_filter_display_name(dwarf_id, IR_val: str) -> str:
-    """User-requested Sep 2026: "dans l'affichage du filtre lors d'une
-    session, on peut mettre la vrai valeur pas le chiffre" - factored
+    """User-requested Sep 2026: "In the filter display during a
+    session, you can enter the actual value, not the number" - factored
     out of the model-dependent naming ternary already used a few lines
     below for the "To do => Astro Photo" log block, so both that block
     and the step-trace notice added for verification (see the
@@ -240,6 +319,7 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             binning_val = str(program['setup_camera'].get('binning', "0"))
             IR_val = str(program['setup_camera'].get('ircut', "0"))
             count_val = str(program['setup_camera'].get('count', "0"))
+            end_time_val = _parse_end_time(program['setup_camera'].get('end_time', ''))
 
             # Mosaic (tele-only, user-requested Sep 2026): a sub-section
             # of the tele capture settings, backward-compatible -
@@ -288,6 +368,7 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             wide_exp_val = str(program['setup_wide_camera'].get('exposure', "0"))
             wide_gain_val = str(program['setup_wide_camera'].get('gain', "0"))
             wide_count_val = str(program['setup_wide_camera'].get('count', "0"))  # Fix: use separate variable
+            wide_end_time_val = _parse_end_time(program['setup_wide_camera'].get('end_time', ''))
 
             if wide_exp_val or wide_gain_val or wide_count_val:
                 log.notice(f" To do => Astro Wide Photo with these parameters")
@@ -644,7 +725,12 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             time.sleep(2)
             if interrupted(): return
             try:
-                continue_action = perform_waitEndAstroPhoto(session=session)
+                if end_time_val is not None:
+                    continue_action = _wait_for_astro_end(
+                        perform_stopAstroPhoto, end_time_val, interrupted, session, "Tele", progress_callback,
+                    )
+                else:
+                    continue_action = perform_waitEndAstroPhoto(session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_12", progress_callback=progress_callback)
             except Exception as e:
@@ -715,7 +801,12 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             time.sleep(2)
             if interrupted(): return
             try:
-                continue_action = perform_waitEndAstroWidePhoto(session=session)
+                if wide_end_time_val is not None:
+                    continue_action = _wait_for_astro_end(
+                        perform_stopAstroWidePhoto, wide_end_time_val, interrupted, session, "Wide", progress_callback,
+                    )
+                else:
+                    continue_action = perform_waitEndAstroWidePhoto(session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_15", progress_callback=progress_callback)
             except Exception as e:

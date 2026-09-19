@@ -95,6 +95,30 @@ def _ir_filter_index_by_name(dwarf_type: str, name: str) -> int:
     found = next((v for v in table.values if v["name"] == name), None)
     return found["index"] if found else table.default_value_index
 
+
+# Translated display labels for the raw filter constants (user-reported
+# Sep 2026: "VIS_FILTER et ASTRO_FILTER, pb traduction" on pages/
+# watch_device.py) - separate from _ir_filter_names() above, which feeds
+# the SETTINGS dropdown and must keep matching dwarf_session.py's
+# _ir_filter_display_name() / the allowed_ir_filter* tables' own "name"
+# field exactly (round-tripped back to an index on save) - translating
+# THOSE would break that lookup. This is purely cosmetic, for read-only
+# displays (pages/watch_device.py) that already have the raw name (from
+# _ir_filter_display_name()) and just want it shown nicely.
+_IR_FILTER_LABEL_KEYS = {
+    "IR_CUT": "ir_filter_ircut",
+    "IR_PASS": "ir_filter_irpass",
+    "VIS_FILTER": "ir_filter_vis",
+    "ASTRO_FILTER": "ir_filter_astro",
+    "DUAL_BAND": "ir_filter_dualband",
+    "DARK": "ir_filter_dark",
+}
+
+
+def ir_filter_display_label(raw_name: str) -> str:
+    key = _IR_FILTER_LABEL_KEYS.get(raw_name)
+    return t(key) if key else raw_name
+
 # Astro TELE gain range confirmed via the live HTTP API (Aug 2026): 40 is
 # the minimum in astro mode specifically (different from 0 in normal
 # photo mode). WIDE's range is NOT independently confirmed yet - reusing

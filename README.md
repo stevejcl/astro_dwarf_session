@@ -25,11 +25,15 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 
 ## What it does
 
-- **Connects to your Dwarf(s)** over Wi-Fi (BLE pairing built in) and talks to them live over the same WebSocket/protobuf protocol the official app uses.
-- **Controls several telescopes from one app**, side by side — a "mission control" dashboard shows every paired Dwarf at a glance: connected/disconnected, battery, sensor temperature, free storage, and a live camera thumbnail while a capture is running.
-- **Runs and schedules imaging programs**: build a program once (goto, calibration, EQ Solving, camera settings, capture — including Mosaic panels) and either run it live or schedule it for later. A background scheduler picks up due programs even with no browser tab open.
+- **Connects to your Dwarf(s)** over Wi-Fi (BLE pairing built in, plus a no-Bluetooth manual config path for when a BLE adapter isn't cooperating — see below) and talks to them live over the same WebSocket/protobuf protocol the official app uses.
+- **Controls several telescopes from one app**, side by side — a "mission control" dashboard shows every paired Dwarf at a glance: connected/disconnected, battery, sensor temperature, free storage, live capture progress (captured/requested count, stacked count, scheduled stop time if set), a live camera thumbnail while a capture is running, and the result of the last finished program. A **Connect all** button brings every disconnected Dwarf online in one click instead of opening each one's own page.
+- **Sites** bundle a Wi-Fi network and a location (lat/long, timezone) under one name, reusable across every Dwarf that observes from there — pick one instead of retyping the same Wi-Fi password and coordinates for every device, every time you change location.
+- **Runs and schedules imaging programs**: build a program once (goto, calibration, EQ Solving, camera settings, capture — including Mosaic panels) and either run it live or schedule it for later. A background scheduler picks up due programs even with no browser tab open. A capture step can optionally be given a scheduled end time — if the requested image count isn't reached by then, the session is stopped cleanly instead of running indefinitely.
+- **Syncs and monitors the Dwarf's own on-device shooting schedule** (the native, firmware-side scheduling feature, separate from this app's own program scheduler) — view every schedule currently stored on the device with live status (planned/in progress/completed/expired) and per-target progress, delete one, or queue one for the next connection while offline.
+- **Spreads a batch of targets across identical Dwarfs**: when two or more paired devices share the same model, sending a session from the target-catalog page can target "any available" one of that model instead of a specific device, and the app picks whichever is actually free at send time.
 - **Lets you browse the sessions already on the device** — a dedicated explorer lists real astro sessions straight from the Dwarf's own storage, sorted newest first, with thumbnails and a one-click enlarged view showing target, date, exposure, gain, and IR filter.
 - **Keeps a live step-by-step trace** of what a running program is doing, and a full log viewer for anything that needs a closer look.
+- **Watch mode** (`/watch`) — a read-only dashboard and per-device view for spectators on the same network: live camera preview, battery/temperature, capture progress, exposure/gain/filter. No path in this mode can ever send a command to a device, by construction, so it's safe to hand someone the link without handing over control.
 - **Installs to your phone's home screen** as a standalone app (no browser address bar) via built-in PWA support.
 
 ## Installation
@@ -72,17 +76,28 @@ On a phone, open that same address in the browser, then use "Add to Home Screen"
 
 ## Usage
 
+### Sites
+Before pairing or configuring a device, it helps to have at least one Site set up: `/sites` lets you name a Wi-Fi network + location (with a "use current location" button, browser-based) once and reuse it everywhere. Every place that needs a Wi-Fi/location pair — pairing a new device, the no-Bluetooth manual config wizard, a device's own settings page — has a Site picker with an inline "+" to create one on the spot, so you're never forced to leave the page you're on just to set up the first Site.
+
 ### Pairing a device
-From the dashboard, tap **+** to pair a new Dwarf over Bluetooth — it walks you through selecting the device and joining your Wi-Fi network. Once paired, the device shows up on the dashboard permanently (until you remove it).
+From the dashboard, tap **+** to pair a new Dwarf over Bluetooth — pick a Site (for its Wi-Fi credentials and location) and it walks you through selecting the device and joining that network. Once paired, the device shows up on the dashboard permanently (until you remove it).
+
+If a device's Wi-Fi was already configured through the official DwarfLab app (so it reconnects to that network on its own at startup) — or if Bluetooth pairing isn't an option on this machine (a common issue: `bleak` failing to detect the BLE adapter at all) — the dashboard's Wi-Fi icon opens a manual config wizard instead: pick a Site, the model, and enter the IP/UID shown in the DwarfLab app's own "My Device" screen. No Bluetooth involved.
 
 ### Live control
-Open a paired device from the dashboard to reach its control page: camera settings (exposure, gain, binning, IR filter — per-model, since Dwarf II/3/Mini each have their own filter set), one-off actions (calibration, EQ Solving with a live Azimuth/Altitude correction readout, goto, reboot), and the live camera stream.
+Open a paired device from the dashboard to reach its control page: camera settings (exposure, gain, binning, IR filter — per-model, since Dwarf II/3/Mini each have their own filter set), one-off actions (calibration, EQ Solving with a live Azimuth/Altitude correction readout, goto, reboot), the live camera stream (Tele and Wide each in their own collapsible panel — show both, one, or neither), and a "Force Bluetooth reconnect" recovery option for when the device's IP changed and the normal reconnect stopped working.
 
 ### Programs
-The program editor builds a JSON session file — the same format the scheduler consumes — covering goto (solar/manual/none), calibration, EQ Solving, camera setup, capture duration, and Mosaic (framing scale on each axis, shots per panel). Save a program to run it immediately, or schedule it for a specific date/time; the scheduler runs in the background regardless of which page you're looking at, and retries a failed step a configurable number of times before giving up.
+The program editor builds a JSON session file — the same format the scheduler consumes — covering goto (solar/manual/none), calibration, EQ Solving, camera setup, capture duration, an optional scheduled end time (stop the capture at a given time if the requested count isn't reached yet — handles crossing midnight correctly), and Mosaic (framing scale on each axis, shots per panel). Save a program to run it immediately, or schedule it for a specific date/time (with a calendar/clock picker, and a "now + 5 min" shortcut on schedule editing); the scheduler runs in the background regardless of which page you're looking at, and retries a failed step a configurable number of times before giving up.
+
+### On-device shooting schedule
+Separate from this app's own program scheduler above, a Dwarf can also hold its own native shooting schedule (the same mechanism the official DwarfLab app's own scheduling feature uses). A device's control page shows every schedule currently stored on it — status (planned, with its date/time range; in progress; completed; expired), and per-target progress — with a delete action per schedule. A schedule built elsewhere and waiting to be sent (e.g. while the device was offline or busy) shows as a banner you can sync immediately or discard once the device is reachable.
 
 ### Session explorer
 Each device's control page links to an **Astro Sessions** explorer: a grid of thumbnails pulled directly from the Dwarf's own on-device album (no separate app or cloud account needed), sorted most-recent-first. Click a thumbnail for a large view with the session's target, capture date, exposure, gain, and IR filter.
+
+### Watch mode
+`/watch` is a separate, read-only dashboard meant for someone to look at your session without being able to touch it — no capture, connect, disconnect, or settings controls exist anywhere in this mode's code, so there's no path by which opening it could ever send a command to a device. Useful for sharing progress with someone else on the same network (or just for a second screen) without worrying about a stray tap changing a setting mid-capture.
 
 ### Logs
 A dedicated `/logs` page tails the shared log file live, with a text filter — useful for anything the on-screen step trace doesn't cover in enough detail.
@@ -92,16 +107,24 @@ A dedicated `/logs` page tails the shared log file live, with a text filter — 
 ```
 astro_dwarf_session/          (this repo)
 ├── astro_dwarf_ui.py         # entry point (NiceGUI + native window)
-├── dwarf_session.py          # session-execution logic (goto/calibration/EQ/capture/Mosaic)
+├── dwarf_session.py          # session-execution logic (goto/calibration/EQ/capture/Mosaic, scheduled end time)
 ├── device_registry.py        # loads known devices' config.py/config.ini pairs at startup
+├── device_provisioning.py    # creates a new device's config.py/config.ini (BLE pairing template, or the no-BLE wizard's full write)
+├── site_registry.py          # Wi-Fi + location "Sites", reusable across devices
+├── pending_schedules.py      # on-device shooting schedules queued while offline/busy
 ├── components/                # UI building blocks + the scheduler
 │   ├── scheduler_runner.py    #   runs one program, step by step
 │   ├── scheduler_loop.py      #   background timer that picks up due programs
 │   ├── program_editor.py      #   the program-builder form
-│   ├── camera_stream.py       #   live HTTP camera preview
+│   ├── schedule_editor.py     #   builds a shooting-schedule task list to sync to the device
+│   ├── camera_stream.py       #   live HTTP/RTSP camera preview, one collapsible panel per camera
 │   ├── device_card.py         #   the dashboard's per-device "mission control" card
+│   ├── site_picker.py         #   Site dropdown + inline "create a Site" dialog, shared by pairing/manual config/settings
+│   ├── datetime_picker.py     #   calendar/clock popup inputs, shared across the program and schedule editors
+│   ├── geolocation.py         #   browser-based "use current location" button
+│   ├── api_routes.py          #   /api/dwarfs + /api/schedule, for the external target-catalog page (incl. auto load-balancing across same-model devices)
 │   └── ...
-├── pages/                     # one file per route (dashboard, session, programs, explorer, settings, pairing, logs)
+├── pages/                     # one file per route (dashboard, session, programs, explorer, settings, pairing, manual_config, sites, watch_dashboard, watch_device, logs)
 ├── images/                    # device-model icons shown on the dashboard
 └── dwarf_python_api/          # device-control library (WebSocket/protobuf + HTTP), a separate project
 ```

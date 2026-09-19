@@ -105,6 +105,20 @@ def build_program_section(session) -> None:
                         "text-xs text-red-700 font-medium mt-1"
                     )
 
+                # Images captured/stacked (user-requested Sep 2026: same
+                # numbers already shown on pages/programs.py's Results
+                # tab card, via id_command's shots_taken/shots_stacked -
+                # RunState.shots_taken/shots_stacked mirror those so this
+                # LIVE view shows them too, right after the run finishes,
+                # without waiting for a page reload to re-read the Done/
+                # Error JSON file). Only meaningful once finished (best-
+                # effort read AFTER the capture completes, same as the
+                # Results tab) - blank while state.running.
+                if state.shots_taken:
+                    ui.label(
+                        f"{state.shots_stacked or 0}/{state.shots_taken} {t('prog_shots_stacked')}"
+                    ).classes("text-xs text-grey-6")
+
             # Hide the upload/Start controls while a run is actively
             # executing (user-requested) - nothing to upload towards and
             # you can't start a second one on this device anyway.

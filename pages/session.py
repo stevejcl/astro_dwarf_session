@@ -170,20 +170,20 @@ async def _offer_pending_schedule_sync(session, dwarf_uid: str, pending: dict) -
     this device was offline - see components/api_routes.py). Asks before
     syncing rather than doing it silently: the plan may be stale by the
     time the person actually opens the app and connects."""
-    name = pending.get("scheduleName", "a pending schedule")
+    name = pending.get("scheduleName", t("sched_unnamed"))
     n_tasks = len(pending.get("shooting_tasks", []))
 
     async def _sync_now() -> None:
         dialog.close()
-        notif = _safe_ongoing_notification("Syncing schedule…")
+        notif = _safe_ongoing_notification(t("sched_syncing"))
         ok = await run.io_bound(perform_sync_shooting_schedule, pending, session=session)
         notif.spinner = False
         if ok:
             pending_schedules.clear_pending(dwarf_uid)
-            notif.message = "Schedule synced."
+            notif.message = t("sched_synced")
             notif.type = "positive"
         else:
-            notif.message = "Schedule sync failed — left as pending, retry later."
+            notif.message = t("sched_sync_failed_retry")
             notif.type = "negative"
         await asyncio.sleep(2.0)
         notif.dismiss()
@@ -192,16 +192,63 @@ async def _offer_pending_schedule_sync(session, dwarf_uid: str, pending: dict) -
         dialog.close()
 
     with ui.dialog() as dialog, ui.card():
-        ui.label(f"A schedule is waiting for this device: \"{name}\" ({n_tasks} target(s)).")
+        ui.label(t("sched_pending_offer", name=name, count=n_tasks))
         with ui.row():
-            ui.button("Sync now", on_click=_sync_now)
-            ui.button("Later", on_click=_dismiss_only)
-            ui.button("Discard", on_click=lambda: (pending_schedules.clear_pending(dwarf_uid), dialog.close()))
+            ui.button(t("sched_sync_now"), on_click=_sync_now)
+            ui.button(t("later"), on_click=_dismiss_only)
+            ui.button(t("discard"), on_click=lambda: (pending_schedules.clear_pending(dwarf_uid), dialog.close()))
     dialog.open()
 
 
-_SCHEDULE_STATE_LABELS = {0: "Initialized", 1: "Pending", 2: "Shooting", 3: "Completed", 4: "Expired"}
-_TASK_STATE_LABELS = {0: "Idle", 1: "Shooting", 2: "Success", 3: "Failed", 4: "Interrupted"}
+_SCHEDULE_STATE_KEYS = {
+    0: "sched_state_initialized",
+    1: "sched_state_pending",
+    2: "sched_state_shooting",
+    3: "sched_state_completed",
+    4: "sched_state_expired",
+}
+_TASK_STATE_KEYS = {
+    0: "sched_task_state_idle",
+    1: "sched_task_state_shooting",
+    2: "sched_task_state_success",
+    3: "sched_task_state_failed",
+    4: "sched_task_state_interrupted",
+}
+
+
+def _schedule_state_label(state: int) -> str:
+    """Looked up through t() at CALL time, never cached in a module-
+    level dict (user-reported Sep 2026: translations missing here) -
+    the app's language can change at runtime (dashboard.py's language
+    selector), so a dict built once at import time would freeze
+    whichever language was active on first import instead of following
+    later switches, the same reasoning components/i18n.py's own t()
+    calls elsewhere already follow."""
+    key = _SCHEDULE_STATE_KEYS.get(state)
+    return t(key) if key else str(state)
+
+
+def _task_state_label(state: int) -> str:
+    key = _TASK_STATE_KEYS.get(state)
+    return t(key) if key else str(state)
+
+
+def _schedule_status_text(sc: dict) -> str:
+    """User-requested (Sep 2026): \"un texte dépendant de l'état : prévu
+    date debut - fin, en cours, terminé et échec\". The device's own
+    ShootingScheduleMsg carries this schedule's own start_time/end_time
+    (separate from each task's own startTime/endTime - see the parsing
+    in _handle_refresh_schedules()) - shown only for the PENDING state
+    (1, \"not started yet\"), since that's the one case where knowing
+    WHEN it's due to run is actually useful; once it's shooting/
+    completed/expired the plain state label already says what happened,
+    the dates would be redundant with the per-task lines shown below."""
+    if sc.get("state_code") == 1 and sc.get("startTime") and sc.get("endTime"):
+        start_dt = datetime.fromtimestamp(sc["startTime"])
+        end_dt = datetime.fromtimestamp(sc["endTime"])
+        end_fmt = f"{end_dt:%H:%M}" if start_dt.date() == end_dt.date() else f"{end_dt:%Y-%m-%d %H:%M}"
+        return t("sched_planned_range", start=f"{start_dt:%Y-%m-%d %H:%M}", end=end_fmt)
+    return sc["state"]
 
 # Per-dwarf_uid cache of the last CMD_GET_ALL_SHOOTING_SCHEDULE read - see
 # _handle_refresh_schedules(). Module-level (like connection_health's own
@@ -274,20 +321,20 @@ async def _handle_delete_schedule(
     Simplified to match the other three handlers' working pattern.
     """
     with ui.dialog() as dialog, ui.card():
-        ui.label(f"Delete “{schedule_name}” from the device? This cannot be undone.").classes("text-sm")
+        ui.label(t("sched_delete_confirm", name=schedule_name)).classes("text-sm")
 
         async def _do_delete() -> None:
             dialog.close()
             if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.delete_schedule"):
                 _safe_notify(t("device_busy"), type="warning")
                 return
-            notification = _safe_ongoing_notification(f"Deleting “{schedule_name}”…")
+            notification = _safe_ongoing_notification(t("sched_deleting", name=schedule_name))
             try:
                 ok = await run.io_bound(perform_delete_shooting_schedule, schedule_id, session=session)
             finally:
                 connection_health.release_command_slot(dwarf_uid)
             if ok:
-                _finish_ongoing_notification(notification, "Schedule deleted.", "positive")
+                _finish_ongoing_notification(notification, t("sched_deleted"), "positive")
                 # Drop it from the cached list immediately rather than
                 # waiting for the next manual Refresh - the device won't
                 # offer it back on a re-fetch anyway once deleted.
@@ -295,14 +342,12 @@ async def _handle_delete_schedule(
                 if cached:
                     _schedules_cache[dwarf_uid] = [s for s in cached if s.get("scheduleId") != schedule_id]
             else:
-                _finish_ongoing_notification(
-                    notification, "Delete failed - see the app log for the device's error code.", "negative"
-                )
+                _finish_ongoing_notification(notification, t("sched_delete_failed"), "negative")
             refresh_view()
 
         with ui.row().classes("w-full justify-end gap-2 mt-2"):
-            ui.button("Cancel", on_click=dialog.close).props("flat")
-            ui.button("Delete", on_click=_do_delete).props("color=negative")
+            ui.button(t("cancel"), on_click=dialog.close).props("flat")
+            ui.button(t("delete"), on_click=_do_delete).props("color=negative")
     dialog.open()
 
 
@@ -325,9 +370,9 @@ async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Calla
         connection_health.release_command_slot(dwarf_uid)
 
     if info is None:
-        _schedules_fetch_error[dwarf_uid] = "Could not read schedules from the device."
+        _schedules_fetch_error[dwarf_uid] = t("sched_read_error")
         _schedules_cache.pop(dwarf_uid, None)
-        _safe_notify("Could not read schedules from the device.", type="negative")
+        _safe_notify(t("sched_read_error"), type="negative")
     else:
         _schedules_fetch_error.pop(dwarf_uid, None)
         parsed = []
@@ -340,7 +385,7 @@ async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Calla
                     p = {}
                 tasks.append({
                     "name": p.get("name", "?"),
-                    "state": _TASK_STATE_LABELS.get(task.state, str(task.state)),
+                    "state": _task_state_label(task.state),
                     "startTime": p.get("startTime"),
                     "endTime": p.get("endTime"),
                     "shutterName": p.get("shutterName"),
@@ -357,7 +402,14 @@ async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Calla
             parsed.append({
                 "scheduleId": sched.schedule_id,
                 "name": sched.schedule_name or sched.schedule_id,
-                "state": _SCHEDULE_STATE_LABELS.get(sched.state, str(sched.state)),
+                "state": _schedule_state_label(sched.state),
+                "state_code": sched.state,
+                # The SCHEDULE's own start_time/end_time (distinct from
+                # each task's own startTime/endTime above) - used by
+                # _schedule_status_text() for the "planned <start> -
+                # <end>" text while state_code == 1 (Pending).
+                "startTime": sched.start_time or None,
+                "endTime": sched.end_time or None,
                 "tasks": tasks,
                 "recency": recency,
             })
@@ -369,7 +421,7 @@ async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Calla
         # previously only updated the cache and refreshed the view
         # silently, with no feedback distinguishable from "nothing
         # happened" if the person wasn't staring at the section already.
-        _safe_notify(f"Schedules refreshed ({len(parsed)} found).", type="positive")
+        _safe_notify(t("sched_refreshed_notify", count=len(parsed)), type="positive")
     _schedules_last_fetch[dwarf_uid] = time.time()
     refresh_view()
 
@@ -395,7 +447,7 @@ async def _handle_sync_pending(session, dwarf_uid: str, refresh_view: Callable[[
     if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.sync_pending"):
         _safe_notify(t("device_busy"), type="warning")
         return
-    notification = _safe_ongoing_notification("Syncing pending schedule…")
+    notification = _safe_ongoing_notification(t("sched_syncing"))
     pending = pending_schedules.get_pending(dwarf_uid)
     try:
         ok = await run.io_bound(perform_sync_shooting_schedule, pending, session=session) if pending else False
@@ -404,9 +456,9 @@ async def _handle_sync_pending(session, dwarf_uid: str, refresh_view: Callable[[
 
     if ok:
         pending_schedules.clear_pending(dwarf_uid)
-        _finish_ongoing_notification(notification, "Schedule synced.", "positive")
+        _finish_ongoing_notification(notification, t("sched_synced"), "positive")
     else:
-        _finish_ongoing_notification(notification, "Schedule sync failed — left as pending, retry later.", "negative")
+        _finish_ongoing_notification(notification, t("sched_sync_failed_retry"), "negative")
     refresh_view()
 
 
@@ -703,18 +755,21 @@ def build_session_page() -> None:
                         with ui.row().classes("items-center gap-2 w-full"):
                             ui.icon("schedule").classes("text-amber-6")
                             ui.label(
-                                f"Pending schedule: {pending_sched.get('scheduleName', '?')} "
-                                f"({len(pending_sched.get('shooting_tasks', []))} target(s))"
+                                t(
+                                    "sched_pending_banner",
+                                    name=pending_sched.get("scheduleName", t("sched_unnamed")),
+                                    count=len(pending_sched.get("shooting_tasks", [])),
+                                )
                             ).classes("text-sm flex-1")
                             if can_sync_now:
                                 ui.button(
-                                    "Sync now",
+                                    t("sched_sync_now"),
                                     on_click=lambda: _handle_sync_pending(
                                         session, dwarf_uid, refresh_view_and_camera_settings
                                     ),
                                 ).props("dense flat color=primary")
                             ui.button(
-                                "Discard",
+                                t("discard"),
                                 on_click=lambda: (
                                     pending_schedules.clear_pending(dwarf_uid),
                                     refresh_view_and_camera_settings(),
@@ -871,27 +926,27 @@ def build_session_page() -> None:
             @ui.refreshable
             def shooting_schedule_view() -> None:
                 with ui.expansion(
-                    "Shooting schedule (on device)", icon="event_note",
+                    t("sched_section_title"), icon="event_note",
                 ).classes("w-full").bind_value(_get_schedule_section_box(dwarf_uid), "value"):
                     last_fetch = _schedules_last_fetch.get(dwarf_uid)
                     if last_fetch:
                         ui.label(
-                            "Last checked: " + datetime.fromtimestamp(last_fetch).strftime("%H:%M:%S")
+                            t("sched_last_checked", time=datetime.fromtimestamp(last_fetch).strftime("%H:%M:%S"))
                         ).classes("text-xs text-grey-6")
                     fetch_err = _schedules_fetch_error.get(dwarf_uid)
                     cached_scheds = _schedules_cache.get(dwarf_uid)
                     if fetch_err:
                         ui.label(fetch_err).classes("text-negative text-sm")
                     elif cached_scheds is None:
-                        ui.label("Not checked yet — click Refresh.").classes("text-sm text-grey-6")
+                        ui.label(t("sched_not_checked_yet")).classes("text-sm text-grey-6")
                     elif not cached_scheds:
-                        ui.label("No shooting schedule currently stored on this device.").classes("text-sm text-grey-6")
+                        ui.label(t("sched_none_stored")).classes("text-sm text-grey-6")
                     else:
                         shown = _schedules_shown_count.get(dwarf_uid, 3)
                         for sc in cached_scheds[:shown]:
                             with ui.card().classes("w-full q-pa-sm q-mb-xs"):
                                 with ui.row().classes("w-full items-center gap-2"):
-                                    ui.label(f"{sc['name']} — {sc['state']}").classes("font-medium text-sm flex-1")
+                                    ui.label(f"{sc['name']} — {_schedule_status_text(sc)}").classes("font-medium text-sm flex-1")
                                     ui.button(
                                         icon="delete",
                                         on_click=lambda _, sid=sc["scheduleId"], sname=sc["name"]: _handle_delete_schedule(
@@ -923,14 +978,14 @@ def build_session_page() -> None:
                                     ui.label(line).classes("text-xs text-grey-7")
                         if len(cached_scheds) > shown:
                             ui.button(
-                                f"Show more ({len(cached_scheds) - shown} more)",
+                                t("sched_show_more", count=len(cached_scheds) - shown),
                                 on_click=lambda: (
                                     _schedules_shown_count.__setitem__(dwarf_uid, shown + 3),
                                     shooting_schedule_view.refresh(),
                                 ),
                             ).props("dense flat size=sm")
                     ui.button(
-                        "Refresh",
+                        t("sched_refresh"),
                         on_click=lambda: _handle_refresh_schedules(
                             actions_session, dwarf_uid, shooting_schedule_view.refresh
                         ),

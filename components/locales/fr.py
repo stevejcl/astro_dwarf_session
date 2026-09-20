@@ -140,6 +140,8 @@ TRANSLATIONS: dict[str, str] = {
     "prog_wait_after_camera":       "Attente apr\u00e8s capture (s)",
     "prog_end_time":                "Heure de fin",
     "prog_end_time_hint":           "Optionnel - arr\u00eate la capture \u00e0 cette heure (HH:MM) si le nombre d'images n'est pas encore atteint.",
+    "prog_estimated_duration":      "Dur\u00e9e estim\u00e9e\u00a0: {duration}",
+    "prog_estimated_duration_with_end": "Dur\u00e9e estim\u00e9e\u00a0: {duration} (ou plus t\u00f4t si l'heure de fin est atteinte avant)",
     "prog_save":                    "Enregistrer",
     "prog_saved":                   "Enregistr\u00e9 : {filename}",
     "prog_missing_fields":          "Merci de remplir : {fields}",
@@ -281,7 +283,8 @@ TRANSLATIONS: dict[str, str] = {
     "astro_capture_started":        "Capture astro d\u00e9marr\u00e9e",
     "astro_capture_stopped":        "Capture astro arr\u00eat\u00e9e",
     "goto_stopped":                 "Goto arr\u00eat\u00e9",
-
+    "go_Live":                      "Passer en Live",
+    "goLive_ok":                    "Mode Live activ\u00e9",
     # -- Quick actions (Toggle Lights, Focus Infinite, Calibrate, Polar
     # Position, EQ Solving, Reboot) --------------------------------------
     "action_toggle_lights":         "Lumi\u00e8res",

@@ -906,10 +906,10 @@ def build_session_page() -> None:
             if actions_session is not None:
                 build_actions_section(actions_session, session_view.refresh)
                 build_camera_stream_section(actions_session)
-                with ui.expansion(t("motor_pad_title"), icon="control_camera").classes("w-full"):
+                with ui.card().classes("w-full p-0"), ui.expansion(t("motor_pad_title"), icon="control_camera").classes("w-full"):
                     build_motor_pad(actions_session)
 
-                    with ui.expansion("Motor axis positioning (advanced)", icon="tune").classes("w-full"):
+                    with ui.card().classes("w-full p-0 mt-2"), ui.expansion("Motor axis positioning (advanced)", icon="tune").classes("w-full"):
                         build_motor_position_tool(actions_session)
 
             # --- Shooting schedule (on device) — user-reported
@@ -936,7 +936,7 @@ def build_session_page() -> None:
             # session_view already had to be fixed for.
             @ui.refreshable
             def shooting_schedule_view() -> None:
-                with ui.expansion(
+                with ui.card().classes("w-full p-0"), ui.expansion(
                     t("sched_section_title"), icon="event_note",
                 ).classes("w-full").bind_value(_get_schedule_section_box(dwarf_uid), "value"):
                     last_fetch = _schedules_last_fetch.get(dwarf_uid)

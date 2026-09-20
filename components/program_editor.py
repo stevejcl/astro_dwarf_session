@@ -114,7 +114,15 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
     program = json.loads(json.dumps(initial_program)) if initial_program else _blank_program()
     cmd = program["command"]
 
-    with ui.column().classes("w-full gap-3"):
+    # Wrapped in a card (user-reported Sep 2026, native-window
+    # screenshot: "couleur identique" - this whole editor was a flat
+    # form directly on the page's own tinted background, with zero
+    # ui.card() anywhere in this file, unlike the rest of the app's
+    # white/raised-panel look - most visible in the native window,
+    # where there's no browser chrome around the content to hint at a
+    # boundary either). Combined `with A(), B():` so the card wraps the
+    # WHOLE existing column without re-indenting its entire body below.
+    with ui.card().classes("w-full p-4"), ui.column().classes("w-full gap-3"):
         description = ui.input(t("prog_description"), value=cmd["id_command"]["description"]).classes("w-full")
 
         with ui.row().classes("w-full gap-2"):
@@ -299,7 +307,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
         # running indefinitely toward a count that won't be reached in
         # the available window. Blank (the default) means unchanged
         # behavior - wait for the full count, however long that takes.
-        with ui.row().classes("w-full gap-2") as end_time_section:
+        with ui.row().classes("w-full gap-2 items-center") as end_time_section:
             initial_end_time = (
                 cmd["setup_wide_camera"].get("end_time", "")
                 if cmd["setup_wide_camera"]["do_action"]
@@ -307,7 +315,57 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             )
             end_time_input = time_picker_input(t("prog_end_time"), initial_end_time)
             end_time_input.classes("w-32")
-            ui.label(t("prog_end_time_hint")).classes("text-xs text-grey-6 self-center")
+            ui.icon("info").classes("text-grey-5 cursor-help self-center").tooltip(
+                t("prog_end_time_hint")
+            )
+            # Estimated total duration (user-requested Sep 2026: "le
+            # temps total estime de la session (nombre images * duree
+            # d'exposition)... qui se rafraichit si on modifie le
+            # nombre d'expo") - count x exposure, recomputed live on
+            # every change to either field below (and to end_time,
+            # since which one actually governs depends on both). Never
+            # blocks Save - a value it can't parse (only possible if
+            # the exposure table's own "name" isn't a plain number or a
+            # "num/denom" fraction, which the astro exposure tables
+            # never use in practice) just leaves this blank instead of
+            # erroring.
+            duration_estimate_label = ui.label("").classes("text-xs text-grey-6 self-center")
+
+        def _update_duration_estimate() -> None:
+            try:
+                exposure_seconds = float(exposure_input.value)
+            except (TypeError, ValueError):
+                try:
+                    num, denom = str(exposure_input.value).split("/")
+                    exposure_seconds = float(num) / float(denom)
+                except (TypeError, ValueError, ZeroDivisionError):
+                    duration_estimate_label.set_text("")
+                    return
+
+            count = int(count_input.value or 0)
+            total_seconds = int(exposure_seconds * count)
+
+            hours, remainder = divmod(total_seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            bits = []
+            if hours:
+                bits.append(f"{hours}h")
+            if hours or minutes:
+                bits.append(f"{minutes}min")
+            bits.append(f"{seconds}s")
+            duration_text = " ".join(bits)
+
+            if end_time_input.value.strip():
+                duration_estimate_label.set_text(
+                    t("prog_estimated_duration_with_end", duration=duration_text)
+                )
+            else:
+                duration_estimate_label.set_text(t("prog_estimated_duration", duration=duration_text))
+
+        exposure_input.on_value_change(lambda _: _update_duration_estimate())
+        count_input.on_value_change(lambda _: _update_duration_estimate())
+        end_time_input.on_value_change(lambda _: _update_duration_estimate())
+        _update_duration_estimate()
 
         with ui.row().classes("w-full gap-2") as ir_filter_section:
             ir_filter_input = ui.select(

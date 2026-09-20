@@ -172,7 +172,7 @@ def build_camera_settings(session) -> None:
     poll automatically here)."""
     dwarf_type = config_to_dwarf_id_str(session.config.dwarf_model_id) or "2"
 
-    with ui.column().classes("w-full gap-2 mt-2") as container:
+    with ui.card().classes("w-full p-4 mt-2"), ui.column().classes("w-full gap-2") as container:
         with ui.row().classes("items-center justify-between w-full"):
             ui.label(t("camera_settings")).classes("text-sm text-grey-6")
             ui.button(

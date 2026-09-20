@@ -345,7 +345,7 @@ def build_settings_page() -> None:
             # ble_pairing.py's write_ble_credentials()) - blank the
             # first time this device was paired before that existed, or
             # filled from the Site above via "Apply".
-            with ui.expansion(t("settings_force_ble_title"), icon="bluetooth_searching", value=False).classes("w-full mt-2"):
+            with ui.card().classes("w-full p-0 mt-2"), ui.expansion(t("settings_force_ble_title"), icon="bluetooth_searching", value=False).classes("w-full"):
                 ui.label(t("settings_force_ble_hint")).classes("text-xs text-grey-6")
 
                 ble_psd_input = ui.input(

@@ -98,7 +98,7 @@ def build_watch_device_page() -> None:
         session = manager.get(dwarf_uid)
 
         with ui.column().classes(
-            "w-full max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto gap-3 p-4"
+            "w-full max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-[900px] mx-auto gap-3 p-4"
         ):
             with ui.row().classes("items-center justify-between w-full"):
                 ui.button(icon="arrow_back", on_click=lambda: ui.navigate.to("/watch")).props(

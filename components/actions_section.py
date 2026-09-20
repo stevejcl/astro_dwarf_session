@@ -35,6 +35,7 @@ from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import (
     motor_action,
     perform_calibration,
+    perform_GoLive,
     perform_powerCloseRGB,
     perform_powerOpenRGB,
     perform_powerIndOff,
@@ -130,7 +131,7 @@ def _build_eq_result_panel(session) -> Callable[[], None]:
             azi_icon.classes(replace="text-lg text-negative")
         azi_label.set_text(f"{abs(azi_err):.2f}\u00b0 {t('action_eq_solving_azimuth')}")
 
-        if alt_err < 0:
+        if (alt_err > 0) != needs_flip:
             alt_icon.name = "arrow_upward"
             alt_icon.classes(replace="text-lg text-positive")
         else:
@@ -306,7 +307,7 @@ def build_actions_section(session, refresh_view) -> None:
     # despite the button being defined before the panel it triggers.
     eq_result_update: Callable[[], None] = lambda: None
 
-    with ui.expansion(t("actions"), icon="tune", value=False).classes("w-full"):
+    with ui.card().classes("w-full p-0"), ui.expansion(t("actions"), icon="tune", value=False).classes("w-full"):
         with ui.grid().classes("w-full grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-1"):
             ui.button(
                 t("start_astro_capture"),
@@ -342,6 +343,17 @@ def build_actions_section(session, refresh_view) -> None:
                 ),
             ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
+                t("go_Live"),
+                icon="live_tv",
+                on_click=lambda: _run_and_notify(
+                    session,
+                    dwarf_uid,
+                    perform_GoLive,
+                    success_message=t("goLive_ok"),
+                    refresh_view=refresh_view,
+                ),
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ui.button(
                 t("action_toggle_lights"),
                 icon="lightbulb",
                 on_click=lambda: _handle_toggle_lights(session, dwarf_uid),
@@ -352,24 +364,25 @@ def build_actions_section(session, refresh_view) -> None:
                 on_click=lambda: _handle_toggle_power_lights(session, dwarf_uid),
             ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
+                t("action_focus"),
+                icon="center_focus_strong",
+                on_click=lambda: _run_and_notify(
+                    session,
+                    dwarf_uid,
+                    perform_start_autofocus,
+                    infinite=False,
+                    success_message=t("action_focus_done"),
+                ),
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ui.button(
                 t("action_focus_infinite"),
-                icon="all_out",
+                icon="all_inclusive",
                 on_click=lambda: _run_and_notify(
                     session,
                     dwarf_uid,
                     perform_start_autofocus,
                     infinite=True,
                     success_message=t("action_focus_infinite_done"),
-                ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
-            ui.button(
-                t("action_calibrate"),
-                icon="tune",
-                on_click=lambda: _run_and_notify(
-                    session,
-                    dwarf_uid,
-                    perform_calibration,
-                    success_message=t("action_calibrate_done"),
                 ),
             ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
@@ -391,6 +404,16 @@ def build_actions_section(session, refresh_view) -> None:
                     start_polar_align,
                     success_message=t("action_eq_solving_done"),
                     refresh_view=eq_result_update,
+                ),
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ui.button(
+                t("action_calibrate"),
+                icon="tune",
+                on_click=lambda: _run_and_notify(
+                    session,
+                    dwarf_uid,
+                    perform_calibration,
+                    success_message=t("action_calibrate_done"),
                 ),
             ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(

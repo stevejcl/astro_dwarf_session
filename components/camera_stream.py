@@ -89,55 +89,56 @@ def _build_preview(cam_config: dict, url: str, rtsp_url: str, show_links: bool) 
     for opening the raw stream in an external player (VLC/OBS) from the
     control app, not useful to a read-only spectator (pages/
     watch_device.py passes False)."""
-    expansion = ui.expansion(t(cam_config["label_key"]), icon="videocam", value=False).classes("w-full")
+    with ui.card().classes("w-full p-0"):
+        expansion = ui.expansion(t(cam_config["label_key"]), icon="videocam", value=False).classes("w-full")
 
-    with expansion:
-        not_available_label = ui.label(t("camera_stream_http_not_available")).classes(
-            "text-xs text-grey-5 italic"
-        )
-        not_available_label.set_visibility(False)
+        with expansion:
+            not_available_label = ui.label(t("camera_stream_http_not_available")).classes(
+                "text-xs text-grey-5 italic"
+            )
+            not_available_label.set_visibility(False)
 
-        # Auto height instead of fixed breakpoint steps (user-reported
-        # Sep 2026: "le flux video a la bonne taille en hauteur" - a
-        # fixed h-48/h-64/... doesn't match the STREAM's actual aspect
-        # ratio, so it either letterboxes or crops depending on screen
-        # width, unlike a plain ui.image() of a known picture - e.g.
-        # Dwarfium Scope Archive's own library view - where the browser
-        # sizes the <img> to its real intrinsic dimensions automatically
-        # once w-full h-auto is the only sizing rule). min-h keeps a
-        # placeholder box (not zero height) before the first frame has
-        # actually loaded, so the panel doesn't collapse to nothing the
-        # instant it's expanded.
-        _size_classes = "w-full h-auto min-h-32 rounded bg-neutral-900"
+            # Auto height instead of fixed breakpoint steps (user-reported
+            # Sep 2026: "le flux video a la bonne taille en hauteur" - a
+            # fixed h-48/h-64/... doesn't match the STREAM's actual aspect
+            # ratio, so it either letterboxes or crops depending on screen
+            # width, unlike a plain ui.image() of a known picture - e.g.
+            # Dwarfium Scope Archive's own library view - where the browser
+            # sizes the <img> to its real intrinsic dimensions automatically
+            # once w-full h-auto is the only sizing rule). min-h keeps a
+            # placeholder box (not zero height) before the first frame has
+            # actually loaded, so the panel doesn't collapse to nothing the
+            # instant it's expanded.
+            _size_classes = "w-full h-auto min-h-32 rounded bg-neutral-900"
 
-        with ui.column().classes("w-full gap-1") as container:
-            image = ui.image(url).classes(_size_classes)
+            with ui.column().classes("w-full gap-1") as container:
+                image = ui.image(url).classes(_size_classes)
 
-        # Embedded live RTSP preview (user-requested Sep 2026) - hidden
-        # until confirmed RTSP; its own <img src> points at OUR OWN
-        # /video/rtsp_stream/ route (rtsp_worker.py), not the raw rtsp://
-        # URL directly, since browsers can't play RTSP natively at all.
-        with ui.column().classes("w-full gap-1") as rtsp_container:
-            rtsp_image = ui.image("").classes(_size_classes)
-        rtsp_container.set_visibility(False)
+            # Embedded live RTSP preview (user-requested Sep 2026) - hidden
+            # until confirmed RTSP; its own <img src> points at OUR OWN
+            # /video/rtsp_stream/ route (rtsp_worker.py), not the raw rtsp://
+            # URL directly, since browsers can't play RTSP natively at all.
+            with ui.column().classes("w-full gap-1") as rtsp_container:
+                rtsp_image = ui.image("").classes(_size_classes)
+            rtsp_container.set_visibility(False)
 
-        if show_links:
-            with ui.row().classes("items-center gap-2 w-full mt-1"):
-                ui.input(value=url).props("readonly dense").classes("flex-1")
-                ui.button(
-                    icon="content_copy",
-                    on_click=lambda u=url: ui.run_javascript(f"navigator.clipboard.writeText('{u}')"),
-                ).props("flat dense round")
-                ui.button(
-                    icon="open_in_new",
-                    on_click=lambda u=url: ui.navigate.to(u, new_tab=True),
-                ).props("flat dense round")
-            with ui.row().classes("items-center gap-2 w-full"):
-                ui.input(value=rtsp_url).props("readonly dense").classes("flex-1")
-                ui.button(
-                    icon="content_copy",
-                    on_click=lambda u=rtsp_url: ui.run_javascript(f"navigator.clipboard.writeText('{u}')"),
-                ).props("flat dense round")
+            if show_links:
+                with ui.row().classes("items-center gap-2 w-full mt-1"):
+                    ui.input(value=url).props("readonly dense").classes("flex-1")
+                    ui.button(
+                        icon="content_copy",
+                        on_click=lambda u=url: ui.run_javascript(f"navigator.clipboard.writeText('{u}')"),
+                    ).props("flat dense round")
+                    ui.button(
+                        icon="open_in_new",
+                        on_click=lambda u=url: ui.navigate.to(u, new_tab=True),
+                    ).props("flat dense round")
+                with ui.row().classes("items-center gap-2 w-full"):
+                    ui.input(value=rtsp_url).props("readonly dense").classes("flex-1")
+                    ui.button(
+                        icon="content_copy",
+                        on_click=lambda u=rtsp_url: ui.run_javascript(f"navigator.clipboard.writeText('{u}')"),
+                    ).props("flat dense round")
 
     return _PreviewHandles(
         cam_id=cam_config["cam_id"],

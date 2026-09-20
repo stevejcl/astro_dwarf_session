@@ -99,6 +99,33 @@ _LARGE_VISUAL_CLASSES = "rounded w-32 h-32 md:w-40 md:h-40 xl:w-48 xl:h-48 2xl:w
 _INFO_TEXT_CLASSES = "text-xs md:text-sm xl:text-base 2xl:text-lg"
 _INFO_ICON_CLASSES = "text-sm md:text-base xl:text-lg 2xl:text-xl"
 
+# Safety thresholds for the blinking-red warning below (user-requested
+# Sep 2026: "je n'ai pas vu qu'il ne restait que 1 Go de disque dur" -
+# low battery/disk are exactly the kind of thing easy to miss glancing
+# at a card full of same-colour text, especially checking in on an
+# overnight run half-asleep).
+_LOW_BATTERY_PCT = 15
+_LOW_DISK_GB = 15
+
+
+def _apply_warning_style(icon: ui.icon, label: ui.label, is_low: bool) -> None:
+    """Red + a soft pulse on both the icon and its value when below a
+    safety threshold, back to the normal grey otherwise - called for
+    battery AND disk, in BOTH the idle and active-session layouts (4
+    call sites in update() below), so the warning is visible whichever
+    state the card happens to be in - including mid-capture, which is
+    exactly when disk space matters most and was previously hidden
+    entirely behind the capture-progress banner. animate-pulse
+    (Tailwind's built-in fading pulse) rather than a hard on/off blink -
+    reads as "needs attention" without the photosensitivity concerns a
+    true blink can raise."""
+    if is_low:
+        icon.classes(replace=f"text-red-6 animate-pulse {_INFO_ICON_CLASSES}")
+        label.classes(replace=f"text-red-6 font-medium animate-pulse {_INFO_TEXT_CLASSES}")
+    else:
+        icon.classes(replace=f"text-grey-6 {_INFO_ICON_CLASSES}")
+        label.classes(replace=f"text-grey-7 {_INFO_TEXT_CLASSES}")
+
 
 class DeviceCardView:
     """One card per DwarfSession, built once. Call update(session) on
@@ -198,7 +225,9 @@ class DeviceCardView:
                                 f"font-medium text-grey-8 {_INFO_TEXT_CLASSES}"
                             )
                             with ui.row().classes("items-center gap-1"):
-                                ui.icon("battery_full").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
+                                self._idle_battery_icon = ui.icon("battery_full").classes(
+                                    f"text-grey-6 {_INFO_ICON_CLASSES}"
+                                )
                                 self._idle_battery_label = ui.label("").classes(
                                     f"text-grey-7 {_INFO_TEXT_CLASSES}"
                                 )
@@ -208,7 +237,9 @@ class DeviceCardView:
                                     f"text-grey-7 {_INFO_TEXT_CLASSES}"
                                 )
                             with ui.row().classes("items-center gap-1"):
-                                ui.icon("sd_card").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
+                                self._idle_disk_icon = ui.icon("sd_card").classes(
+                                    f"text-grey-6 {_INFO_ICON_CLASSES}"
+                                )
                                 self._idle_disk_label = ui.label("").classes(
                                     f"text-grey-7 {_INFO_TEXT_CLASSES}"
                                 )
@@ -250,7 +281,9 @@ class DeviceCardView:
                     with ui.row().classes("items-center gap-3 flex-wrap") as self._info_column:
                         _device_type_badge(session)
                         with ui.row().classes("items-center gap-1"):
-                            ui.icon("battery_full").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
+                            self._battery_icon = ui.icon("battery_full").classes(
+                                f"text-grey-6 {_INFO_ICON_CLASSES}"
+                            )
                             self._battery_label = ui.label("").classes(
                                 f"text-grey-7 {_INFO_TEXT_CLASSES}"
                             )
@@ -260,7 +293,9 @@ class DeviceCardView:
                                 f"text-grey-7 {_INFO_TEXT_CLASSES}"
                             )
                         with ui.row().classes("items-center gap-1"):
-                            ui.icon("sd_card").classes(f"text-grey-6 {_INFO_ICON_CLASSES}")
+                            self._disk_icon = ui.icon("sd_card").classes(
+                                f"text-grey-6 {_INFO_ICON_CLASSES}"
+                            )
                             self._disk_label = ui.label("").classes(
                                 f"text-grey-7 {_INFO_TEXT_CLASSES}"
                             )
@@ -331,6 +366,10 @@ class DeviceCardView:
             self._idle_name_label.set_text(full_label)
             battery = full_status.get("BatteryLevelDwarf")
             self._idle_battery_label.set_text(f"{battery}%" if battery is not None else "")
+            _apply_warning_style(
+                self._idle_battery_icon, self._idle_battery_label,
+                battery is not None and battery < _LOW_BATTERY_PCT,
+            )
             temperature = full_status.get("TemperatureLevelDwarf")
             self._idle_temperature_label.set_text(
                 f"{temperature}\u00b0C" if temperature is not None else ""
@@ -341,6 +380,10 @@ class DeviceCardView:
                 t("dashboard_disk_space", available=available, total=total)
                 if available is not None and total is not None
                 else ""
+            )
+            _apply_warning_style(
+                self._idle_disk_icon, self._idle_disk_label,
+                available is not None and available < _LOW_DISK_GB,
             )
             run_state = scheduler_runner.get_run_state(self.dwarf_uid)
             if run_state is not None and run_state.finished_ok is not None:
@@ -363,6 +406,10 @@ class DeviceCardView:
         else:
             battery = full_status.get("BatteryLevelDwarf")
             self._battery_label.set_text(f"{battery}%" if battery is not None else "")
+            _apply_warning_style(
+                self._battery_icon, self._battery_label,
+                battery is not None and battery < _LOW_BATTERY_PCT,
+            )
             temperature = full_status.get("TemperatureLevelDwarf")
             self._temperature_label.set_text(
                 f"{temperature}\u00b0C" if temperature is not None else ""
@@ -373,6 +420,10 @@ class DeviceCardView:
                 t("dashboard_disk_space", available=available, total=total)
                 if available is not None and total is not None
                 else ""
+            )
+            _apply_warning_style(
+                self._disk_icon, self._disk_label,
+                available is not None and available < _LOW_DISK_GB,
             )
 
             # active_session is already True here (this branch is only

@@ -305,22 +305,31 @@ def _run_starting_blocking(
     source_filepath,
 ):
     # This is now running in the io_bound worker thread.
+    try:
+        if device_is_actively_capturing(session):
+            state.running = False
+            state.error = (
+                "The Dwarf is already capturing - "
+                "refusing to start a new session."
+            )
+            return
 
-    if device_is_actively_capturing(session):
-        state.running = False
-        state.error = (
-            "The Dwarf is already capturing - "
-            "refusing to start a new session."
+        acquired = connection_health.try_acquire_command_slot(
+            dwarf_uid,
+            caller="scheduler_runner.start_run",
         )
-        return
-
-    if not connection_health.try_acquire_command_slot(
-        dwarf_uid,
-        caller="scheduler_runner.start_run",
-    ):
-        state.running = False
-        state.error = "A command is already in progress for this device."
-        return
+        if not acquired:
+            state.running = False
+            state.error = "A command is already in progress for this device."
+            return
+    finally:
+        # try/finally (not a plain call after the acquire, as in an
+        # earlier version) so mark_start_pending() from start_run()
+        # below always gets cleared here even if something above raises
+        # - a leaked pending flag would otherwise starve health_check
+        # for this device FOREVER, the same failure mode this exists to
+        # fix, just permanent instead of an 18-minute window.
+        connection_health.clear_start_pending(dwarf_uid)
 
     _run_blocking(
         program,
@@ -501,6 +510,17 @@ def start_run(
 
     if is_running(dwarf_uid):
         raise RuntimeError("A program is already running for this device.")
+
+    # Marked here, BEFORE the background thread even starts (user-
+    # reported Sep 2026: a real overnight log showed a scheduled
+    # program's start starved for 18 minutes straight - health_check's
+    # own poll cadence happened to phase-lock against scheduler_loop's
+    # retry cadence, so it kept winning the slot-acquire race every
+    # single time). Cleared in _run_starting_blocking() below the
+    # moment its own acquire attempt actually resolves - see
+    # connection_health.clear_start_pending()'s own docstring for why
+    # this shouldn't linger any longer than that.
+    connection_health.mark_start_pending(dwarf_uid)
 
     # Neither check above knows about activity astro_dwarf_session didn't
     # itself start (a manual session from the official Dwarf app, or an

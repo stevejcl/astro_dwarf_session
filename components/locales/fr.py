@@ -302,6 +302,8 @@ TRANSLATIONS: dict[str, str] = {
     "reboot_confirm_button":        "Red\u00e9marrer",
     "reboot_sent":                  "Commande de red\u00e9marrage envoy\u00e9e",
     "cancel":                       "Annuler",
+    "close":                        "Fermer",
+    "watch_qr_title":               "Scanner pour ouvrir le mode Watch",
 
     # -- Pairing page ----------------------------------------------------
     "add_dwarf":                    "Ajouter un Dwarf",

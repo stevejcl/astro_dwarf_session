@@ -36,6 +36,18 @@ DIST_LOCALES_DIR = DIST_DIR / "components" / "locales"
 # html_file_path reference) - a genuine DATA file PyInstaller's default
 # import-tracing doesn't pick up, unlike the .py modules around it.
 _ble_connect_html = Path("dwarf_ble_connect") / "connect_dwarf.html"
+
+# catalog.html - the external DSO target-catalog page (components/
+# api_routes.py's /catalog route). MUST be bundled via --add-data, not
+# just copied loose into dist/ (user-reported Sep 2026: copying it next
+# to the built .exe did NOT work) - in a --onefile build, __file__ for
+# a bundled module resolves inside the PyInstaller extraction temp dir
+# (sys._MEIPASS), never the folder the .exe itself lives in, so a loose
+# file next to the .exe was never where the lookup was actually
+# checking. Destination "." bundles it at the ROOT of that extraction
+# dir, matching _bundled_path()'s own sys._MEIPASS / "catalog.html".
+_catalog_html = Path("catalog.html")
+
 sep = os.pathsep  # Cross-platform separator: ; on Windows, : on Unix/macOS
 
 extra_data = []
@@ -43,6 +55,11 @@ if _ble_connect_html.exists():
     extra_data.append(f"{_ble_connect_html}{sep}dwarf_ble_connect")
 else:
     print(f"Warning: {_ble_connect_html} not found - BLE pairing may break in the built exe.")
+
+if _catalog_html.exists():
+    extra_data.append(f"{_catalog_html}{sep}.")
+else:
+    print(f"Warning: {_catalog_html} not found - the target-catalog page will be unavailable in the built exe.")
 
 print("Current working directory:", os.getcwd())
 

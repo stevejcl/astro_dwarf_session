@@ -129,18 +129,26 @@ def build_watch_device_page() -> None:
                 # to a read-only spectator here.
                 build_camera_stream_section(session, show_links=False)
 
-            with ui.row().classes("w-full gap-3"):
-                battery_metric = ui.column().classes("flex-1")
-                temperature_metric = ui.column().classes("flex-1")
-            with ui.row().classes("w-full gap-3"):
-                tele_count_metric = ui.column().classes("flex-1")
-                wide_count_metric = ui.column().classes("flex-1")
+            # ui.grid(), not ui.row() (user-reported Sep 2026: cards
+            # still weren't matching heights within a row despite
+            # h-full on the card itself) - a real CSS grid gives every
+            # cell in the same row equal height natively, rather than
+            # relying on flex "items-stretch" propagating correctly
+            # through row -> column -> card, which - column stretch
+            # applies to WIDTH by default, not height - never actually
+            # reached the card in the first place.
+            with ui.grid(columns=2).classes("w-full gap-3"):
+                battery_metric = ui.column()
+                temperature_metric = ui.column()
+            with ui.grid(columns=2).classes("w-full gap-3"):
+                tele_count_metric = ui.column()
+                wide_count_metric = ui.column()
 
             ui.label(t("watch_exposure_gain")).classes("text-sm text-grey-6 mt-2")
-            with ui.row().classes("w-full gap-3"):
-                exposure_metric = ui.column().classes("flex-1")
-                gain_metric = ui.column().classes("flex-1")
-                filter_metric = ui.column().classes("flex-1")
+            with ui.grid(columns=3).classes("w-full gap-3"):
+                exposure_metric = ui.column()
+                gain_metric = ui.column()
+                filter_metric = ui.column()
 
             def _refresh() -> None:
                 connected_icon.classes(

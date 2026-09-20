@@ -18,6 +18,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 
 from components import connection_health
 from components.device_card import DeviceCardView
+from components.network_info import watch_qr_svg, watch_url
 from components.i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme, theme_toggle_button
@@ -122,13 +123,28 @@ def build_dashboard_page() -> None:
                 with ui.row().classes("items-center gap-1"):
                     # TODO: move this into a proper Settings page once one
                     # exists (see dwarfium-scope-archive's pattern in
-                    # pages/astro_settings.py) - a bare select in the
+                    # pages/astro_settings.py) - a bare toggle in the
                     # dashboard header is a stopgap, not the final UX.
-                    ui.select(
-                        SUPPORTED_LANGUAGES,
-                        value=get_language(),
-                        on_change=lambda e: (set_language(e.value), ui.navigate.reload()),
-                    ).props("dense borderless options-dense").classes("w-12 text-xs")
+                    #
+                    # A plain button toggling between the two supported
+                    # languages (user-reported Sep 2026, mobile
+                    # screenshot: the dropdown's own chevron + padding
+                    # took noticeably more width than any of the icon
+                    # buttons next to it, at "fr"'s expense on a narrow
+                    # screen) - only 2 languages exist right now, so a
+                    # toggle is both narrower AND matches the row's
+                    # existing icon-button sizing exactly. Would need to
+                    # go back to a real dropdown if a 3rd language is
+                    # ever added.
+                    def _toggle_language() -> None:
+                        current = get_language()
+                        other = next(lang for lang in SUPPORTED_LANGUAGES if lang != current)
+                        set_language(other)
+                        ui.navigate.reload()
+
+                    ui.button(get_language().upper(), on_click=_toggle_language).props(
+                        "flat round dense"
+                    ).classes("text-xs")
                     ui.button(
                         icon="add", on_click=lambda: ui.navigate.to("/pairing")
                     ).props("flat round")
@@ -198,5 +214,23 @@ def build_dashboard_page() -> None:
                 for session in sessions:
                     await connection_health.maybe_check(session)
                     cards[session.dwarf_uid].update(session)
+
+            # Watch-mode QR code (user-requested Sep 2026): opens a
+            # dialog with a QR code + the plain URL for /watch, so a
+            # phone on the same network can join as a read-only
+            # spectator without typing an IP address by hand. Placed at
+            # the bottom of the page, away from the denser icon row at
+            # the top - this is a one-off "share" action, not something
+            # reached for on every visit.
+            with ui.row().classes("w-full justify-center mt-2"):
+                def _open_watch_qr() -> None:
+                    with ui.dialog() as dialog, ui.card().classes("items-center"):
+                        ui.label(t("watch_qr_title")).classes("text-base")
+                        ui.html(watch_qr_svg()).classes("w-48 h-48")
+                        ui.label(watch_url()).classes("text-xs text-grey-6")
+                        ui.button(t("close"), on_click=dialog.close).props("flat")
+                    dialog.open()
+
+                ui.button(icon="qr_code_2", on_click=_open_watch_qr).props("flat round")
 
             ui.timer(2.0, poll)

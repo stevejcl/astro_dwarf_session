@@ -97,11 +97,19 @@ def _label_thread_for_device(session) -> None:
         register_thread_device_label(thread.ident, session.dwarf_uid)
 
 
-def _metric_card(label: str, value, unit: str) -> None:
+def _metric_card(label: str, value, unit: str, *, is_low: bool = False) -> None:
+    """is_low (user-requested Sep 2026, same threshold as components/
+    device_card.py's dashboard card - see its own _LOW_BATTERY_PCT/
+    _LOW_DISK_GB): red + a soft pulse instead of the normal grey, for
+    battery/free-storage specifically - "je n'ai pas vu qu'il ne
+    restait que 1 Go" was reported from the dashboard card, but this
+    page had the exact same gap, its own separate implementation."""
     with ui.card().classes("flex-1 items-center"):
-        ui.label(label).classes("text-xs text-grey-6")
+        ui.label(label).classes(
+            "text-xs text-red-6 font-medium" if is_low else "text-xs text-grey-6"
+        )
         ui.label(f"{value if value is not None else '\u2013'}{unit}").classes(
-            "text-lg font-medium"
+            "text-lg font-medium text-red-6 animate-pulse" if is_low else "text-lg font-medium"
         )
 
 
@@ -806,8 +814,10 @@ def build_session_page() -> None:
                     # --- Hardware status --------------------------------------
                     if session.is_connected:
                         with ui.row().classes("w-full gap-2"):
+                            battery = full_status.get("BatteryLevelDwarf")
                             _metric_card(
-                                t("battery"), full_status.get("BatteryLevelDwarf"), "%"
+                                t("battery"), battery, "%",
+                                is_low=battery is not None and battery < 15,
                             )
                             _metric_card(
                                 t("temperature"),
@@ -818,7 +828,8 @@ def build_session_page() -> None:
                             available = full_status.get("availableSizeDwarf")
                             total = full_status.get("totalSizeDwarf")
                             _metric_card(
-                                t("free_storage"), available, "GB" if available else ""
+                                t("free_storage"), available, "GB" if available else "",
+                                is_low=available is not None and available < 15,
                             )
                             _metric_card(
                                 t("total_storage"), total, "GB" if total else ""

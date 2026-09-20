@@ -37,6 +37,7 @@ if needed.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from fastapi import Request
@@ -48,14 +49,60 @@ from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 from dwarf_python_api.lib.dwarf_utils import perform_get_last_sync_error
+from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 from device_registry import list_device_entries
 from components import connection_health
+from components.device_card import _DEVICE_TYPE_ICONS
 import pending_schedules
 import dwarf_python_api.lib.my_logger as log
 
 
+def _bundled_path(relative: str) -> Path:
+    """Resolves a data file bundled alongside the app - catalog.html,
+    specifically (user-reported Sep 2026: copying it next to the built
+    .exe did NOT work). In a normal source checkout, __file__ sits under
+    the project root as usual. In a PyInstaller --onefile build, though,
+    __file__ for a bundled module resolves inside the temporary
+    extraction directory (sys._MEIPASS), NOT the folder the .exe
+    actually lives in - so "next to the .exe" was never where this
+    lookup was checking. Matches astro_dwarf_ui.py's own frozen-check
+    for images_dir, and requires catalog.html to be bundled via
+    buildAstroDwarfUI.py's --add-data (not just copied into dist/)."""
+    if getattr(sys, "frozen", False):
+        base_dir = Path(sys._MEIPASS)
+    else:
+        base_dir = Path(__file__).resolve().parent.parent
+    return base_dir / relative
+
+
+def _model_display_name(cfg: DwarfConfig) -> str:
+    """Full model name ('Dwarf II' / 'Dwarf 3' / 'Dwarf Mini') for a
+    device's config - reuses components/device_card.py's own icon table
+    (already keyed by the SAME config_to_dwarf_id_str() runtime id) so
+    this doesn't duplicate that mapping a third time. Used to group
+    devices by model for the AUTO virtual entries below - see
+    _devices_snapshot()'s own docstring."""
+    dwarf_type = config_to_dwarf_id_str(cfg.dwarf_model_id) or "2"
+    return _DEVICE_TYPE_ICONS.get(dwarf_type, _DEVICE_TYPE_ICONS["2"])[1]
+
+
 def _devices_snapshot() -> list[dict]:
+    """Real devices (from devices.json), each tagged with its `model` -
+    plus one SYNTHETIC \"auto:<model>\" entry per model that has 2+ real
+    devices known (user-requested Sep 2026: \"si on en avait deux même
+    type, on pourrait se répartir la charge\"). catalog.html is fully
+    generic about what a dwarfUid IS - it just lists whatever this
+    returns and POSTs back whichever `dwarfUid` was picked (verified by
+    reading its own fetch('/api/dwarfs') / fetch('/api/schedule') code)
+    - so a virtual entry works there with ZERO changes to that
+    third-party file: catalog.html shows \"Any Dwarf 3 (auto)\" as just
+    another option, the user picks it like any other device, and
+    api_schedule() below (_resolve_auto_dwarf_uid()) is what actually
+    turns \"auto:Dwarf 3\" into a REAL dwarfUid at send time - resolved
+    THEN, not when this snapshot was fetched, so it reflects whichever
+    device is actually free at the moment of sending, not whenever the
+    catalog page happened to load."""
     manager = get_manager()
     sessions_by_uid = {s.dwarf_uid: s for s in manager.all()}
     out = []
@@ -68,11 +115,53 @@ def _devices_snapshot() -> list[dict]:
         out.append({
             "name": entry.name,
             "dwarfUid": cfg.dwarf_uid,
+            "model": _model_display_name(cfg),
             "connected": bool(session and session.is_connected),
             "busy": bool(session and connection_health.is_busy(cfg.dwarf_uid)),
             "hasPending": pending_schedules.get_pending(cfg.dwarf_uid) is not None,
         })
+
+    models_count: dict[str, int] = {}
+    for d in out:
+        models_count[d["model"]] = models_count.get(d["model"], 0) + 1
+    for model, count in models_count.items():
+        if count < 2:
+            continue
+        same_model = [d for d in out if d["model"] == model]
+        out.append({
+            "name": f"Any {model} (auto)",
+            "dwarfUid": f"auto:{model}",
+            "model": model,
+            "connected": any(d["connected"] for d in same_model),
+            "busy": False,  # a virtual entry is never itself "busy" - see resolution logic
+            "hasPending": False,
+            "virtual": True,
+        })
     return out
+
+
+def _resolve_auto_dwarf_uid(dwarf_uid: str) -> tuple[str | None, str | None]:
+    """Turns a virtual 'auto:<model>' dwarfUid (see _devices_snapshot()'s
+    synthetic entries) into a REAL device's dwarfUid, picking the best
+    candidate of that model RIGHT NOW - not whichever was least busy
+    when the catalog page loaded its dropdown, which could easily be
+    stale by the time \"Send\" is actually clicked.
+
+    Preference order: connected AND idle > connected but busy (queued
+    as busy_pending, same as picking that device manually) > known but
+    offline (queued as pending, offered on its next connect) - i.e. the
+    exact same three outcomes api_schedule() already has for a manually-
+    picked device, just with the device itself chosen automatically.
+    Returns (resolved_uid, error_message) - error_message is set only
+    when no device of that model is known at all."""
+    if not dwarf_uid.startswith("auto:"):
+        return dwarf_uid, None
+    model = dwarf_uid[len("auto:"):]
+    candidates = [d for d in _devices_snapshot() if d.get("model") == model and not d.get("virtual")]
+    if not candidates:
+        return None, f"No known device of model {model!r}"
+    candidates.sort(key=lambda d: (not d["connected"], d["busy"], d["hasPending"]))
+    return candidates[0]["dwarfUid"], None
 
 
 def register_api_routes() -> None:
@@ -99,11 +188,14 @@ def register_api_routes() -> None:
         sidesteps the earlier 127.0.0.1-means-the-phone-itself confusion
         in the "Program to Dwarf" panel's bridge URL field.
 
-        Looks for catalog.html next to astro_dwarf_ui.py (the project
-        root) - drop the downloaded catalog file there under that exact
-        name for this route to find it.
+        Looks for catalog.html next to astro_dwarf_ui.py in a source
+        checkout, or bundled into the .exe in a packaged build (see
+        _bundled_path() above) - drop the downloaded catalog file at
+        the project root under that exact name for this route to find
+        it in dev mode; a packaged build needs it present at build time
+        instead (buildAstroDwarfUI.py bundles it via --add-data).
         """
-        catalog_path = Path(__file__).resolve().parent.parent / "catalog.html"
+        catalog_path = _bundled_path("catalog.html")
         if not catalog_path.exists():
             return JSONResponse(
                 {"error": f"catalog.html not found at {catalog_path} - place the DSO catalog HTML file there."},
@@ -127,6 +219,13 @@ def register_api_routes() -> None:
 
         if not dwarf_uid:
             return JSONResponse({"error": "dwarfUid is required"}, status_code=400)
+
+        if dwarf_uid.startswith("auto:"):
+            resolved, err = _resolve_auto_dwarf_uid(dwarf_uid)
+            if err:
+                return JSONResponse({"error": err}, status_code=404)
+            log.info(f"[{dwarf_uid}] Resolved to {resolved!r} (least busy of that model).")
+            dwarf_uid = resolved
 
         try:
             session = get_manager().get(dwarf_uid)

@@ -23,6 +23,7 @@ from nicegui import ui
 import dwarf_python_api.lib.my_logger as my_logger
 
 from components.i18n import t
+from components.network_info import get_lan_port, get_local_ip
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
 
@@ -61,6 +62,17 @@ def build_logs_page() -> None:
                 ui.button(icon="refresh", on_click=lambda: _refresh()).props(
                     "flat round dense"
                 )
+
+            # LAN access readout (user-requested Sep 2026): not tied to
+            # any one Dwarf, so it lives here rather than the per-device
+            # settings page. LAN_PORT is published once at startup
+            # (astro_dwarf_ui.py) via app.storage.general - server-wide,
+            # so this doesn't need PORT threaded through this page.
+            ip = get_local_ip()
+            port = get_lan_port()
+            ui.label(f"\U0001f4e1 LAN access: http://{ip}:{port}").classes(
+                "text-sm text-blue-600"
+            )
 
             log_path = my_logger.log_file
             if not log_path:

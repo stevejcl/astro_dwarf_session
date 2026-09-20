@@ -73,6 +73,19 @@ If all auto-reconnect attempts fail, the device is left in the existing
 session.py's Reconnect button, which also clears the "exhausted" flag
 so auto-reconnect gets another fresh shot next time.
 
+PRIORITY OVER SCHEDULED STARTS (user-reported Sep 2026, real overnight
+log): a scheduled program's start was starved for a full 18 minutes -
+this module's own ~_CHECK_INTERVAL_S poll cadence happened to phase-
+lock against scheduler_loop's own retry cadence (same interval), so
+every single scheduler_runner.start_run() attempt lost the slot-acquire
+race to a health_check that had *just* grabbed it moments earlier, over
+and over, until health_check finally stalled to its full 150s worst
+case (see the latency note above) and released it for good. mark_start_
+pending()/clear_start_pending() (called from scheduler_runner.py around
+its own acquire attempt) make maybe_check() back off entirely while a
+program start is pending for a uid, so it always gets the very next
+opening instead of having to out-race a periodic check indefinitely.
+
 EVENT LOOP CLEANUP: a device-initiated disconnect (CMD_NOTIFY_POWER_OFF)
 calls WebSocketClient.disconnect() internally (websockets_utils.py) and
 correctly clears self.websocket, so session.is_connected does flip to
@@ -152,6 +165,35 @@ _command_in_flight_caller: dict[str, str] = {}
 # reconnects (which clears this, see mark_just_connected()).
 _auto_reconnect_exhausted: set[str] = set()
 _auto_reconnect_in_progress: set[str] = set()
+
+# uids where a scheduler_runner.start_run() attempt is currently trying
+# to acquire the command slot (user-reported Sep 2026, real overnight
+# log: a scheduled program's start was starved for a FULL 18 minutes -
+# health_check's own ~15s poll cadence happened to phase-lock against
+# scheduler_loop's own ~15s tick, so every single retry lost the race to
+# a health_check that had *just* grabbed the slot moments earlier, over
+# and over, until health_check finally stalled to its full 150s worst
+# case and released it for good). maybe_check() below backs off
+# entirely while a uid is marked here, so a pending program start
+# always gets the very next opening instead of having to out-race a
+# periodic check indefinitely.
+_start_pending: set[str] = set()
+
+
+def mark_start_pending(dwarf_uid: str) -> None:
+    """Call right before attempting to acquire the command slot for a
+    NEW scheduler_runner run (see start_run()) - not while a run is
+    already established and holding the slot itself, only during the
+    brief acquire race this exists to protect."""
+    _start_pending.add(dwarf_uid)
+
+
+def clear_start_pending(dwarf_uid: str) -> None:
+    """Call once the acquire attempt above has resolved, success or
+    failure - this flag's only job is to win that one race, not to
+    keep suppressing health checks for the run's entire duration (the
+    slot itself, once actually held, already does that)."""
+    _start_pending.discard(dwarf_uid)
 
 
 def try_acquire_command_slot(dwarf_uid: str, caller: str = "?") -> bool:
@@ -316,6 +358,8 @@ async def maybe_check(session: DwarfSession) -> None:
         return
 
     uid = session.dwarf_uid
+    if uid in _start_pending:
+        return
     now = time.monotonic()
     if now - _last_check_at.get(uid, 0.0) < _CHECK_INTERVAL_S:
         return

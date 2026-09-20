@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import logging
 import os
+import socket
 import sys
 from multiprocessing import freeze_support
 
@@ -115,6 +116,25 @@ from pages.sites import build_sites_page
 from pages.watch_dashboard import build_watch_dashboard_page
 from pages.watch_device import build_watch_device_page
 
+def _find_open_port(host: str, start_port: int = 8000, end_port: int = 8999) -> int:
+    """Own replacement for nicegui.native.find_open_port() (user-
+    reported Sep 2026: the default launch picked a port that was
+    already in use by something else). That function only test-binds
+    on 'localhost' (127.0.0.1) regardless of what host the app will
+    actually listen on - with --host defaulting to 0.0.0.0 (see
+    parse_args() below), a port already held by another process
+    specifically on 0.0.0.0 or on a particular LAN adapter's address
+    can slip through as "free" when only tested against localhost.
+    This probes the SAME host the server will actually bind to."""
+    for port in range(start_port, end_port + 1):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((host, port))
+                return port
+        except OSError:
+            continue
+    raise OSError("No open port found")
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Astro Dwarf UI")
     parser.add_argument(
@@ -163,8 +183,20 @@ def main() -> None:
     if __name__ == "__main__":
         my_logger.update_log_file(default_name="astro_session.log")
 
-    PORT = args.port if args.port else native.find_open_port()
+    PORT = args.port if args.port else _find_open_port(args.host)
 
+    # Read back by pages/settings.py's LAN-access label (user-requested
+    # Sep 2026) - app.storage.general is server-wide (see components/
+    # i18n.py's own use of it), so any page can read this without
+    # threading PORT through every build_*_page() call. Set via
+    # on_startup rather than a bare assignment here, same reasoning as
+    # the win32 exception-handler install a few lines below: NiceGUI's
+    # storage backend is only guaranteed ready once ui.run()'s own
+    # server has actually started.
+    def _publish_lan_port() -> None:
+        app.storage.general["LAN_PORT"] = PORT
+
+    app.on_startup(_publish_lan_port)
     # Device-type icons (dashboard's model badge, see device_card.py) -
     # served from /images/<name>.png. Resolved relative to THIS file
     # (not the current working directory), so it works regardless of

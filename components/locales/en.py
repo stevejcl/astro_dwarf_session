@@ -287,6 +287,9 @@ TRANSLATIONS: dict[str, str] = {
     "action_toggle_lights":         "Toggle Lights",
     "lights_on_done":               "Lights on",
     "lights_off_done":              "Lights off",
+    "action_toggle_power_lights":   "Toggle Power Light",
+    "power_lights_on_done":         "Power light on",
+    "power_lights_off_done":        "Power light off",
     "action_focus_infinite":        "Focus Infinite",
     "action_focus_infinite_done":   "Infinite focus started",
     "action_calibrate":             "Calibrate",
@@ -302,6 +305,8 @@ TRANSLATIONS: dict[str, str] = {
     "reboot_confirm_button":        "Reboot",
     "reboot_sent":                  "Reboot command sent",
     "cancel":                       "Cancel",
+    "close":                        "Close",
+    "watch_qr_title":               "Scan to open Watch mode",
 
     # -- Pairing page ----------------------------------------------------
     "add_dwarf":                    "Add a Dwarf",

@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.0.4] - 2026-09-19
+
+### Improvements
+    Multiple enhancements and fixes: publish LAN port and use a robust find_open_port()
+    Add network_info (local IP, LAN port, watch URL/QR) and show QR/URL on dashboard and logs
+    Support virtual "Any <model> (auto)" devices and auto-resolution when scheduling
+    Add power-indicator toggle and i18n strings
+    Visual low-battery/low-disk warnings on cards and session metrics
+    Add QrCode to Start a Watch Only Stacking Session
+    Add qrcode to requirements.
+
+### Bug
+    fix build script to bundle catalog.html and resolve bundled path in API routes
+    fix scheduler/health-check race with start_pending flags;
+
 ## [3.0.3] - 2026-09-19
 
 ### Improvements

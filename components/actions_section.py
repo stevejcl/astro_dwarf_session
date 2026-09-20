@@ -37,6 +37,8 @@ from dwarf_python_api.lib.dwarf_utils import (
     perform_calibration,
     perform_powerCloseRGB,
     perform_powerOpenRGB,
+    perform_powerIndOff,
+    perform_powerIndOn,
     perform_reboot,
     perform_start_autofocus,
     perform_stop_goto,
@@ -53,6 +55,16 @@ from components.i18n import t
 # from the device to stay in sync with. Resets to "assumed off" on app
 # restart.
 _lights_on: dict[str, bool] = {}
+# Power indicator LED (user-requested Sep 2026: "eteindre les lumieres
+# de la battery" - separate from _lights_on above, which is the main
+# RGB illumination light on the telescope body). CMD_RGB_POWER_POWERIND_
+# ON/OFF - same module (MODULE_RGB_POWER) as the RGB light, but its own
+# distinct on/off pair, confirmed working in dwarf_python_api's own
+# perform_powerIndOn()/perform_powerIndOff() docstrings ("4 confirmed-
+# working V3 functions") - just never wired to a button here before.
+# Same no-readback caveat as _lights_on: tracked in-memory only, reset
+# on app restart.
+_power_lights_on: dict[str, bool] = {}
 
 
 def _build_eq_result_panel(session) -> Callable[[], None]:
@@ -62,15 +74,20 @@ def _build_eq_result_panel(session) -> Callable[[], None]:
     physically turning azimuth/altitude knobs, matching Dwarfium's own
     choice of a persistent panel over a notification).
 
-    Icon direction and colour scheme is a faithful port of Dwarfium's
-    own JSX (bi-arrow-clockwise/counterclockwise for azimuth mapped to
-    Material's rotate_right/rotate_left, bi-arrow-up/down mapped to
-    arrow_upward/arrow_downward) - confirmed against the official
-    protocol docs' own field comments (azi_err: positive=clockwise,
-    negative=counter-clockwise; alt_err: positive=up, negative=down),
-    not guessed. Absolute value shown (sign is conveyed by the icon/
-    colour, not by a +/- prefix), matching Dwarfium's own
-    Math.abs(...).toFixed(2).
+    Icon direction and colour scheme: shows which way to physically turn
+    the azimuth/altitude knob to CORRECT the error, not which way the
+    error itself points.
+
+    PER-MODEL (Sep 2026, field-tested): the sign convention is NOT the
+    same between Mini and Dwarf 3 - a real Mini test showed the
+    ORIGINAL (un-flipped) mapping already correct (turning the knob the
+    way that icon pointed reduced the error), while a real Dwarf 3 test
+    showed the OPPOSITE - the flipped mapping was needed there. Dwarf II
+    user-confirmed (Sep 2026) to share the same mechanism as D3, so it
+    gets the same flipped mapping - not independently tested on a real
+    D2 unit, but a direct statement about the hardware, not a guess.
+    Absolute value still shown (sign is conveyed by the icon/colour, not
+    by a +/- prefix), matching Dwarfium's own Math.abs(...).toFixed(2).
 
     Hidden until the first EQ Solving result is available, then stays
     visible with the LAST known reading (does not clear itself, so the
@@ -96,7 +113,16 @@ def _build_eq_result_panel(session) -> Callable[[], None]:
             return
         panel.set_visibility(True)
 
-        if azi_err > 0:
+        # See this function's own docstring - D3 needs the flipped
+        # (correction-direction) mapping; Mini (and, unconfirmed, D2)
+        # use the original error-direction mapping as-is.
+        # See this function's own docstring - D2 and D3 share the same
+        # mechanism (user-confirmed Sep 2026) and both need the flipped
+        # (correction-direction) mapping; Mini uses the original error-
+        # direction mapping as-is.
+        needs_flip = config_to_dwarf_id_int(session.config.dwarf_model_id) in (2, 3)
+
+        if (azi_err > 0) != needs_flip:
             azi_icon.name = "rotate_right"
             azi_icon.classes(replace="text-lg text-positive")
         else:
@@ -104,7 +130,7 @@ def _build_eq_result_panel(session) -> Callable[[], None]:
             azi_icon.classes(replace="text-lg text-negative")
         azi_label.set_text(f"{abs(azi_err):.2f}\u00b0 {t('action_eq_solving_azimuth')}")
 
-        if alt_err > 0:
+        if alt_err < 0:
             alt_icon.name = "arrow_upward"
             alt_icon.classes(replace="text-lg text-positive")
         else:
@@ -227,6 +253,27 @@ async def _handle_toggle_lights(session, dwarf_uid) -> None:
         ui.notify(t("command_failed"), type="negative")
 
 
+async def _handle_toggle_power_lights(session, dwarf_uid) -> None:
+    is_on = _power_lights_on.get(dwarf_uid, False)
+    fn = perform_powerIndOff if is_on else perform_powerIndOn
+
+    if not connection_health.try_acquire_command_slot(dwarf_uid):
+        ui.notify(t("device_busy"), type="warning")
+        return
+    try:
+        result = await run.io_bound(fn, session=session)
+    finally:
+        connection_health.release_command_slot(dwarf_uid)
+
+    if result is not False:
+        _power_lights_on[dwarf_uid] = not is_on
+        ui.notify(
+            t("power_lights_off_done") if is_on else t("power_lights_on_done"), type="positive"
+        )
+    else:
+        ui.notify(t("command_failed"), type="negative")
+
+
 async def _handle_reboot(session, dwarf_uid) -> None:
     with ui.dialog() as dialog, ui.card():
         ui.label(t("reboot_confirm"))
@@ -298,6 +345,11 @@ def build_actions_section(session, refresh_view) -> None:
                 t("action_toggle_lights"),
                 icon="lightbulb",
                 on_click=lambda: _handle_toggle_lights(session, dwarf_uid),
+            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ui.button(
+                t("action_toggle_power_lights"),
+                icon="battery_charging_full",
+                on_click=lambda: _handle_toggle_power_lights(session, dwarf_uid),
             ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_focus_infinite"),

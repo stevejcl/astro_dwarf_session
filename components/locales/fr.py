@@ -159,6 +159,7 @@ TRANSLATIONS: dict[str, str] = {
     "prog_telescopius_empty":       "Aucune ligne exploitable dans ce CSV.",
     "prog_telescopius_generated":   "{count} programme(s) g\u00e9n\u00e9r\u00e9(s) (format {format}) et ajout\u00e9s \u00e0 la file.",
     "prog_mosaic":                  "Mosaic",
+    "mosaic_planner_link":          "Planificateur mosa\u00efque Voie Lact\u00e9e",
     "prog_framing_x":               "Cadrage X (1.0-1.8x)",
     "prog_framing_y":               "Cadrage Y (1.0-1.8x)",
     "prog_mosaic_count":            "Sous-images par panneau (1-249)",
@@ -285,12 +286,18 @@ TRANSLATIONS: dict[str, str] = {
     "goto_stopped":                 "Goto arr\u00eat\u00e9",
     "go_Live":                      "Passer en Live",
     "goLive_ok":                    "Mode Live activ\u00e9",
+
     # -- Quick actions (Toggle Lights, Focus Infinite, Calibrate, Polar
     # Position, EQ Solving, Reboot) --------------------------------------
     "action_toggle_lights":         "Lumi\u00e8res",
     "lights_on_done":               "Lumi\u00e8res allum\u00e9es",
     "lights_off_done":              "Lumi\u00e8res \u00e9teintes",
+    "action_toggle_power_lights":   "Voyant alimentation",
+    "power_lights_on_done":         "Voyant allum\u00e9",
+    "power_lights_off_done":        "Voyant \u00e9teint",
     "action_focus_infinite":        "Focus infini",
+    "action_focus":                 "Focus",
+    "action_focus_done":            "Focus termin\u00e9",
     "action_focus_infinite_done":   "Mise au point infinie d\u00e9marr\u00e9e",
     "action_calibrate":             "Calibrer",
     "action_calibrate_done":        "Calibration d\u00e9marr\u00e9e",

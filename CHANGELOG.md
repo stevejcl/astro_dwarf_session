@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.7] - 2026-09-21
+### Improvements
+    Add a replaceable Milky Way mosaic planner (English + French HTML) and a small API test page
+    Wire a new /mosaic-planner-{lang} route that serves the planner from next to the running exe via _external_path
+    Copy those files into dist during build (warn if missing).
+    Also add related i18n keys (en/fr) and a Programs-page button that opens the planner for the app language.
+    This lets the planner be updated without rebuilding the exe.
 
 ## [3.0.6] - 2026-09-21
 ### Improvements

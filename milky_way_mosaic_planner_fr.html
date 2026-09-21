@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planificateur Mosaïque Voie Lactée — astro_dwarf_session</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #141922;
+    --panel-border: #232b3a;
+    --text: #e6e9ef;
+    --text-dim: #8b95a7;
+    --accent: #5fb3ff;
+    --accent-dim: #2c5a82;
+    --ok: #4ade80;
+    --err: #f87171;
+    --warn: #fbbf24;
+    --mono: "SF Mono", Consolas, "Roboto Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 2rem 1.25rem 4rem;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; font-weight: 600; margin: 0 0 0.15rem; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-dim); font-size: 0.9rem; margin: 0 0 1.5rem; line-height: 1.5; }
+  fieldset {
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 1.1rem 1.25rem 1.3rem;
+    margin: 0 0 1.1rem;
+  }
+  legend { padding: 0 0.4rem; font-size: 0.78rem; color: var(--text-dim); font-weight: 600; }
+  label { display: block; font-size: 0.82rem; color: var(--text-dim); margin: 0.7rem 0 0.3rem; }
+  label:first-of-type { margin-top: 0; }
+  input[type=text], input[type=number], input[type=date], input[type=time], select {
+    width: 100%;
+    background: #0d1219;
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    padding: 0.55rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 120px; }
+  .checks { display: flex; gap: 1.5rem; margin-top: 0.9rem; flex-wrap: wrap; }
+  .checks label { display: flex; align-items: center; gap: 0.5rem; margin: 0; color: var(--text); font-size: 0.9rem; cursor: pointer; }
+  .checks input { width: auto; }
+  .hint { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.3rem; line-height: 1.4; }
+  button {
+    background: var(--accent);
+    color: #06121f;
+    border: none;
+    padding: 0.7rem 1.1rem;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: #1c2532; color: var(--text); border: 1px solid var(--panel-border); }
+  button:disabled { background: var(--accent-dim); color: var(--text-dim); cursor: default; }
+  button:not(:disabled):hover { filter: brightness(1.08); }
+  .btn-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .server-row { margin-bottom: 1.25rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.5rem; }
+  th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--panel-border); }
+  th { color: var(--text-dim); font-weight: 600; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.02em; }
+  tr.unschedulable td { color: var(--err); }
+  tr.tile-row { cursor: default; }
+  .badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+  .badge-ok { background: rgba(74,222,128,0.15); color: var(--ok); }
+  .badge-warn { background: rgba(248,113,113,0.15); color: var(--err); }
+  .summary { font-size: 0.85rem; color: var(--text-dim); margin: 0.6rem 0; }
+  .status-line { font-size: 0.88rem; font-weight: 600; padding: 0.6rem 0.8rem; border-radius: 8px; margin-top: 0.8rem; display: none; }
+  .status-line.show { display: block; }
+  .status-ok { background: rgba(74,222,128,0.12); color: var(--ok); border: 1px solid rgba(74,222,128,0.3); }
+  .status-warn { background: rgba(251,191,36,0.12); color: var(--warn); border: 1px solid rgba(251,191,36,0.3); }
+  .status-err { background: rgba(248,113,113,0.12); color: var(--err); border: 1px solid rgba(248,113,113,0.3); }
+  #tilesSection { display: none; }
+  #tilesSection.show { display: block; }
+  .progress-cell { font-family: var(--mono); font-size: 0.78rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Planificateur Mosaïque Voie Lactée</h1>
+  <p class="subtitle">Découpe une zone du ciel en tuiles Wide, calcule quand chacune est le mieux placée cette nuit, et envoie le tout à <code>astro_dwarf_session</code> via <code>/api/program</code>. Aucune dépendance externe — les calculs de position (altitude/azimut) sont faits localement, ça fonctionne aussi sans connexion internet sur le site d'observation.</p>
+  <div class="row server-row">
+    <div>
+      <label for="serverUrl">Serveur astro_dwarf_session</label>
+      <input type="text" id="serverUrl" placeholder="http://192.168.0.x:PORT">
+    </div>
+    <div>
+      <label for="dwarfSelect">Dwarf cible</label>
+      <div style="display:flex; gap:0.4rem; align-items:center;">
+        <select id="dwarfSelect" style="flex:1;"><option>Chargement…</option></select>
+        <button type="button" class="secondary" id="refreshDwarfsBtn" title="Rafraîchir la liste" style="padding:0.55rem 0.7rem;">↻</button>
+      </div>
+      <p class="hint" id="dwarfExcludedHint" style="margin-top:0.3rem;"></p>
+    </div>
+  </div>
+
+  <fieldset>
+    <legend>Position d'observation</legend>
+    <div class="btn-row">
+      <button type="button" class="secondary" id="geoBtn">📍 Utiliser ma position</button>
+    </div>
+    <div class="row" style="margin-top: 0.8rem;">
+      <div>
+        <label for="lat">Latitude (°, + = Nord)</label>
+        <input type="number" id="lat" step="any" placeholder="47.30">
+      </div>
+      <div>
+        <label for="lon">Longitude (°, + = Est)</label>
+        <input type="number" id="lon" step="any" placeholder="-1.65">
+      </div>
+    </div>
+    <p class="hint" id="geoStatus"></p>
+    <p class="hint" id="twilightHint"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Aperçu du ciel — clique pour définir le centre</legend>
+    <canvas id="skyCanvas" width="820" height="360" style="width:100%; height:auto; border-radius:6px; cursor:crosshair; display:block;"></canvas>
+    <p class="hint">Bande claire = plan galactique (Voie Lactée). Zone teintée en vert = au-dessus de l'altitude minimum à l'heure de début choisie. Ligne pointillée bleue = méridien Nord-Sud à cette heure (croix = zénith, le point le mieux placé à cet instant). Le point rouge marque le centre actuellement sélectionné.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Zone à mosaïquer</legend>
+    <div class="row">
+      <div>
+        <label for="centerRa">RA centre (heures décimales)</label>
+        <input type="number" id="centerRa" step="any" value="18.5">
+      </div>
+      <div>
+        <label for="centerDec">Dec centre (degrés)</label>
+        <input type="number" id="centerDec" step="any" value="-20">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="gridCols">Colonnes</label>
+        <input type="number" id="gridCols" min="1" max="10" value="3">
+      </div>
+      <div>
+        <label for="gridRows">Lignes</label>
+        <input type="number" id="gridRows" min="1" max="10" value="2">
+      </div>
+      <div>
+        <label for="overlap">Recouvrement (%)</label>
+        <input type="number" id="overlap" min="0" max="50" value="15">
+      </div>
+    </div>
+    <p class="hint" id="fovHint">FOV Wide utilisé : —</p>
+    <div class="btn-row">
+      <button type="button" class="secondary" id="aladinBtn">🔭 Voir cette zone sur Aladin</button>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="eqMode"> Dwarf en position EQ (mise en station faite)</label>
+    </div>
+    <p class="hint" id="eqHint"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Réglages de capture (identiques pour chaque tuile)</legend>
+    <div class="row">
+      <div>
+        <label for="exposure">Exposition (s)</label>
+        <input type="text" id="exposure" value="15">
+      </div>
+      <div>
+        <label for="gain">Gain</label>
+        <input type="text" id="gain" value="80">
+      </div>
+      <div>
+        <label for="durationMode">Mode de durée</label>
+        <select id="durationMode">
+          <option value="count">Nombre d'images fixe</option>
+          <option value="duration">Durée fixe par tuile</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div id="countField">
+        <label for="count">Images par tuile</label>
+        <input type="number" id="count" value="60">
+      </div>
+      <div id="durationField" style="display:none;">
+        <label for="tileDurationMinutes">Durée par tuile (minutes)</label>
+        <input type="number" id="tileDurationMinutes" value="60" min="1">
+      </div>
+    </div>
+    <p class="hint" id="durationModeHint"></p>
+    <div class="checks">
+      <label><input type="checkbox" id="autofocusFirstOnly" checked> Autofocus sur la 1ère tuile de chaque groupe</label>
+    </div>
+    <p class="hint">L'autofocus se fait via le Tele même si la capture est en Wide — le champ ne dépend pas de la caméra utilisée.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Fenêtre de la nuit</legend>
+    <div class="row">
+      <div>
+        <label for="startTime">Début</label>
+        <input type="time" id="startTime" step="1">
+      </div>
+      <div>
+        <label for="minAltitude">Altitude minimum (°)</label>
+        <input type="number" id="minAltitude" value="25">
+      </div>
+    </div>
+    <p class="hint">Chaque tuile est planifiée séquentiellement, sur son créneau où elle est visible au-dessus de cette altitude minimum, en partant de l'heure de début. Une tuile qui ne redescend jamais assez tôt/haut cette nuit est marquée "non planifiable" plutôt que d'être forcée.</p>
+  </fieldset>
+
+  <div class="btn-row">
+    <button type="button" id="generateBtn">Générer la grille</button>
+  </div>
+
+  <div id="tilesSection">
+    <fieldset style="margin-top: 1.1rem;">
+      <legend>Tuiles générées</legend>
+      <p class="summary" id="tilesSummary"></p>
+      <table id="tilesTable">
+        <thead>
+          <tr>
+            <th>#</th><th>RA</th><th>Dec</th><th>Alt à l'heure prévue</th><th>Heure</th><th>Statut</th><th>Lune</th>
+          </tr>
+        </thead>
+        <tbody id="tilesBody"></tbody>
+      </table>
+      <div class="btn-row">
+        <button type="button" id="sendAllBtn">Envoyer toutes les tuiles planifiables</button>
+      </div>
+      <div class="status-line" id="sendStatus"></div>
+    </fieldset>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------------
+   Astronomy math - deliberately self-contained (no CDN, works offline
+   at the observing site). Standard textbook formulas, nothing exotic.
+------------------------------------------------------------------- */
+const DEG = Math.PI / 180;
+const RAD = 180 / Math.PI;
+
+function toJulianDate(date) {
+  return date.getTime() / 86400000 + 2440587.5;
+}
+
+// Greenwich Mean Sidereal Time, in degrees, for a given Julian Date.
+function gmstDeg(jd) {
+  const T = (jd - 2451545.0) / 36525.0;
+  let gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0)
+    + 0.000387933 * T * T - (T * T * T) / 38710000.0;
+  gmst = gmst % 360;
+  if (gmst < 0) gmst += 360;
+  return gmst;
+}
+
+// Altitude/azimuth (degrees) for a given RA(hours)/Dec(degrees), observer
+// lat/lon (degrees, lon east-positive), at a given JS Date (UTC-aware).
+function altAz(raHours, decDeg, latDeg, lonDeg, date) {
+  const jd = toJulianDate(date);
+  const lstDeg = (gmstDeg(jd) + lonDeg + 360) % 360;
+  const raDeg = raHours * 15;
+  let haDeg = lstDeg - raDeg;
+  haDeg = ((haDeg + 180) % 360 + 360) % 360 - 180;
+
+  const ha = haDeg * DEG, dec = decDeg * DEG, lat = latDeg * DEG;
+  const sinAlt = Math.sin(dec) * Math.sin(lat) + Math.cos(dec) * Math.cos(lat) * Math.cos(ha);
+  const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+  let cosAz = (Math.sin(dec) - Math.sin(alt) * Math.sin(lat)) / (Math.cos(alt) * Math.cos(lat));
+  cosAz = Math.max(-1, Math.min(1, cosAz));
+  let az = Math.acos(cosAz) * RAD;
+  if (Math.sin(ha) > 0) az = 360 - az;
+  return { alt: alt * RAD, az };
+}
+
+// Sun's RA/Dec via the standard USNO low-precision formula (accurate
+// to ~0.01deg, well within what's needed for twilight times) - user-
+// requested Sep 2026: "avec la localisation on peut connaitre les
+// horaires coucher et nuit". Not the Sun's actual position for
+// pointing anything - purely to find when it crosses the horizon and
+// the various twilight thresholds below.
+function sunEquatorial(date) {
+  const jd = toJulianDate(date);
+  const d = jd - 2451545.0;
+  const gDeg = 357.529 + 0.98560028 * d;
+  const qDeg = 280.459 + 0.98564736 * d;
+  const g = gDeg * DEG;
+  const LDeg = qDeg + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g);
+  const L = LDeg * DEG;
+  const e = (23.439 - 0.00000036 * d) * DEG;
+  const raRad = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
+  const decRad = Math.asin(Math.sin(e) * Math.sin(L));
+  let raHours = (raRad * RAD) / 15;
+  if (raHours < 0) raHours += 24;
+  return { ra: raHours, dec: decRad * RAD, lambda: ((LDeg % 360) + 360) % 360 };
+}
+
+function sunAltitude(date, lat, lon) {
+  const sun = sunEquatorial(date);
+  return altAz(sun.ra, sun.dec, lat, lon, date).alt;
+}
+
+// Moon's RA/Dec via the standard low-precision lunar position formula
+// (Astronomical Almanac / Meeus-derived, accuracy ~a few arcminutes -
+// plenty for "how close is the Moon to this tile"). User-requested
+// Sep 2026: a per-tile button showing the Moon's position at that
+// tile's own session. Same obliquity constant as sunEquatorial() -
+// both ultimately convert an ecliptic position to equatorial.
+function moonEquatorial(date) {
+  const jd = toJulianDate(date);
+  const d = jd - 2451545.0;
+  const LDeg = 218.316 + 13.176396 * d;   // mean longitude
+  const MDeg = 134.963 + 13.064993 * d;   // mean anomaly
+  const FDeg = 93.272 + 13.229350 * d;    // mean distance from ascending node
+  const M = MDeg * DEG, F = FDeg * DEG;
+  const lambdaDeg = LDeg + 6.289 * Math.sin(M);   // ecliptic longitude
+  const betaDeg = 5.128 * Math.sin(F);            // ecliptic latitude
+  const lambda = lambdaDeg * DEG, beta = betaDeg * DEG;
+  const e = (23.439 - 0.00000036 * d) * DEG;
+  const raRad = Math.atan2(
+    Math.sin(lambda) * Math.cos(e) - Math.tan(beta) * Math.sin(e),
+    Math.cos(lambda)
+  );
+  const decRad = Math.asin(Math.sin(beta) * Math.cos(e) + Math.cos(beta) * Math.sin(e) * Math.sin(lambda));
+  let raHours = (raRad * RAD) / 15;
+  if (raHours < 0) raHours += 24;
+  return { ra: raHours, dec: decRad * RAD, lambda: ((lambdaDeg % 360) + 360) % 360 };
+}
+
+// Angular separation (degrees) between two RA(hours)/Dec(degrees)
+// points on the sky - the standard spherical law-of-cosines formula.
+function angularSeparation(ra1Hours, dec1Deg, ra2Hours, dec2Deg) {
+  const ra1 = ra1Hours * 15 * DEG, dec1 = dec1Deg * DEG;
+  const ra2 = ra2Hours * 15 * DEG, dec2 = dec2Deg * DEG;
+  const cosSep = Math.sin(dec1) * Math.sin(dec2) + Math.cos(dec1) * Math.cos(dec2) * Math.cos(ra1 - ra2);
+  return Math.acos(Math.max(-1, Math.min(1, cosSep))) * RAD;
+}
+
+// Called from each tile row's 🌙 button (inline onclick, since rows are
+// rebuilt from a template string - see renderTiles()). Shows the
+// Moon's separation from THAT tile and its own altitude, at the
+// MIDPOINT of the tile's own session (more representative of the
+// whole exposure than just the start moment).
+// Moon phase (user-requested Sep 2026: "on peut mettre sa taille:
+// pleine lune etc" - illumination matters more than raw separation
+// for how much the Moon will wash out a tile: a Full Moon at 40° away
+// can still hurt more than a thin crescent right next to the target.
+// Elongation (Sun-Moon angular separation, computed the SAME way as
+// angularSeparation() above - coordinate-system-independent, so RA/
+// Dec works exactly as well as ecliptic longitude here) gives the
+// illuminated fraction; comparing ecliptic longitudes tells waxing
+// (before full) from waning (after full).
+function moonPhaseInfo(date) {
+  const sun = sunEquatorial(date);
+  const moon = moonEquatorial(date);
+  const elongation = angularSeparation(sun.ra, sun.dec, moon.ra, moon.dec);
+  const illumination = (1 - Math.cos(elongation * DEG)) / 2;
+  const lonDiff = ((moon.lambda - sun.lambda) % 360 + 360) % 360;
+  const waxing = lonDiff < 180;
+  const pct = illumination * 100;
+
+  let name;
+  if (pct < 2) name = 'Nouvelle Lune';
+  else if (pct < 48) name = waxing ? 'Premier croissant' : 'Dernier croissant';
+  else if (pct < 52) name = waxing ? 'Premier quartier' : 'Dernier quartier';
+  else if (pct < 98) name = waxing ? 'Lune gibbeuse croissante' : 'Lune gibbeuse d\u00e9croissante';
+  else name = 'Pleine Lune';
+
+  return { pct, name };
+}
+
+function showMoonInfo(index) {
+  const lat = parseFloat(document.getElementById('lat').value);
+  const lon = parseFloat(document.getElementById('lon').value);
+  const t = scheduledTiles[index];
+  const el = document.getElementById(`moonInfo${index}`);
+  if (!t || !t.scheduled || !el || isNaN(lat) || isNaN(lon)) return;
+  const midpoint = new Date((t.start.getTime() + t.end.getTime()) / 2);
+  const moon = moonEquatorial(midpoint);
+  const moonAlt = altAz(moon.ra, moon.dec, lat, lon, midpoint).alt;
+  const sep = angularSeparation(t.ra, t.dec, moon.ra, moon.dec);
+  const phase = moonPhaseInfo(midpoint);
+  const belowHorizon = moonAlt < 0 ? ' (sous l\u2019horizon)' : '';
+  el.textContent = `${phase.name} (${phase.pct.toFixed(0)}%) \u00e0 ${sep.toFixed(0)}\u00b0 de la tuile, altitude ${moonAlt.toFixed(0)}\u00b0${belowHorizon}`;
+}
+
+// Scans forward from `from` in 1-minute steps (up to 20h) for the
+// first moment the Sun's altitude crosses BELOW `thresholdDeg` - used
+// for sunset (0deg) and the three twilight stages (-6/-12/-18deg).
+// Simple linear scan, not interpolated - a smaller error than the
+// low-precision solar position itself already carries.
+function findSunCrossing(from, lat, lon, thresholdDeg) {
+  let t = new Date(from);
+  const deadline = new Date(from.getTime() + 20 * 3600000);
+  let prevAlt = sunAltitude(t, lat, lon);
+  while (t < deadline) {
+    t = new Date(t.getTime() + 60000);
+    const alt = sunAltitude(t, lat, lon);
+    if (prevAlt >= thresholdDeg && alt < thresholdDeg) return t;
+    prevAlt = alt;
+  }
+  return null;
+}
+
+function updateTwilightTimes() {
+  const lat = parseFloat(document.getElementById('lat').value);
+  const lon = parseFloat(document.getElementById('lon').value);
+  const el = document.getElementById('twilightHint');
+  if (isNaN(lat) || isNaN(lon)) { el.textContent = ''; return; }
+  const now = new Date();
+  const sunset = findSunCrossing(now, lat, lon, 0);
+  const astro = findSunCrossing(now, lat, lon, -18);
+  const fmt = d => d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '—';
+  el.innerHTML = `Coucher du soleil : <strong>${fmt(sunset)}</strong> · D\u00e9but de la nuit astronomique (Soleil \u00e0 -18\u00b0) : <strong>${fmt(astro)}</strong>` +
+    (astro ? ` <button type="button" class="secondary" id="useNightStartBtn" style="margin-left:0.5rem; padding:0.15rem 0.5rem; font-size:0.72rem;">Utiliser cette heure</button>` : '');
+  if (astro) {
+    document.getElementById('useNightStartBtn').addEventListener('click', () => {
+      const pad = n => String(n).padStart(2, '0');
+      document.getElementById('startTime').value = `${pad(astro.getHours())}:${pad(astro.getMinutes())}:${pad(astro.getSeconds())}`;
+      drawSkyChart();
+    });
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Aladin link (user-requested Sep 2026: "un lien vers aladin avec les
+   parametres saisie") - Aladin Lite's own "Get view URL" format,
+   confirmed from a real working example (CDS forum): target as
+   sexagesimal "HH MM SS.sss+DD MM SS.ss" (no space before the sign),
+   fov in degrees. Built fresh from the CURRENT field values at click
+   time - not kept live-in-sync, this is a one-off "check it on
+   Aladin" jump, not a persistent embed.
+------------------------------------------------------------------- */
+function decimalHoursToSexagesimal(hours) {
+  const sign = hours < 0 ? '-' : '';
+  hours = Math.abs(hours);
+  const h = Math.floor(hours);
+  const mFull = (hours - h) * 60;
+  const m = Math.floor(mFull);
+  const s = (mFull - m) * 60;
+  return `${sign}${String(h).padStart(2, '0')} ${String(m).padStart(2, '0')} ${s.toFixed(3).padStart(6, '0')}`;
+}
+function decimalDegToSexagesimal(deg) {
+  const sign = deg < 0 ? '-' : '+';
+  deg = Math.abs(deg);
+  const d = Math.floor(deg);
+  const mFull = (deg - d) * 60;
+  const m = Math.floor(mFull);
+  const s = (mFull - m) * 60;
+  return `${sign}${String(d).padStart(2, '0')} ${String(m).padStart(2, '0')} ${s.toFixed(2).padStart(5, '0')}`;
+}
+
+document.getElementById('aladinBtn').addEventListener('click', () => {
+  const centerRa = parseFloat(document.getElementById('centerRa').value);
+  const centerDec = parseFloat(document.getElementById('centerDec').value);
+  if (isNaN(centerRa) || isNaN(centerDec)) {
+    alert('Renseigne RA/Dec du centre avant d\u2019ouvrir Aladin.');
+    return;
+  }
+  const cols = parseInt(document.getElementById('gridCols').value, 10) || 1;
+  const rows = parseInt(document.getElementById('gridRows').value, 10) || 1;
+  // Rough FOV covering the whole planned mosaic, not just one tile, so
+  // Aladin opens already showing the full area at a sensible zoom.
+  const fovDeg = Math.max(cols * currentFov.h, rows * currentFov.v) * 1.15;
+
+  const target = `${decimalHoursToSexagesimal(centerRa)}${decimalDegToSexagesimal(centerDec)}`;
+  const url = `https://aladin.cds.unistra.fr/AladinLite/?target=${encodeURIComponent(target)}&fov=${fovDeg.toFixed(2)}&survey=P/DSS2/color`;
+  window.open(url, '_blank');
+});
+
+/* ---------------------------------------------------------------------
+   Galactic plane (Milky Way band) - standard J2000 galactic <-> equatorial
+   rotation, textbook formulas (galactic north pole RA/Dec + galactic
+   longitude of the north celestial pole). Used only to DRAW a visual
+   reference curve on the sky chart below - not involved in any
+   scheduling math.
+------------------------------------------------------------------- */
+const GAL_POLE_RA = 192.85948 * DEG;
+const GAL_POLE_DEC = 27.12825 * DEG;
+const GAL_LON_NCP = 122.93192 * DEG;
+
+function galacticToEquatorial(lDeg, bDeg) {
+  const l = lDeg * DEG, b = bDeg * DEG;
+  const sinDec = Math.sin(GAL_POLE_DEC) * Math.sin(b)
+    + Math.cos(GAL_POLE_DEC) * Math.cos(b) * Math.cos(GAL_LON_NCP - l);
+  const dec = Math.asin(Math.max(-1, Math.min(1, sinDec)));
+  const y = Math.cos(b) * Math.sin(GAL_LON_NCP - l);
+  const x = Math.cos(GAL_POLE_DEC) * Math.sin(b) - Math.sin(GAL_POLE_DEC) * Math.cos(b) * Math.cos(GAL_LON_NCP - l);
+  let ra = GAL_POLE_RA + Math.atan2(y, x);
+  ra = ((ra * RAD % 360) + 360) % 360;
+  return { ra: ra / 15, dec: dec * RAD };
+}
+
+/* ---------------------------------------------------------------------
+   Sky chart (RA 0-24h left-to-right, Dec +90..-90 top-to-bottom) -
+   coarse per-cell altitude shading + galactic plane overlay + click to
+   set the mosaic center. Deliberately low-res (fast, no external
+   assets) rather than a real star chart.
+------------------------------------------------------------------- */
+const skyCanvas = document.getElementById('skyCanvas');
+const skyCtx = skyCanvas.getContext('2d');
+const CW = skyCanvas.width, CH = skyCanvas.height;
+function raToX(ra) { return (ra / 24) * CW; }
+function decToY(dec) { return ((90 - dec) / 180) * CH; }
+function xToRa(x) { return (x / CW) * 24; }
+function yToDec(y) { return 90 - (y / CH) * 180; }
+
+let selectedCenter = null; // {ra, dec} - null until the user clicks or types
+let scheduledTiles = []; // moved up from near the Generate button - referenced
+// by drawSkyChart() below, which is called once at page load, before
+// that later declaration would otherwise exist yet (temporal dead zone).
+let lastGenerationParams = null; // {durationMode, count, tileDurationMinutes} - see the Send handler below
+
+function drawSkyChart() {
+  skyCtx.fillStyle = '#0d1219';
+  skyCtx.fillRect(0, 0, CW, CH);
+
+  const lat = parseFloat(document.getElementById('lat').value);
+  const lon = parseFloat(document.getElementById('lon').value);
+  const minAltitude = parseFloat(document.getElementById('minAltitude').value) || 25;
+  const timeStr = document.getElementById('startTime').value || '00:00:00';
+  const now = new Date();
+  const [hh, mm, ss] = timeStr.split(':').map(Number);
+  const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, ss || 0);
+  if (startDate < now) startDate.setDate(startDate.getDate() + 1);
+
+  // Visibility shading - coarse grid, only if we have a usable position.
+  if (!isNaN(lat) && !isNaN(lon)) {
+    const cellW = 12, cellH = 12;
+    for (let y = 0; y < CH; y += cellH) {
+      for (let x = 0; x < CW; x += cellW) {
+        const ra = xToRa(x + cellW / 2);
+        const dec = yToDec(y + cellH / 2);
+        const { alt } = altAz(ra, dec, lat, lon, startDate);
+        if (alt >= minAltitude) {
+          // Brighter green the higher above the threshold, capped.
+          const strength = Math.min(1, (alt - minAltitude) / 45);
+          skyCtx.fillStyle = `rgba(74, 222, 128, ${0.10 + strength * 0.22})`;
+          skyCtx.fillRect(x, y, cellW, cellH);
+        }
+      }
+    }
+  }
+
+  // Galactic plane band - three lines (b = -5, 0, +5 deg) for a visible
+  // band rather than a single hairline, split into segments wherever RA
+  // wraps around 0/24h so lines don't streak across the whole chart.
+  skyCtx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+  skyCtx.lineWidth = 1;
+  for (const b of [-8, 0, 8]) {
+    let prev = null;
+    skyCtx.beginPath();
+    for (let l = 0; l <= 360; l += 2) {
+      const eq = galacticToEquatorial(l, b);
+      const x = raToX(eq.ra), y = decToY(eq.dec);
+      if (prev && Math.abs(x - prev.x) > CW / 2) {
+        skyCtx.stroke();
+        skyCtx.beginPath();
+        prev = null;
+      }
+      if (prev === null) skyCtx.moveTo(x, y); else skyCtx.lineTo(x, y);
+      prev = { x, y };
+    }
+    skyCtx.stroke();
+  }
+
+  // Meridian (North-South line, user-requested Sep 2026: "indiquer les
+  // directions N-S lie a l'heure d'observation") - everything on this
+  // RA (= Local Sidereal Time at the chosen start time) is either due
+  // south (below the pole, the BEST moment for a target - highest in
+  // the sky, least atmosphere in the way) or due north (above the
+  // pole). It's a straight vertical line in RA/Dec space specifically
+  // because RA/Dec is fixed to the sky, not the ground - unlike
+  // azimuth, which sweeps continuously as the Earth turns.
+  if (!isNaN(lat) && !isNaN(lon)) {
+    const jd = toJulianDate(startDate);
+    const lstHours = ((gmstDeg(jd) + lon + 360) % 360) / 15;
+    const meridianX = raToX(lstHours);
+    skyCtx.strokeStyle = 'rgba(95, 179, 255, 0.6)';
+    skyCtx.setLineDash([4, 4]);
+    skyCtx.beginPath();
+    skyCtx.moveTo(meridianX, 0);
+    skyCtx.lineTo(meridianX, CH);
+    skyCtx.stroke();
+    skyCtx.setLineDash([]);
+
+    skyCtx.fillStyle = 'rgba(95, 179, 255, 0.9)';
+    skyCtx.font = 'bold 11px sans-serif';
+    // "S" near the part of the meridian actually above the horizon and
+    // closest to the observer's zenith (dec ~= lat) - that's the
+    // practical "best right now" spot, not just the geometric south
+    // celestial pole which is usually below the horizon entirely from
+    // mid-latitudes.
+    skyCtx.fillText('S (m\u00e9ridien)', meridianX + 4, decToY(lat) - 6);
+    skyCtx.fillText('N', meridianX + 4, decToY(90) + 12);
+
+    // Zenith marker - directly overhead right now (alt=90), the single
+    // best-placed point on the whole chart at the chosen time.
+    const zx = meridianX, zy = decToY(lat);
+    skyCtx.strokeStyle = 'rgba(95, 179, 255, 0.9)';
+    skyCtx.lineWidth = 1.5;
+    skyCtx.beginPath();
+    skyCtx.moveTo(zx - 6, zy); skyCtx.lineTo(zx + 6, zy);
+    skyCtx.moveTo(zx, zy - 6); skyCtx.lineTo(zx, zy + 6);
+    skyCtx.stroke();
+  }
+
+  // Axes labels (light touch - just RA hour ticks and Dec ticks).
+  skyCtx.fillStyle = 'rgba(139, 149, 167, 0.7)';
+  skyCtx.font = '10px sans-serif';
+  for (let h = 0; h <= 24; h += 4) {
+    skyCtx.fillText(`${h}h`, raToX(h) + 2, CH - 4);
+  }
+  for (let d = -60; d <= 60; d += 30) {
+    skyCtx.fillText(`${d}°`, 2, decToY(d) - 2);
+  }
+
+  // Generated tiles overlay (user-requested Sep 2026: "cote esthetique:
+  // carte du ciel avec tuiles") - each drawn as its actual FOV rectangle
+  // at its RA/Dec, RA half-width corrected by cos(dec) same as the grid
+  // generation itself (otherwise rectangles would look too wide near
+  // the poles relative to what the camera actually frames). Colored by
+  // status: green = schedulable, red = not, dashed amber outline added
+  // on top for the near-zenith warning.
+  if (scheduledTiles.length) {
+    for (const t of scheduledTiles) {
+      const cosDec = Math.max(0.05, Math.cos(t.dec * DEG));
+      const halfRaHours = (currentFov.h / 2 / cosDec) / 15;
+      const halfDec = currentFov.v / 2;
+      const x1 = raToX(t.ra - halfRaHours), x2 = raToX(t.ra + halfRaHours);
+      const y1 = decToY(t.dec + halfDec), y2 = decToY(t.dec - halfDec);
+
+      skyCtx.strokeStyle = t.scheduled ? 'rgba(74, 222, 128, 0.9)' : 'rgba(248, 113, 113, 0.85)';
+      skyCtx.lineWidth = 1.5;
+      skyCtx.setLineDash([]);
+      skyCtx.strokeRect(Math.min(x1, x2), y1, Math.abs(x2 - x1), y2 - y1);
+
+      if (t.nearZenith) {
+        skyCtx.strokeStyle = 'rgba(251, 191, 36, 0.9)';
+        skyCtx.setLineDash([3, 3]);
+        skyCtx.strokeRect(Math.min(x1, x2) - 2, y1 - 2, Math.abs(x2 - x1) + 4, y2 - y1 + 4);
+        skyCtx.setLineDash([]);
+      }
+
+      skyCtx.fillStyle = t.scheduled ? 'rgba(74, 222, 128, 0.95)' : 'rgba(248, 113, 113, 0.9)';
+      skyCtx.font = 'bold 10px sans-serif';
+      skyCtx.fillText(`${t.row + 1}.${t.col + 1}`, Math.min(x1, x2) + 3, y1 + 12);
+    }
+  }
+
+  // Currently selected center.
+  if (selectedCenter) {
+    const x = raToX(selectedCenter.ra), y = decToY(selectedCenter.dec);
+    skyCtx.fillStyle = '#f87171';
+    skyCtx.beginPath();
+    skyCtx.arc(x, y, 5, 0, Math.PI * 2);
+    skyCtx.fill();
+  }
+}
+
+skyCanvas.addEventListener('click', (e) => {
+  const rect = skyCanvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (CW / rect.width);
+  const y = (e.clientY - rect.top) * (CH / rect.height);
+  const ra = xToRa(x), dec = yToDec(y);
+  selectedCenter = { ra, dec };
+  document.getElementById('centerRa').value = ra.toFixed(3);
+  document.getElementById('centerDec').value = dec.toFixed(2);
+  drawSkyChart();
+});
+
+['lat', 'lon', 'minAltitude', 'startTime'].forEach(id => {
+  document.getElementById(id).addEventListener('change', drawSkyChart);
+});
+document.getElementById('geoBtn').addEventListener('click', () => {
+  // Redraw once geolocation actually resolves (it's async - a plain
+  // change-listener on #lat/#lon above already covers typing, this
+  // covers the geolocation button's own programmatic fill).
+  setTimeout(() => { drawSkyChart(); updateTwilightTimes(); }, 1200);
+});
+['lat', 'lon'].forEach(id => {
+  document.getElementById(id).addEventListener('change', updateTwilightTimes);
+});
+drawSkyChart();
+updateTwilightTimes();
+
+/* ---------------------------------------------------------------------
+   Server URL (editable, remembered) - same pattern as the /api/program
+   test page.
+------------------------------------------------------------------- */
+function detectDefaultBase() {
+  if (/^https?:$/.test(location.protocol)) return location.origin;
+  return '';
+}
+const SERVER_STORAGE_KEY = 'astro_dwarf_session_mosaic_server_url';
+const serverInput = document.getElementById('serverUrl');
+serverInput.value = localStorage.getItem(SERVER_STORAGE_KEY) || detectDefaultBase();
+serverInput.addEventListener('change', () => {
+  serverInput.value = serverInput.value.trim().replace(/\/+$/, '');
+  localStorage.setItem(SERVER_STORAGE_KEY, serverInput.value);
+  loadDwarfs();
+});
+function apiBase() { return serverInput.value.trim().replace(/\/+$/, ''); }
+
+/* ---------------------------------------------------------------------
+   Device list + per-model Wide FOV default (D3 and Mini are close
+   enough - ~44x25 vs ~44x24.5 - that a single fallback is fine when
+   the model string doesn't match either, see this file's own notes
+   from the design discussion: both ~50 deg diagonal, 1920x1080).
+------------------------------------------------------------------- */
+const WIDE_FOV = {
+  'Dwarf 3': { h: 44.1, v: 24.8 },
+  'Dwarf Mini': { h: 43.6, v: 24.5 },
+  default: { h: 44.0, v: 24.6 },
+};
+
+// Dwarf II excluded entirely (user-confirmed Sep 2026, matches an
+// existing comment in dwarf_python_api's own dwarf_utils.py): its Wide
+// camera uses DIFFERENT protocol param IDs than D3/Mini in photo mode
+// (0x0a01... vs 0x0101...), confirmed by network capture but never
+// wired up in astro_dwarf_session's Wide-capture code path at all - so
+// a Wide-camera program sent to a Dwarf II would not work correctly.
+// This whole planner only ever builds Wide-camera programs.
+const UNSUPPORTED_WIDE_MODELS = ['Dwarf II'];
+let currentFov = WIDE_FOV.default;
+
+function fovForModel(model) {
+  return WIDE_FOV[model] || WIDE_FOV.default;
+}
+
+async function loadDwarfs() {
+  const select = document.getElementById('dwarfSelect');
+  const previousValue = select.value; // preserve the user's current pick
+  // across a refresh (user-reported Sep 2026: auto-refresh must NOT
+  // silently reset an already-chosen device mid-setup - that could
+  // send tiles to the wrong Dwarf without anyone noticing). Only the
+  // very first load (nothing selected yet) shows "Chargement…".
+  if (!previousValue) select.innerHTML = '<option>Chargement…</option>';
+  try {
+    const res = await fetch(`${apiBase()}/api/dwarfs`);
+    const data = await res.json();
+    const allDevices = data.devices || [];
+    const excludedCount = allDevices.filter(d => UNSUPPORTED_WIDE_MODELS.includes(d.model)).length;
+    const devices = allDevices.filter(d => !UNSUPPORTED_WIDE_MODELS.includes(d.model));
+    if (!devices.length) {
+      select.innerHTML = '<option value="">Aucun device compatible Wide</option>';
+      updateFovHint();
+      return;
+    }
+    select.innerHTML = devices.map(d => {
+      const bits = [d.model || '', d.ip || '', d.connected ? 'connecté' : 'déconnecté'].filter(Boolean);
+      return `<option value="${d.dwarfUid}" data-model="${d.model || ''}">${d.name} (${bits.join(' · ')})</option>`;
+    }).join('');
+    if (previousValue && devices.some(d => d.dwarfUid === previousValue)) {
+      select.value = previousValue;
+    }
+    document.getElementById('dwarfExcludedHint').textContent = excludedCount
+      ? `${excludedCount} Dwarf II non affiché(s) - capture Wide non supportée sur ce modèle.`
+      : '';
+    updateFovHint();
+  } catch (e) {
+    select.innerHTML = '<option value="">Erreur de connexion au serveur</option>';
+  }
+}
+document.getElementById('dwarfSelect').addEventListener('change', updateFovHint);
+function updateFovHint() {
+  const select = document.getElementById('dwarfSelect');
+  const opt = select.options[select.selectedIndex];
+  const model = opt ? opt.dataset.model : '';
+  currentFov = fovForModel(model);
+  document.getElementById('fovHint').textContent =
+    `FOV Wide utilisé : ${currentFov.h.toFixed(1)}° × ${currentFov.v.toFixed(1)}°` +
+    (model ? ` (${model})` : ' (par défaut - choisis un device pour affiner)');
+}
+loadDwarfs();
+updateFovHint();
+document.getElementById('refreshDwarfsBtn').addEventListener('click', loadDwarfs);
+// Light auto-refresh (user-reported Sep 2026: "la decouverte des dwarfs
+// se fait au chargement de la page" - loadDwarfs() only ran once, so a
+// device connecting/disconnecting after this page was opened never
+// showed up without a manual reload). 20s is frequent enough to notice
+// a device coming online while setting things up, without hammering
+// /api/dwarfs.
+setInterval(loadDwarfs, 20000);
+
+document.getElementById('eqMode').addEventListener('change', updateEqHint);
+function updateEqHint() {
+  const eqMode = document.getElementById('eqMode').checked;
+  document.getElementById('eqHint').textContent = eqMode
+    ? 'Recouvrement utilisé tel quel - pas de rotation de champ en EQ.'
+    : 'Sans EQ : +10 points de recouvrement ajoutés automatiquement (rotation de champ), et les tuiles trop proches du zénith (>80°) seront signalées.';
+}
+updateEqHint();
+
+document.getElementById('durationMode').addEventListener('change', updateDurationModeUI);
+function updateDurationModeUI() {
+  const mode = document.getElementById('durationMode').value;
+  document.getElementById('countField').style.display = mode === 'count' ? '' : 'none';
+  document.getElementById('durationField').style.display = mode === 'duration' ? '' : 'none';
+  document.getElementById('durationModeHint').textContent = mode === 'duration'
+    ? 'Le nombre d\u2019images est calcul\u00e9 largement au-dessus du n\u00e9cessaire, et l\u2019heure de fin (endTime) coupe la capture pile \u00e0 la dur\u00e9e voulue - m\u00eame m\u00e9canisme que le champ \u00ab\u00a0Heure de fin\u00a0\u00bb optionnel de l\u2019\u00e9diteur de programme.'
+    : '';
+}
+updateDurationModeUI();
+
+/* ---------------------------------------------------------------------
+   Geolocation (browser) - deliberately simple, this page handles it
+   itself rather than depending on a Site already configured on the
+   server side (the planner may run before any device is even picked).
+------------------------------------------------------------------- */
+document.getElementById('geoBtn').addEventListener('click', () => {
+  const status = document.getElementById('geoStatus');
+  if (!navigator.geolocation) {
+    status.textContent = 'Géolocalisation non disponible sur ce navigateur.';
+    return;
+  }
+  status.textContent = 'Localisation en cours…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById('lat').value = pos.coords.latitude.toFixed(5);
+      document.getElementById('lon').value = pos.coords.longitude.toFixed(5);
+      status.textContent = `Position obtenue (précision ±${Math.round(pos.coords.accuracy)}m).`;
+      drawSkyChart();
+      updateTwilightTimes();
+    },
+    (err) => { status.textContent = `Échec de la géolocalisation : ${err.message}`; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
+
+// Default start time: now.
+(function setDefaultStart() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('startTime').value = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+})();
+
+/* ---------------------------------------------------------------------
+   Grid generation: RA offsets corrected by cos(dec) so tiles stay
+   evenly spaced on the SKY, not just in raw RA degrees (which would
+   bunch up near the poles).
+------------------------------------------------------------------- */
+function generateGrid(centerRa, centerDec, cols, rows, fov, overlapPct) {
+  const overlap = overlapPct / 100;
+  const stepH = fov.h * (1 - overlap);
+  const stepV = fov.v * (1 - overlap);
+  const tiles = [];
+  for (let row = 0; row < rows; row++) {
+    const dec = centerDec + (row - (rows - 1) / 2) * stepV;
+    const cosDec = Math.max(0.05, Math.cos(dec * DEG)); // guard near the pole
+    for (let col = 0; col < cols; col++) {
+      const raOffsetDeg = (col - (cols - 1) / 2) * stepH / cosDec;
+      const ra = centerRa + raOffsetDeg / 15;
+      tiles.push({
+        name: `MW Tile R${row + 1}C${col + 1}`,
+        ra: ((ra % 24) + 24) % 24,
+        dec,
+        row, col,
+      });
+    }
+  }
+  return tiles;
+}
+
+/* ---------------------------------------------------------------------
+   Scheduling: for each tile, scan forward from startTime in 5-min
+   steps across the next 12h looking for a stretch where altitude stays
+   >= minAltitude for at least the tile's own required duration
+   (count x exposure + a small buffer for goto/calibration/autofocus).
+   Greedy, sequential - tiles are considered in the order they're
+   generated, each claiming the EARLIEST still-free slot that works for
+   it, so two tiles never get scheduled on top of each other.
+------------------------------------------------------------------- */
+function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIndex) {
+  const stepMinutes = 5;
+  const maxHorizonMinutes = 12 * 60;
+  let cursor = new Date(startDate);
+  const results = [];
+
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i];
+    const durationSeconds = getDurationForIndex(i);
+    let found = null;
+    let probe = new Date(cursor);
+    const deadline = new Date(startDate.getTime() + maxHorizonMinutes * 60000);
+
+    while (probe < deadline) {
+      const { alt } = altAz(tile.ra, tile.dec, lat, lon, probe);
+      if (alt >= minAltitude) {
+        // Check the tile stays above minAltitude for its WHOLE duration,
+        // not just at the start - otherwise it could set mid-capture.
+        const endProbe = new Date(probe.getTime() + durationSeconds * 1000);
+        const { alt: altAtEnd } = altAz(tile.ra, tile.dec, lat, lon, endProbe);
+        if (altAtEnd >= minAltitude) {
+          found = { start: new Date(probe), end: endProbe, altAtStart: alt };
+          break;
+        }
+      }
+      probe = new Date(probe.getTime() + stepMinutes * 60000);
+    }
+
+    if (found) {
+      results.push({ ...tile, scheduled: true, start: found.start, end: found.end, altAtStart: found.altAtStart });
+      // Next tile can't start before this one ends.
+      cursor = new Date(found.end.getTime() + 30000); // 30s buffer between tiles
+    } else {
+      results.push({ ...tile, scheduled: false });
+    }
+  }
+  return results;
+}
+
+/* ---------------------------------------------------------------------
+   Generate button
+------------------------------------------------------------------- */
+
+document.getElementById('generateBtn').addEventListener('click', () => {
+  const lat = parseFloat(document.getElementById('lat').value);
+  const lon = parseFloat(document.getElementById('lon').value);
+  if (isNaN(lat) || isNaN(lon)) {
+    alert('Renseigne ta position (latitude/longitude) avant de générer.');
+    return;
+  }
+  const centerRa = parseFloat(document.getElementById('centerRa').value);
+  const centerDec = parseFloat(document.getElementById('centerDec').value);
+  const cols = parseInt(document.getElementById('gridCols').value, 10);
+  const rows = parseInt(document.getElementById('gridRows').value, 10);
+  const overlapPct = parseFloat(document.getElementById('overlap').value);
+  const eqMode = document.getElementById('eqMode').checked;
+  // Extra margin without EQ tracking (user-requested Sep 2026: "un
+  // champ EQ pour stipuler si on utilise le dwarf en position EQ ou
+  // simplement alt Z") - in Alt-Az mode the frame rotates around its
+  // own center over the course of an exposure (field rotation), so
+  // adjacent tiles need more overlap than a pure EQ mount to still
+  // cover each other's edges reliably. +10 points is a simple, fixed
+  // safety margin for a first version, not a full field-rotation-rate
+  // calculation.
+  const effectiveOverlapPct = eqMode ? overlapPct : overlapPct + 10;
+  const exposure = parseFloat(document.getElementById('exposure').value);
+  const durationMode = document.getElementById('durationMode').value;
+  // Fixed-duration mode (user-requested Sep 2026: "temps de capture
+  // fixe... on utilise l'option horaire de fin de astro_session") -
+  // count is set to a generous CEILING (never the real target), and
+  // endTime (sent per-tile below) is what actually cuts the capture
+  // off at the wanted duration - the exact same mechanism as the
+  // program editor's own optional End Time field
+  // (dwarf_session.py's _wait_for_astro_end()). +20% margin on the
+  // ceiling covers a device stacking somewhat fewer frames than a
+  // naive exposure-time division would predict.
+  const tileDurationMinutes = parseFloat(document.getElementById('tileDurationMinutes').value);
+  const count = durationMode === 'duration'
+    ? Math.ceil((tileDurationMinutes * 60 / exposure) * 1.2)
+    : parseInt(document.getElementById('count').value, 10);
+  const minAltitude = parseFloat(document.getElementById('minAltitude').value);
+  const timeStr = document.getElementById('startTime').value || '00:00:00';
+
+  const now = new Date();
+  const [hh, mm, ss] = timeStr.split(':').map(Number);
+  const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, ss || 0);
+  if (startDate < now) startDate.setDate(startDate.getDate() + 1);
+
+  // Base goto/settle buffer, plus an EXTRA buffer on whichever tiles
+  // will actually run autofocus (user-asked Sep 2026: "on se base sur
+  // le nombre par un temps fixe?" - yes, but that fixed 60s never
+  // accounted for autofocus specifically, which can run noticeably
+  // longer, especially infinite focus - 30s to 1min+, see this whole
+  // planner's earlier design notes). Matches the SAME autofocusFirstOnly
+  // logic used later when actually sending (i === 0 gets it if checked,
+  // otherwise every tile does) - keeping the schedule's own duration
+  // estimate consistent with what will really be sent, tile by tile.
+  const baseDurationSeconds = durationMode === 'duration'
+    ? tileDurationMinutes * 60 + 60
+    : exposure * count + 60;
+  const AUTOFOCUS_BUFFER_SECONDS = 90;
+  const autofocusFirstOnly = document.getElementById('autofocusFirstOnly').checked;
+  function durationForIndex(i) {
+    const hasAutofocus = autofocusFirstOnly ? i === 0 : true;
+    return baseDurationSeconds + (hasAutofocus ? AUTOFOCUS_BUFFER_SECONDS : 0);
+  }
+
+  const tiles = generateGrid(centerRa, centerDec, cols, rows, currentFov, effectiveOverlapPct);
+  scheduledTiles = scheduleTiles(tiles, lat, lon, startDate, minAltitude, durationForIndex);
+  // Stored so the Send button (a separate handler) uses the EXACT same
+  // count/mode this schedule was actually computed with (user-reported
+  // Sep 2026 concern: re-reading the hidden #count field directly at
+  // send time, instead of the computed duration-mode ceiling, would
+  // silently send the wrong count - possibly not enough images to last
+  // until endTime).
+  lastGenerationParams = { durationMode, count, tileDurationMinutes, startDate };
+  // Near-zenith flag (Alt-Az only) - field rotation is fastest close to
+  // the zenith (it can exceed several degrees per MINUTE right
+  // overhead, versus being slow near the meridian at more typical
+  // altitudes), so a tile scheduled there is the most likely to show
+  // visible smearing/misalignment between sub-frames without EQ
+  // tracking. Flagged, not excluded - still the caller's call.
+  if (!eqMode) {
+    scheduledTiles.forEach(t => {
+      if (t.scheduled && t.altAtStart > 80) t.nearZenith = true;
+    });
+  }
+
+  renderTiles();
+  drawSkyChart();
+});
+
+function formatRa(ra) {
+  const h = Math.floor(ra);
+  const m = Math.floor((ra - h) * 60);
+  return `${h}h${String(m).padStart(2, '0')}m`;
+}
+function formatTime(date) {
+  const pad = n => String(n).padStart(2, '0');
+  // Date included, not just HH:MM (user-reported Sep 2026: "generer ne
+  // tient pas compte de la modification de l'heure" - traced to
+  // startDate silently rolling to TOMORROW whenever the entered start
+  // time is earlier than the current moment, with nothing in the
+  // table distinguishing "today 20:30" from "tomorrow 20:30" - two
+  // genuinely different schedules could display identically).
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function renderTiles() {
+  const body = document.getElementById('tilesBody');
+  const section = document.getElementById('tilesSection');
+  const summary = document.getElementById('tilesSummary');
+  section.classList.add('show');
+
+  const ok = scheduledTiles.filter(t => t.scheduled).length;
+  const failed = scheduledTiles.length - ok;
+  const pad = n => String(n).padStart(2, '0');
+  const targetDate = lastGenerationParams && lastGenerationParams.startDate;
+  // Explicit "night targeted" line (same bug/fix as formatTime() above)
+  // so a silent roll-to-tomorrow is obvious even before reading a
+  // single row.
+  const dateLine = targetDate
+    ? `Nuit cibl\u00e9e : ${pad(targetDate.getDate())}/${pad(targetDate.getMonth() + 1)} \u00e0 partir de ${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}. `
+    : '';
+  summary.textContent = dateLine + `${scheduledTiles.length} tuiles · ${ok} planifiables cette nuit` +
+    (failed ? ` · ${failed} non planifiables (jamais assez hautes dans la fenêtre)` : '');
+
+  body.innerHTML = scheduledTiles.map((t, i) => {
+    if (!t.scheduled) {
+      return `<tr class="unschedulable"><td>${i + 1}</td><td>${formatRa(t.ra)}</td><td>${t.dec.toFixed(2)}°</td><td>—</td><td>—</td><td><span class="badge badge-warn">Non planifiable</span></td><td>—</td></tr>`;
+    }
+    return `<tr class="tile-row"><td>${i + 1}</td><td>${formatRa(t.ra)}</td><td>${t.dec.toFixed(2)}°</td><td class="progress-cell">${t.altAtStart.toFixed(0)}°</td><td>${formatTime(t.start)}</td><td><span class="badge badge-ok">OK</span>${t.nearZenith ? ' <span class="badge badge-warn">Proche z\u00e9nith</span>' : ''}</td>` +
+      `<td><button type="button" class="secondary" style="padding:0.2rem 0.5rem; font-size:0.72rem;" onclick="showMoonInfo(${i})">🌙</button><div class="hint" id="moonInfo${i}" style="margin-top:0.2rem;"></div></td></tr>`;
+  }).join('');
+}
+
+/* ---------------------------------------------------------------------
+   Send all schedulable tiles to /api/program, sequentially (not in
+   parallel - avoids hammering the server/device with many concurrent
+   requests for what is, after all, just writing a handful of JSON
+   files).
+------------------------------------------------------------------- */
+document.getElementById('sendAllBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('sendAllBtn');
+  const status = document.getElementById('sendStatus');
+  const dwarfUid = document.getElementById('dwarfSelect').value;
+  if (!dwarfUid) {
+    status.className = 'status-line show status-err';
+    status.textContent = 'Choisis un Dwarf avant d\u2019envoyer.';
+    return;
+  }
+  const toSend = scheduledTiles.filter(t => t.scheduled);
+  if (!toSend.length) {
+    status.className = 'status-line show status-err';
+    status.textContent = 'Aucune tuile planifiable à envoyer.';
+    return;
+  }
+
+  const exposure = document.getElementById('exposure').value.trim();
+  const gain = document.getElementById('gain').value.trim();
+  // From the Generate step (user-reported Sep 2026: re-reading the
+  // hidden #count field directly here, instead of what was actually
+  // scheduled with, risked a mismatch in duration mode) - not re-read
+  // from the form directly.
+  const { durationMode, count } = lastGenerationParams || {
+    durationMode: 'count', count: parseInt(document.getElementById('count').value, 10),
+  };
+  const autofocusFirstOnly = document.getElementById('autofocusFirstOnly').checked;
+
+  btn.disabled = true;
+  let okCount = 0, errCount = 0;
+  const pad = n => String(n).padStart(2, '0');
+
+  for (let i = 0; i < toSend.length; i++) {
+    const t = toSend[i];
+    btn.textContent = `Envoi ${i + 1}/${toSend.length}…`;
+    const payload = {
+      dwarfUid,
+      target: { name: t.name, ra: t.ra, dec: t.dec },
+      camera: 'wide',
+      exposure, gain, count,
+      date: `${t.start.getFullYear()}-${pad(t.start.getMonth() + 1)}-${pad(t.start.getDate())}`,
+      time: `${pad(t.start.getHours())}:${pad(t.start.getMinutes())}:${pad(t.start.getSeconds())}`,
+      autofocus: autofocusFirstOnly ? (t.row === 0 && t.col === 0) : true,
+      // Matches durationForIndex()'s own criterion at generation time
+      // (user-reported Sep 2026: this used to key off position in the
+      // FILTERED toSend list - i===0 - while the schedule's own extra
+      // autofocus-time buffer was given to the grid's real first tile
+      // [row 0, col 0], which could be a DIFFERENT tile if that one
+      // happened to be unschedulable. Same tile, same criterion, both
+      // places now - if row0/col0 itself isn't schedulable, no tile in
+      // this batch gets autofocus, which is at least consistent rather
+      // than silently mismatched.
+    };
+    if (durationMode === 'duration') {
+      // Cuts the capture off at t.end (already computed by
+      // scheduleTiles() using this same tile's own duration) - the
+      // program's own optional End Time mechanism
+      // (dwarf_session.py's _wait_for_astro_end()), same as the
+      // program editor's manual field.
+      payload.endTime = `${pad(t.end.getHours())}:${pad(t.end.getMinutes())}`;
+    }
+    try {
+      const res = await fetch(`${apiBase()}/api/program`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) errCount++; else okCount++;
+    } catch (e) {
+      errCount++;
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Envoyer toutes les tuiles planifiables';
+  status.className = `status-line show ${errCount ? 'status-warn' : 'status-ok'}`;
+  status.textContent = `${okCount} tuile(s) envoyée(s) avec succès` + (errCount ? `, ${errCount} en échec.` : '.') +
+    ' Vérifie que le device est armé (page Programs) pour que le planning se lance automatiquement.';
+});
+</script>
+</body>
+</html>

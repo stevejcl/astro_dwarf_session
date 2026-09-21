@@ -159,6 +159,7 @@ TRANSLATIONS: dict[str, str] = {
     "prog_telescopius_empty":       "No usable rows found in this CSV.",
     "prog_telescopius_generated":   "{count} program(s) generated ({format} format) and added to the queue.",
     "prog_mosaic":                  "Mosaic",
+    "mosaic_planner_link":          "Milky Way mosaic planner",
     "prog_framing_x":               "Framing X (1.0-1.8x)",
     "prog_framing_y":               "Framing Y (1.0-1.8x)",
     "prog_mosaic_count":            "Subframes per panel (1-249)",
@@ -285,6 +286,7 @@ TRANSLATIONS: dict[str, str] = {
     "goto_stopped":                 "Goto stopped",
     "go_Live":                      "Go Live",
     "goLive_ok":                    "Live mode entered",
+
     # -- Quick actions (Toggle Lights, Focus Infinite, Calibrate, Polar
     # Position, EQ Solving, Reboot) --------------------------------------
     "action_toggle_lights":         "Toggle Lights",
@@ -294,6 +296,8 @@ TRANSLATIONS: dict[str, str] = {
     "power_lights_on_done":         "Power light on",
     "power_lights_off_done":        "Power light off",
     "action_focus_infinite":        "Focus Infinite",
+    "action_focus":                 "Focus",
+    "action_focus_done":            "Focus done",
     "action_focus_infinite_done":   "Infinite focus started",
     "action_calibrate":             "Calibrate",
     "action_calibrate_done":        "Calibration started",

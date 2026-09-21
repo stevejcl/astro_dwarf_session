@@ -1,8 +1,8 @@
 """
 components/api_routes.py
 
-Add three REST routes to the FastAPI server that NiceGUI is already running
-(`from nicegui import app` — `app` IS the FastAPI instance; see
+Adds REST + page routes to the FastAPI server that NiceGUI is already
+running (`from nicegui import app` — `app` IS the FastAPI instance; see
 `astro_dwarf_ui.py`, which already uses it for `app.add_static_files`).
 
 No second server, no second port, and no re-reading of `devices.json` on
@@ -114,6 +114,26 @@ def _bundled_path(relative: str) -> Path:
     buildAstroDwarfUI.py's --add-data (not just copied into dist/)."""
     if getattr(sys, "frozen", False):
         base_dir = Path(sys._MEIPASS)
+    else:
+        base_dir = Path(__file__).resolve().parent.parent
+    return base_dir / relative
+
+
+def _external_path(relative: str) -> Path:
+    """Resolves a data file meant to be REPLACEABLE without rebuilding
+    the .exe (user-requested Sep 2026, for the Milky Way mosaic planner
+    specifically - still under active iteration, unlike catalog.html's
+    stable third-party content, so requiring a full rebuild for every
+    tweak would be painful). Unlike _bundled_path() above, this reads
+    next to the ACTUAL RUNNING .exe (sys.executable's own folder) in a
+    packaged build - not sys._MEIPASS, which is a fresh temp extraction
+    dir every launch and can never be edited persistently. Matches how
+    images/ and components/locales/ are already handled: copied as
+    LOOSE files into dist/ by buildAstroDwarfUI.py, not baked in via
+    --add-data, so replacing the file next to the .exe takes effect on
+    the next launch with no rebuild at all."""
+    if getattr(sys, "frozen", False):
+        base_dir = Path(sys.executable).resolve().parent
     else:
         base_dir = Path(__file__).resolve().parent.parent
     return base_dir / relative
@@ -246,6 +266,36 @@ def register_api_routes() -> None:
                 status_code=404,
             )
         return FileResponse(catalog_path, media_type="text/html")
+
+    @app.get("/mosaic-planner-{lang}")
+    def mosaic_planner_page(lang: str):
+        """Serves the Milky Way mosaic planner the same way /catalog
+        serves catalog.html above - same-origin with /api/*, secure-
+        context geolocation on mobile, etc. Uses _external_path()
+        rather than _bundled_path() (see that function's own docstring)
+        specifically because this file is still under active iteration
+        - drop an updated milky_way_mosaic_planner_<lang>.html next to
+        the project root (dev) or the built .exe (packaged) and it
+        takes effect on the very next request, no rebuild needed
+        either way.
+
+        {lang} is "fr" or "en" (user-requested Sep 2026: no real i18n
+        system in this standalone file yet - just two full copies, one
+        per language, picked by whichever link the caller used - see
+        pages/programs.py's own link, which picks the URL from
+        components.i18n.get_language()). Any other value falls back to
+        "fr" rather than 404ing, so a stray/old link still resolves to
+        SOMETHING rather than a dead page.
+        """
+        if lang not in ("fr", "en"):
+            lang = "fr"
+        planner_path = _external_path(f"milky_way_mosaic_planner_{lang}.html")
+        if not planner_path.exists():
+            return JSONResponse(
+                {"error": f"milky_way_mosaic_planner_{lang}.html not found at {planner_path} - place the mosaic planner HTML file there."},
+                status_code=404,
+            )
+        return FileResponse(planner_path, media_type="text/html")
 
     @app.get("/api/dwarfs")
     def api_dwarfs():

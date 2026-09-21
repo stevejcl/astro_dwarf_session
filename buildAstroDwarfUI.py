@@ -124,6 +124,29 @@ for locale_file in Path("components/locales").glob("*.py"):
     print(f"Copying {locale_file} to {dest}")
     shutil.copy2(locale_file, dest)
 
+# Milky Way mosaic planner, next to the exe in dist/ (user-requested
+# Sep 2026) - a LOOSE companion file, like catalog.html USED to be
+# before it needed --add-data (see that decision's own note above):
+# this page is still under active iteration, so requiring a full
+# rebuild for every tweak would be painful. components/api_routes.py's
+# _external_path() (not _bundled_path()) reads it from next to the
+# ACTUAL running .exe, so replacing this file after the fact takes
+# effect on the next launch, no rebuild at all. Warn rather than fail
+# if it's missing from the repo checkout - same reasoning as
+# catalog.html's own warning below.
+# Two full copies, one per language (user-requested Sep 2026: "on peut
+# faire deux version pour l'instant _fr _en" - no real i18n system in
+# this standalone file yet). /mosaic-planner-{lang} (components/
+# api_routes.py) looks for both by this exact naming.
+for _lang in ("fr", "en"):
+    _lang_html = Path(f"milky_way_mosaic_planner_{_lang}.html")
+    if _lang_html.exists():
+        dest = DIST_DIR / _lang_html.name
+        print(f"Copying {_lang_html} to {dest}")
+        shutil.copy2(_lang_html, dest)
+    else:
+        print(f"Warning: {_lang_html} not found - /mosaic-planner-{_lang} will be unavailable until one is placed next to the built exe.")
+
 # Step 4 - Zip everything in dist
 suffix = os.environ.get("RUNNER_OS", "unknown")  # Windows, Linux, macOS
 zip_path = Path(f"{APP_NAME}-{suffix}.zip")

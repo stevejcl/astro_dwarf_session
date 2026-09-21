@@ -21,7 +21,7 @@ from nicegui import ui
 from dwarf_python_api.lib.dwarf_session import get_manager
 
 from components import scheduler_loop, scheduler_runner
-from components.i18n import t
+from components.i18n import get_language, t
 from components.program_editor import build_program_editor
 from components.schedule_editor import build_schedule_editor
 from components.session_dirs import session_dirs_for
@@ -83,10 +83,25 @@ def build_programs_page() -> None:
         with ui.column().classes(
             "w-full max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-[900px] mx-auto gap-3 p-4"
         ):
-            ui.button(
-                icon="arrow_back",
-                on_click=lambda: ui.navigate.to(f"/session/{dwarf_uid}"),
-            ).props("flat round")
+            with ui.row().classes("items-center gap-2"):
+                ui.button(
+                    icon="arrow_back",
+                    on_click=lambda: ui.navigate.to(f"/session/{dwarf_uid}"),
+                ).props("flat round")
+                # Milky Way mosaic planner (user-requested Sep 2026) -
+                # a standalone page (components/api_routes.py's
+                # /mosaic-planner-{lang}), not tied to this dwarf_uid at
+                # all - it has its own device picker - so this is just a
+                # convenience jump-off point from wherever a program
+                # would be sent to, not a per-device link. No real i18n
+                # system in that standalone file yet (user-requested
+                # Sep 2026: "deux version _fr _en... suivant la langue
+                # on ouvre le bon lien") - two full HTML copies, picked
+                # here from the app's OWN current language setting.
+                ui.button(
+                    icon="grid_view",
+                    on_click=lambda: ui.navigate.to(f"/mosaic-planner-{get_language()}", new_tab=True),
+                ).props("flat round").tooltip(t("mosaic_planner_link"))
             # In native mode (ui.run(native=True)) there is no address
             # bar at all - the URL's dwarf_uid, which is the ONLY thing
             # that determines which device Scripts/Results/relaunch

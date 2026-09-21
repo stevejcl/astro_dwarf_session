@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test /api/program — astro_dwarf_session</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #141922;
+    --panel-border: #232b3a;
+    --text: #e6e9ef;
+    --text-dim: #8b95a7;
+    --accent: #5fb3ff;
+    --accent-dim: #2c5a82;
+    --ok: #4ade80;
+    --err: #f87171;
+    --warn: #fbbf24;
+    --mono: "SF Mono", Consolas, "Roboto Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 2rem 1.25rem 4rem;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 0 0 0.15rem;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin: 0 0 1.75rem;
+    line-height: 1.5;
+  }
+  fieldset {
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 1.1rem 1.25rem 1.3rem;
+    margin: 0 0 1.1rem;
+  }
+  legend {
+    padding: 0 0.4rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  label {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin: 0.7rem 0 0.3rem;
+  }
+  label:first-of-type { margin-top: 0; }
+  input[type=text], input[type=number], input[type=date], input[type=time], select {
+    width: 100%;
+    background: #0d1219;
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    padding: 0.55rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    font-family: inherit;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .row { display: flex; gap: 0.75rem; }
+  .row > div { flex: 1; }
+  .checks { display: flex; gap: 1.5rem; margin-top: 0.9rem; }
+  .checks label {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin: 0; color: var(--text); font-size: 0.9rem; cursor: pointer;
+  }
+  .checks input { width: auto; }
+  button {
+    width: 100%;
+    background: var(--accent);
+    color: #06121f;
+    border: none;
+    padding: 0.75rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.4rem;
+  }
+  button:disabled { background: var(--accent-dim); color: var(--text-dim); cursor: default; }
+  button:not(:disabled):hover { filter: brightness(1.08); }
+  #result {
+    margin-top: 1.1rem;
+    border-radius: 8px;
+    display: none;
+  }
+  #result.show { display: block; }
+  .status-line {
+    font-size: 0.92rem;
+    font-weight: 600;
+    padding: 0.7rem 0.9rem;
+    border-radius: 8px 8px 0 0;
+  }
+  .status-ok { background: rgba(74,222,128,0.12); color: var(--ok); border: 1px solid rgba(74,222,128,0.3); border-bottom: none; }
+  .status-warn { background: rgba(251,191,36,0.12); color: var(--warn); border: 1px solid rgba(251,191,36,0.3); border-bottom: none; }
+  .status-err { background: rgba(248,113,113,0.12); color: var(--err); border: 1px solid rgba(248,113,113,0.3); border-bottom: none; }
+  pre {
+    margin: 0;
+    padding: 0.9rem;
+    background: #0d1219;
+    border: 1px solid var(--panel-border);
+    border-radius: 0 0 8px 8px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .server-line {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 1.25rem;
+    font-family: var(--mono);
+  }
+  .server-line span { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Test — POST /api/program</h1>
+  <p class="subtitle">Petit outil pour valider l'endpoint avant de construire le vrai planificateur de mosaïque Voie lactée. Envoie une seule tuile et affiche la réponse brute du serveur.</p>
+  <div class="server-line">Serveur : <span id="serverUrl">—</span></div>
+
+  <fieldset>
+    <legend>Device</legend>
+    <label for="dwarfSelect">Dwarf cible</label>
+    <select id="dwarfSelect"><option>Chargement…</option></select>
+  </fieldset>
+
+  <fieldset>
+    <legend>Cible</legend>
+    <label for="targetName">Nom</label>
+    <input type="text" id="targetName" value="MW Tile Test" placeholder="ex. MW Tile 12">
+    <div class="row">
+      <div>
+        <label for="ra">RA (heures décimales)</label>
+        <input type="number" id="ra" step="any" value="18.5">
+      </div>
+      <div>
+        <label for="dec">Dec (degrés)</label>
+        <input type="number" id="dec" step="any" value="-25.3">
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Caméra</legend>
+    <label for="camera">Objectif</label>
+    <select id="camera">
+      <option value="wide" selected>Wide</option>
+      <option value="tele">Tele</option>
+    </select>
+    <div class="row">
+      <div>
+        <label for="exposure">Exposition (s)</label>
+        <input type="text" id="exposure" value="15">
+      </div>
+      <div>
+        <label for="gain">Gain</label>
+        <input type="text" id="gain" value="80">
+      </div>
+      <div>
+        <label for="count">Nombre d'images</label>
+        <input type="number" id="count" value="20">
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Planification</legend>
+    <div class="row">
+      <div>
+        <label for="date">Date</label>
+        <input type="date" id="date">
+      </div>
+      <div>
+        <label for="time">Heure de début</label>
+        <input type="time" id="time" step="1">
+      </div>
+      <div>
+        <label for="endTime">Heure de fin (optionnel)</label>
+        <input type="time" id="endTime">
+      </div>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="autofocus"> Autofocus infini</label>
+      <label><input type="checkbox" id="startNow"> Démarrer maintenant si connecté</label>
+    </div>
+  </fieldset>
+
+  <button id="submitBtn">Envoyer la tuile</button>
+
+  <div id="result">
+    <div class="status-line" id="statusLine"></div>
+    <pre id="responseBody"></pre>
+  </div>
+</div>
+
+<script>
+function apiBase() {
+  // Same reasoning as catalog.html's own bridgeUrl(): if this page is
+  // itself served by astro_dwarf_session (http/https), use that same
+  // origin - otherwise (opened as a local file, file:// protocol) fall
+  // back to the default local port.
+  if (/^https?:$/.test(location.protocol)) return location.origin;
+  return 'http://127.0.0.1:8000';
+}
+const BASE = apiBase();
+document.getElementById('serverUrl').textContent = BASE;
+
+// Default date/time: today, now + 5 minutes - mirrors _blank_program()'s
+// own default in program_editor.py, so the form starts on a sane value.
+(function setDefaultDateTime() {
+  const now = new Date(Date.now() + 5 * 60000);
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('date').value =
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  document.getElementById('time').value =
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+})();
+
+async function loadDwarfs() {
+  const select = document.getElementById('dwarfSelect');
+  try {
+    const res = await fetch(`${BASE}/api/dwarfs`);
+    const data = await res.json();
+    const devices = data.devices || [];
+    if (!devices.length) {
+      select.innerHTML = '<option value="">Aucun device connu</option>';
+      return;
+    }
+    select.innerHTML = devices.map(d => {
+      const bits = [d.model || '', d.ip || '', d.connected ? 'connecté' : 'déconnecté'].filter(Boolean);
+      const label = `${d.name} (${bits.join(' · ')})`;
+      return `<option value="${d.dwarfUid}">${label}</option>`;
+    }).join('');
+  } catch (e) {
+    select.innerHTML = '<option value="">Erreur de connexion au serveur</option>';
+  }
+}
+loadDwarfs();
+
+document.getElementById('submitBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('submitBtn');
+  const resultBox = document.getElementById('result');
+  const statusLine = document.getElementById('statusLine');
+  const responseBody = document.getElementById('responseBody');
+
+  const payload = {
+    dwarfUid: document.getElementById('dwarfSelect').value,
+    target: {
+      name: document.getElementById('targetName').value.trim() || 'target',
+      ra: parseFloat(document.getElementById('ra').value),
+      dec: parseFloat(document.getElementById('dec').value),
+    },
+    camera: document.getElementById('camera').value,
+    exposure: document.getElementById('exposure').value.trim(),
+    gain: document.getElementById('gain').value.trim(),
+    count: parseInt(document.getElementById('count').value, 10),
+    date: document.getElementById('date').value,
+    time: document.getElementById('time').value,
+    autofocus: document.getElementById('autofocus').checked,
+    startNow: document.getElementById('startNow').checked,
+  };
+  const endTime = document.getElementById('endTime').value;
+  if (endTime) payload.endTime = endTime;
+
+  if (!payload.dwarfUid) {
+    resultBox.className = 'show';
+    statusLine.className = 'status-line status-err';
+    statusLine.textContent = 'Choisis un Dwarf avant d\u2019envoyer.';
+    responseBody.textContent = '';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+  resultBox.className = 'show';
+  statusLine.className = 'status-line status-warn';
+  statusLine.textContent = 'Envoi en cours…';
+  responseBody.textContent = '';
+
+  try {
+    const res = await fetch(`${BASE}/api/program`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      statusLine.className = 'status-line status-err';
+      statusLine.textContent = `Échec (${res.status}) — ${data.error || 'erreur inconnue'}`;
+    } else {
+      const modeLabels = {
+        started: 'Démarré immédiatement.',
+        scheduled: 'Enregistré, en attente de l\u2019heure programmée.',
+        saved_not_connected: 'Enregistré — device hors ligne, restera planifié.',
+        saved_busy: 'Enregistré — device occupé, restera planifié.',
+      };
+      statusLine.className = 'status-line status-ok';
+      statusLine.textContent = modeLabels[data.mode] || `OK (${data.mode})`;
+    }
+    responseBody.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    statusLine.className = 'status-line status-err';
+    statusLine.textContent = `Erreur réseau — ${e.message}`;
+    responseBody.textContent = String(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Envoyer la tuile';
+  }
+});
+</script>
+</body>
+</html>

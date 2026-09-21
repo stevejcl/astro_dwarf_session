@@ -1,7 +1,13 @@
 # Changelog
 
-## [3.0.6] - 2026-09-20
+## [3.0.5] - 2026-09-20
 ### Improvements
+    This update refines the app’s visual structure with card-based panels, improved contrast across the page shell, and cleaner action layouts. 
+    It adds a Go Live action, reorders focus/calibration controls, and fixes the EQ altitude direction logic. (To be confirmed)
+    The program editor now shows estimated total duration based on exposure and frame count, including the end-time behavior.
+    Explorer views also fetch and display shotsInfo metadata for stacked counts and total exposure duration.
+    Additionally, camera, stream, motor pad, and settings sections were wrapped for a more consistent card-based UI.
+
     This changeset adds a new /api/program API for saving and optionally starting manual target programs, including Wide/Tele camera configuration and auto-device resolution.
     It also expands the device snapshot payload with model/IP metadata, 
 
@@ -9,15 +15,6 @@
     fixes run-state detection during active program execution,
     corrects camera thumbnail selection for Wide stacks,
     updates the PWA manifest/icon to a valid square image for Android installability.
-
-## [3.0.5] - 2026-09-19
-
-### Improvements
-    This update refines the app’s visual structure with card-based panels, improved contrast across the page shell, and cleaner action layouts. 
-    It adds a Go Live action, reorders focus/calibration controls, and fixes the EQ altitude direction logic. (To be confirmed)
-    The program editor now shows estimated total duration based on exposure and frame count, including the end-time behavior.
-    Explorer views also fetch and display shotsInfo metadata for stacked counts and total exposure duration.
-    Additionally, camera, stream, motor pad, and settings sections were wrapped for a more consistent card-based UI.
 
 ## [3.0.4] - 2026-09-19
 

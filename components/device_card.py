@@ -471,20 +471,14 @@ class DeviceCardView:
         # Same kind as last tick: only refresh the bit of text that can
         # legitimately change on its own - no DOM rebuild.
         if kind == "capturing" and self._dynamic_label is not None:
-            # Which camera is actually capturing - by KEY PRESENCE, not
-            # truthiness (a currently-active capture at current_count==0
-            # still has the key; "or" on the values alone would wrongly
-            # fall through to Wide's fields for a moment at Tele's very
-            # first tick). Determines both which raw counters to read
-            # AND which of the two per-camera totals below applies.
-            is_tele = full_status.get("takePhotoCount",0) > 0
+            is_tele = scheduler_runner.resolve_active_camera_is_tele(self.dwarf_uid, full_status)
+            run_state = scheduler_runner.get_run_state(self.dwarf_uid)
             stacked = full_status.get("takePhotoStacked" if is_tele else "takeWidePhotoStacked", 0)
             # NOT the requested total - see RunState's own per-camera
             # requested_count_tele/wide docstring (scheduler_runner.py):
             # this is current_count under a misleading cache key, i.e.
             # "captured so far", not the target.
             current = full_status.get("takePhotoCount" if is_tele else "takeWidePhotoCount", 0)
-            run_state = scheduler_runner.get_run_state(self.dwarf_uid)
             total = (
                 (run_state.requested_count_tele if is_tele else run_state.requested_count_wide)
                 if run_state else ""

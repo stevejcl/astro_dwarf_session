@@ -32,6 +32,7 @@ from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 
 from components.i18n import t
 from components import rtsp_worker
+from components import scheduler_runner
 
 # How often to check for a new stacked frame (seconds). Cheap - reads
 # get_client_status()'s own cache, no network call of its own.
@@ -235,14 +236,18 @@ def dashboard_thumbnail_refresh_source(session, image: ui.image, new_values: dic
     (image from build_dashboard_thumbnail()) - forces a re-fetch only
     when a genuinely new stacked frame landed (see module docstring:
     the HTTP endpoint isn't a continuous stream), using the SAME
-    cache-busting technique as build_camera_stream_section()."""
+    cache-busting technique as build_camera_stream_section(). Picks the
+    Tele or Wide HTTP endpoint via scheduler_runner's shared
+    resolve_active_camera_is_tele() - see its own docstring for why
+    (RunState first, the device's own started flags as a fallback)."""
     ip = session.config.dwarf_ip
-    if not ip or "takePhotoStacked"  or "takeWidePhotoStacked" not in new_values:
+    if not ip:
         return
-    if takeWidePhotoStacked:
-        url = _stream_urls(ip)["http_stacking_wide"]
-    else:
-        url = _stream_urls(ip)["http_stacking_tele"]
+    if "takePhotoStacked" not in new_values and "takeWidePhotoStacked" not in new_values:
+        return
+    full_status = get_client_status(session).get("fullStatus", {})
+    is_tele = scheduler_runner.resolve_active_camera_is_tele(session.dwarf_uid, full_status)
+    url = _stream_urls(ip)["http_stacking_tele" if is_tele else "http_stacking_wide"]
     image.set_source(f"{url}?t={time.monotonic()}")
 
 

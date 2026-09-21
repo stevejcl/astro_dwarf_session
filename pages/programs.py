@@ -357,6 +357,14 @@ def build_programs_page() -> None:
                                                 f" \u00b7 {id_command.get('shots_stacked', 0)}/"
                                                 f"{id_command['shots_taken']} {t('prog_shots_stacked')}"
                                             )
+                                        if id_command.get("count_info"):
+                                            detail += (
+                                                f" \u00b7 {t('prog_count')}: {id_command.get('count_info', 0)}"
+                                            )
+                                        if id_command.get("mosaic_info"):
+                                            detail += (
+                                                f" \u00b7 {t('prog_mosaic')}: {id_command.get('mosaic_info', False)}"
+                                            )
                                         ui.label(detail).classes("text-xs")
                                     if id_command.get("starting_date") or id_command.get("processed_date"):
                                         ui.label(

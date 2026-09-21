@@ -674,10 +674,18 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 continue_action = perform_set_astro_stack_count_v3(int(count_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
+                if progress_callback:
+                    progress_callback(
+                        f"Total Count: {int(count_val)}", "success"
+                    )
             if do_mosaic:
                 continue_action = perform_set_astro_mosaic_count_v3(int(mosaic_count_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
+                if progress_callback:
+                    progress_callback(
+                        f"Mosaic on", "success"
+                    )
 
             time.sleep(5)
             if interrupted(): return

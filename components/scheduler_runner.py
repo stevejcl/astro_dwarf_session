@@ -267,6 +267,34 @@ def get_run_state(dwarf_uid: str) -> RunState | None:
     return _runs.get(dwarf_uid)
 
 
+def resolve_active_camera_is_tele(dwarf_uid: str, full_status: dict) -> bool:
+    """Which camera (Tele vs Wide) is behind the current capture - for
+    displays that need to pick between the two cameras' stats/streams
+    (components/device_card.py's capturing banner, components/
+    camera_stream.py's dashboard thumbnail; user-requested Sep 2026 to
+    share this one spot rather than duplicate it a third time).
+
+    Prefers RunState (set by start_run() from the program's own
+    setup_camera/setup_wide_camera do_action - known instantly,
+    independent of anything the device itself reports, so it can't
+    inherit any device-side staleness). Falls back to the device's own
+    takePhotoStarted/takeWidePhotoStarted flags only when no RunState
+    exists (e.g. a capture started outside this app's own
+    scheduler_runner) - safe to trust for that fallback since
+    dwarf_python_api v3.0.8 fixed the device-side bug that could
+    otherwise leave takePhotoStarted reading True during a Wide-only
+    capture, stale from an earlier Tele one that session. Defaults to
+    Tele when nothing usable is available at all."""
+    run_state = get_run_state(dwarf_uid)
+    if run_state and run_state.requested_count_wide and not run_state.requested_count_tele:
+        return False
+    if run_state and run_state.requested_count_tele:
+        return True
+    if full_status.get("takeWidePhotoStarted") and not full_status.get("takePhotoStarted"):
+        return False
+    return True
+
+
 def is_running(dwarf_uid: str) -> bool:
     state = _runs.get(dwarf_uid)
     return bool(state and state.running)
@@ -443,6 +471,8 @@ def _run_blocking(
             _capture_actual_camera_settings(id_command, session)
             _capture_eq_solving_result(id_command, session)
             _capture_shots_result(id_command, session)
+            id_command["count_info"] = state.requested_count_tele if state.requested_count_tele else state.requested_count_wide
+            id_command["mosaic_info"] =  program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action")
             state.shots_taken = id_command.get("shots_taken")
             state.shots_stacked = id_command.get("shots_stacked")
 

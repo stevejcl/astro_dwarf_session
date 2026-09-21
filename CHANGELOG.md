@@ -1,5 +1,20 @@
 # Changelog
 
+
+## [3.0.6] - 2026-09-21
+### Improvements
+
+    Add shared logic to pick the active camera and surface run metadata to the UI.
+
+    Add scheduler_runner.resolve_active_camera_is_tele(...) to prefer RunState (with a safe device-status fallback) when choosing Tele vs Wide.
+    Use the resolver in camera_stream and device_card to pick correct stacking URLs and capturing labels; fix early-return and status checks in camera_stream.
+    Include count_info and mosaic_info on id_command in scheduler_runner._run_blocking so program list can show run targets.
+    Render count and mosaic details in pages/programs.
+    Report brief progress_callback messages after setting total and mosaic counts in dwarf_session.
+
+    These changes ensure a single source of truth for camera selection and expose run targets to the UI for clearer user feedback.
+
+
 ## [3.0.5] - 2026-09-20
 ### Improvements
     This update refines the app’s visual structure with card-based panels, improved contrast across the page shell, and cleaner action layouts. 

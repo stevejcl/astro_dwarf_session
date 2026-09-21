@@ -313,13 +313,14 @@ def build_programs_page() -> None:
                             for filename in _list_json_files(dirpath):
                                 filepath = os.path.join(dirpath, filename)
                                 data = _read_json(filepath) or {}
-                                id_command = data.get("command", {}).get("id_command", {})
+                                program = data.get("command", {})
+                                id_command = program.get("id_command", {})
                                 when = _parse_full_datetime(
                                     id_command.get("processed_date")
                                 ) or _parse_datetime(
                                     id_command.get("date"), id_command.get("time")
                                 )
-                                entries.append((when, kind, filepath, id_command, filename))
+                                entries.append((when, kind, filepath, id_command, program, filename))
 
                         # Most recent first - undated entries sort last.
                         entries.sort(key=lambda e: e[0] or datetime.min, reverse=True)
@@ -327,7 +328,7 @@ def build_programs_page() -> None:
                         with results_container:
                             if not entries:
                                 ui.label(t("no_results")).classes("text-grey-6 text-sm")
-                            for when, kind, filepath, id_command, filename in entries:
+                            for when, kind, filepath, id_command, program, filename in entries:
                                 with ui.card().classes("w-full"):
                                     with ui.row().classes("items-center gap-2"):
                                         ui.icon(
@@ -340,6 +341,14 @@ def build_programs_page() -> None:
                                         ).classes("text-sm font-medium")
                                     if id_command.get("message"):
                                         ui.label(id_command["message"]).classes(
+                                            "text-xs text-grey-6"
+                                        )
+                                    if program.get("setup_camera", {}).get("do_action"):
+                                        ui.label(f"{t('prog_camera')}: {t('camera_tele')}").classes(
+                                            "text-xs text-grey-6"
+                                        )
+                                    if program.get("setup_wide_camera", {}).get("do_action"):
+                                        ui.label(f"{t('prog_camera')}: {t('camera_wide')}").classes(
                                             "text-xs text-grey-6"
                                         )
                                     if id_command.get("exposure_actual"):
@@ -363,7 +372,7 @@ def build_programs_page() -> None:
                                             )
                                         if id_command.get("mosaic_info"):
                                             detail += (
-                                                f" \u00b7 {t('prog_mosaic')}: {id_command.get('mosaic_info', False)}"
+                                                f" \u00b7 {t('prog_mosaic')}"
                                             )
                                         ui.label(detail).classes("text-xs")
                                     if id_command.get("starting_date") or id_command.get("processed_date"):

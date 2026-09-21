@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.0.6] - 2026-09-20
+### Improvements
+    This changeset adds a new /api/program API for saving and optionally starting manual target programs, including Wide/Tele camera configuration and auto-device resolution.
+    It also expands the device snapshot payload with model/IP metadata, 
+
+### Bug
+    fixes run-state detection during active program execution,
+    corrects camera thumbnail selection for Wide stacks,
+    updates the PWA manifest/icon to a valid square image for Android installability.
+
 ## [3.0.5] - 2026-09-19
 
 ### Improvements

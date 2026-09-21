@@ -477,7 +477,7 @@ class DeviceCardView:
             # fall through to Wide's fields for a moment at Tele's very
             # first tick). Determines both which raw counters to read
             # AND which of the two per-camera totals below applies.
-            is_tele = full_status.get("takePhotoCount") is not None
+            is_tele = full_status.get("takePhotoCount",0) > 0
             stacked = full_status.get("takePhotoStacked" if is_tele else "takeWidePhotoStacked", 0)
             # NOT the requested total - see RunState's own per-camera
             # requested_count_tele/wide docstring (scheduler_runner.py):

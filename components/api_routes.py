@@ -1,7 +1,7 @@
 """
 components/api_routes.py
 
-Add two REST routes to the FastAPI server that NiceGUI is already running
+Add three REST routes to the FastAPI server that NiceGUI is already running
 (`from nicegui import app` — `app` IS the FastAPI instance; see
 `astro_dwarf_ui.py`, which already uses it for `app.add_static_files`).
 
@@ -11,9 +11,13 @@ that the UI itself displays.
 
 ```
 GET  /api/dwarfs
-    -> {"devices": [{"name", "dwarfUid", "connected"}, ...]}
-    Name comes from `device_registry` (`devices.json`), while the
-    "connected" state comes from the actual DwarfSession in memory.
+    -> {"devices": [{"name", "dwarfUid", "model", "ip", "connected", "busy", "hasPending"}, ...]}
+    Name comes from `device_registry` (`devices.json`), while "ip" comes
+    from that device's own config.ini (dwarf_ip) and "connected" from
+    the actual DwarfSession in memory. Also includes a synthetic
+    "auto:<model>" entry per model with 2+ known devices (see
+    _devices_snapshot()'s own docstring) - these have no single "ip",
+    since they don't resolve to one real device until send time.
 
 POST /api/schedule
     body: {"dwarfUid": "...", "schedule": {...}}
@@ -26,6 +30,41 @@ POST /api/schedule
       (see the hook in `pages/session.py::_handle_connect`).
 
     -> {"ok": true, "mode": "sent"|"pending", ...}
+
+POST /api/program
+    body: {"dwarfUid": "...", "target": {"name", "ra", "dec"}, "camera":
+           "wide"|"tele", "exposure", "gain", "count", "binning"?,
+           "ircut"?, "date"?, "time"?, "endTime"?, "autofocus"?,
+           "startNow"?}
+    For the MILKY WAY MOSAIC use case (user-requested Sep 2026): the
+    Wide camera - the whole point of using astro_dwarf_session over the
+    official app for this - has NO equivalent in the on-device native
+    schedule at all (ShootingTaskMsg's business fields, confirmed in
+    dwarf_python_api's _build_shooting_task_msg(), carry no camera
+    selector - it's implicitly Tele-only). So a Wide-camera plan can't
+    go through /api/schedule above; this builds and saves an
+    astro_dwarf_session PROGRAM instead (goto_manual + setup_camera/
+    setup_wide_camera, matching components/program_editor.py's own
+    _blank_program() shape), which DOES support Wide.
+
+    Always writes the program as a ToDo file (components/session_dirs.py),
+    same as saving from the editor - so components/scheduler_loop.py's
+    existing background loop picks it up and runs it automatically at
+    its own date/time, PROVIDED the device has been armed for that
+    (pages/programs.py's toggle - this endpoint never arms a device on
+    its own, matching that toggle's own "off by default" safety
+    reasoning) AND, for a Milky Way mosaic, already in EQ mode - both
+    are manual, physical/UI steps this API can't do for the caller.
+    date/time default to now/now+5min if omitted.
+
+    startNow=true additionally tries to start it RIGHT AWAY instead of
+    only relying on the schedule - only if the device is connected and
+    not already running something; otherwise it's silently left as a
+    saved, scheduled file (not an error - the ToDo file is exactly as
+    useful either way).
+
+    -> {"ok": true, "mode": "started"|"scheduled"|"saved_not_connected"|
+        "saved_busy", "filepath": "..."}
 ```
 
 CORS: the catalogue page has a different origin (a local file or another
@@ -37,7 +76,9 @@ if needed.
 from __future__ import annotations
 
 import json
+import os
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import Request
@@ -52,8 +93,10 @@ from dwarf_python_api.lib.dwarf_utils import perform_get_last_sync_error
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 from device_registry import list_device_entries
-from components import connection_health
+from components import connection_health, scheduler_runner
 from components.device_card import _DEVICE_TYPE_ICONS
+from components.program_editor import _blank_program, _filename_for
+from components.session_dirs import ensure_dirs
 import pending_schedules
 import dwarf_python_api.lib.my_logger as log
 
@@ -116,6 +159,7 @@ def _devices_snapshot() -> list[dict]:
             "name": entry.name,
             "dwarfUid": cfg.dwarf_uid,
             "model": _model_display_name(cfg),
+            "ip": cfg.dwarf_ip,
             "connected": bool(session and session.is_connected),
             "busy": bool(session and connection_health.is_busy(cfg.dwarf_uid)),
             "hasPending": pending_schedules.get_pending(cfg.dwarf_uid) is not None,
@@ -271,3 +315,120 @@ def register_api_routes() -> None:
         log.info(f"[{dwarf_uid}] Device offline — storing schedule as pending.")
         pending_schedules.set_pending(dwarf_uid, schedule)
         return JSONResponse({"ok": True, "mode": "pending"})
+
+    @app.post("/api/program")
+    async def api_program(request: Request):
+        try:
+            body = await request.json()
+        except json.JSONDecodeError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+        dwarf_uid = body.get("dwarfUid")
+        if not dwarf_uid:
+            return JSONResponse({"error": "dwarfUid is required"}, status_code=400)
+
+        if dwarf_uid.startswith("auto:"):
+            resolved, err = _resolve_auto_dwarf_uid(dwarf_uid)
+            if err:
+                return JSONResponse({"error": err}, status_code=404)
+            log.info(f"[{dwarf_uid}] Resolved to {resolved!r} (least busy of that model).")
+            dwarf_uid = resolved
+
+        try:
+            session = get_manager().get(dwarf_uid)
+        except KeyError:
+            return JSONResponse({"error": f"unknown dwarfUid {dwarf_uid!r}"}, status_code=404)
+
+        target = body.get("target") or {}
+        name = target.get("name") or "target"
+        ra = target.get("ra")
+        dec = target.get("dec")
+        if ra is None or dec is None:
+            return JSONResponse({"error": "target.ra and target.dec are required"}, status_code=400)
+
+        camera = str(body.get("camera", "wide")).lower()
+        if camera not in ("wide", "tele"):
+            return JSONResponse({"error": "camera must be 'wide' or 'tele'"}, status_code=400)
+
+        program = _blank_program()
+        cmd = program["command"]
+        cmd["id_command"]["description"] = name
+        cmd["id_command"]["date"] = body.get("date") or datetime.now().strftime("%Y-%m-%d")
+        cmd["id_command"]["time"] = (
+            body.get("time") or (datetime.now() + timedelta(minutes=5)).strftime("%H:%M:%S")
+        )
+
+        # Manual RA/Dec goto - a Milky Way mosaic tile (the driving use
+        # case, user-requested Sep 2026) isn't a named catalog object, so
+        # goto_solar (Sun/Moon/planets) doesn't apply here.
+        cmd["goto_manual"] = {
+            "do_action": True,
+            "target": name,
+            "ra_coord": str(ra),
+            "dec_coord": str(dec),
+            "wait_after": 10,
+        }
+
+        # Per-tile autofocus (user-requested Sep 2026, Milky Way mosaic
+        # use case: focus can drift with temperature over a long night,
+        # but re-focusing on EVERY tile wastes real integration time on
+        # overhead). Deliberately just a plain per-request bool, no
+        # "every N tiles" counter here - each /api/program call is
+        # independent and stateless, so tracking "tiles since last
+        # focus" across many separate saved files would need new shared
+        # state for little benefit; the caller (the mosaic planner)
+        # already knows its own tile order and can decide which ones
+        # set autofocus=true (e.g. the first tile of each hour) when it
+        # builds each request.
+        cmd["infinite_focus"]["do_action"] = bool(body.get("autofocus", False))
+
+        # Only ONE of setup_camera/setup_wide_camera is ever do_action=True
+        # for a program built this way - matches how the editor itself
+        # only lets you pick Tele XOR Wide, never both, for one program.
+        active_key = "setup_wide_camera" if camera == "wide" else "setup_camera"
+        inactive_key = "setup_camera" if camera == "wide" else "setup_wide_camera"
+        active = cmd[active_key]
+        active["do_action"] = True
+        active["exposure"] = str(body.get("exposure", active["exposure"]))
+        active["gain"] = str(body.get("gain", active["gain"]))
+        active["count"] = str(body.get("count", active["count"]))
+        active["end_time"] = body.get("endTime", "")
+        if camera == "tele":
+            active["binning"] = str(body.get("binning", active.get("binning", "0")))
+            active["ircut"] = str(body.get("ircut", active.get("ircut", "1")))
+        cmd[inactive_key]["do_action"] = False
+
+        # Always saved as a ToDo file first, START-NOW-or-not - see this
+        # route's own docstring above for why (scheduler_loop.py picks it
+        # up on its own once the device is armed, same as any program
+        # saved from the editor).
+        dirs = ensure_dirs(session)
+        filename = _filename_for(program)
+        filepath = os.path.join(dirs["TODO_DIR"], filename)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(program, f, indent=4)
+        log.info(f"[{dwarf_uid}] Program saved: {filepath}")
+
+        if not body.get("startNow"):
+            return JSONResponse({"ok": True, "mode": "scheduled", "filepath": filepath})
+
+        if not session.is_connected:
+            log.info(f"[{dwarf_uid}] startNow requested but device is offline - left as scheduled.")
+            return JSONResponse({"ok": True, "mode": "saved_not_connected", "filepath": filepath})
+
+        if scheduler_runner.is_running(dwarf_uid):
+            log.info(f"[{dwarf_uid}] startNow requested but a program is already running - left as scheduled.")
+            return JSONResponse({"ok": True, "mode": "saved_busy", "filepath": filepath})
+
+        try:
+            scheduler_runner.start_run(dwarf_uid, cmd, session, source_filepath=filepath)
+        except RuntimeError as e:
+            # Same race is possible as scheduler_loop.py's own start_run()
+            # call (is_running() checked above, but something else could
+            # have claimed it between that check and this call) -
+            # RuntimeError here means it's STILL saved as a ToDo file, not
+            # lost, so this is a soft "try again" rather than a hard error.
+            log.info(f"[{dwarf_uid}] start_run() race: {e} - left as scheduled.")
+            return JSONResponse({"ok": True, "mode": "saved_busy", "filepath": filepath})
+
+        return JSONResponse({"ok": True, "mode": "started", "filepath": filepath})

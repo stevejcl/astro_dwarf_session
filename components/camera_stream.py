@@ -237,9 +237,12 @@ def dashboard_thumbnail_refresh_source(session, image: ui.image, new_values: dic
     the HTTP endpoint isn't a continuous stream), using the SAME
     cache-busting technique as build_camera_stream_section()."""
     ip = session.config.dwarf_ip
-    if not ip or "takePhotoStacked" not in new_values:
+    if not ip or "takePhotoStacked"  or "takeWidePhotoStacked" not in new_values:
         return
-    url = _stream_urls(ip)["http_stacking_tele"]
+    if takeWidePhotoStacked:
+        url = _stream_urls(ip)["http_stacking_wide"]
+    else:
+        url = _stream_urls(ip)["http_stacking_tele"]
     image.set_source(f"{url}?t={time.monotonic()}")
 
 

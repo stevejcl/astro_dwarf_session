@@ -132,6 +132,11 @@ def build_program_section(session) -> None:
                 stop_button.set_visibility(False)
                 stop_button.enable()
 
+            if state and state.running:
+                start_button.set_visibility(False)
+                stop_button.set_visibility(True)
+                stop_button.enable()
+
         # ALWAYS active - never gated behind "only while I started a run
         # from THIS widget" (user-reported bug, Sep 2026): a program can
         # also be started EXTERNALLY (pages/programs.py's Scripts/

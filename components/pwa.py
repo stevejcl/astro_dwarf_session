@@ -17,19 +17,35 @@ THAT icon - a regular browser tab visit, even with this manifest
 present, still shows the normal address bar. This is standard PWA
 behaviour, not something any manifest setting can override for a
 plain browser tab.
+
+ANDROID + HTTPS (user-reported Sep 2026: "pwa ne marche pas sur mon
+android"): Chrome's PWA installability check - the "any icon must be
+square" requirement fixed below, PLUS a secure context - requires
+either HTTPS or a hostname of exactly "localhost"/"127.0.0.1". This app
+is reached over plain HTTP at a LAN IP (see components/network_info.py's
+own watch_url()), which Chrome does NOT treat as secure - so on Android,
+"Add to Home Screen" is likely to only create a plain bookmark shortcut
+(still shows the address bar) rather than a true standalone-mode PWA,
+NO MATTER what this manifest says. iOS Safari has historically been more
+lenient about this for its own apple-mobile-web-app-capable meta tag,
+which is why the effect may still work there over plain HTTP. Fixing
+this properly on Android would mean serving the app over HTTPS (a
+self-signed cert the phone has to be told to trust, or a real cert via
+a domain name / local CA) - a deployment change, not something fixable
+from this file alone.
 """
 from __future__ import annotations
 
 from fastapi.responses import JSONResponse
 from nicegui import app, ui
 
-# Reuses an existing device icon as a placeholder app icon (user-
-# provided Sep 2026 Gemini-generated icons, already served from
-# astro_dwarf_ui.py's own app.add_static_files("/images", ...) - no
-# copyright concern, see device_card.py's own note on these) - swap
-# for a dedicated app logo later if wanted, this just needs SOME valid
-# icon file for the manifest to be considered valid by mobile browsers.
-_ICON_PATH = "/images/dwarf3.png"
+# Dedicated square PWA icon (user-reported Sep 2026: "pwa ne marche pas
+# sur mon android" - dwarf3.png itself is 270x280, NOT square, which
+# fails Chrome's installability check on Android; PWA manifest icons
+# must be square). Generated once from dwarf3.png (512x512, centered,
+# padded) - see the git history for how, no need to regenerate unless
+# swapping the source image.
+_ICON_PATH = "/images/pwa_icon.png"
 
 _MANIFEST = {
     "name": "Astro Dwarf Session",
@@ -39,7 +55,8 @@ _MANIFEST = {
     "background_color": "#ffffff",
     "theme_color": "#1976d2",
     "icons": [
-        {"src": _ICON_PATH, "sizes": "270x280", "type": "image/png"},
+        {"src": _ICON_PATH, "sizes": "512x512", "type": "image/png"},
+        {"src": _ICON_PATH, "sizes": "192x192", "type": "image/png"},
     ],
 }
 

@@ -31,6 +31,7 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 - **Runs and schedules imaging programs**: build a program once (goto, calibration, EQ Solving, camera settings, capture — including Mosaic panels) and either run it live or schedule it for later. A background scheduler picks up due programs even with no browser tab open. A capture step can optionally be given a scheduled end time — if the requested image count isn't reached by then, the session is stopped cleanly instead of running indefinitely.
 - **Syncs and monitors the Dwarf's own on-device shooting schedule** (the native, firmware-side scheduling feature, separate from this app's own program scheduler) — view every schedule currently stored on the device with live status (planned/in progress/completed/expired) and per-target progress, delete one, or queue one for the next connection while offline.
 - **Spreads a batch of targets across identical Dwarfs**: when two or more paired devices share the same model, sending a session from the target-catalog page can target "any available" one of that model instead of a specific device, and the app picks whichever is actually free at send time.
+- **Plans a Milky Way mosaic** from a standalone planning tool (no login, works from a phone) — pick a Site or use your own location, see a twilight-aware sky chart with the galactic plane and a Moon position/phase check per tile, generate a grid of tiles sized to your Dwarf's own Wide field of view, and send the whole schedule straight into this app's scheduler.
 - **Lets you browse the sessions already on the device** — a dedicated explorer lists real astro sessions straight from the Dwarf's own storage, sorted newest first, with thumbnails and a one-click enlarged view showing target, date, exposure, gain, and IR filter.
 - **Keeps a live step-by-step trace** of what a running program is doing, and a full log viewer for anything that needs a closer look.
 - **Watch mode** (`/watch`) — a read-only dashboard and per-device view for spectators on the same network: live camera preview, battery/temperature, capture progress, exposure/gain/filter. No path in this mode can ever send a command to a device, by construction, so it's safe to hand someone the link without handing over control.
@@ -96,6 +97,9 @@ Separate from this app's own program scheduler above, a Dwarf can also hold its 
 ### Session explorer
 Each device's control page links to an **Astro Sessions** explorer: a grid of thumbnails pulled directly from the Dwarf's own on-device album (no separate app or cloud account needed), sorted most-recent-first. Click a thumbnail for a large view with the session's target, capture date, exposure, gain, and IR filter.
 
+### Milky Way mosaic planner
+A standalone planning page, separate from the main app's own pages — open `/mosaic-planner-en` or `/mosaic-planner-fr` (served straight from the app, no separate install) from a phone or a desktop browser. Pick a Site from the dropdown or use the browser's own geolocation, and it draws a twilight-aware sky chart with the galactic plane, lets you center a mosaic grid sized to a chosen Dwarf's own Wide field of view (EQ or Alt-Az framing), and schedules each tile's exposure/count/duration across the night. Each tile also has a one-tap Moon check — position, altitude, and phase (illumination %) at that tile's own scheduled time — so you can see how much moonlight a given frame will pick up before committing a whole night to it. Once you're happy with the plan, sending it queues every tile straight into this app's own scheduler, one program per tile, with no need to build each one by hand in the program editor.
+
 ### Watch mode
 `/watch` is a separate, read-only dashboard meant for someone to look at your session without being able to touch it — no capture, connect, disconnect, or settings controls exist anywhere in this mode's code, so there's no path by which opening it could ever send a command to a device. Useful for sharing progress with someone else on the same network (or just for a second screen) without worrying about a stray tap changing a setting mid-capture.
 
@@ -122,10 +126,11 @@ astro_dwarf_session/          (this repo)
 │   ├── site_picker.py         #   Site dropdown + inline "create a Site" dialog, shared by pairing/manual config/settings
 │   ├── datetime_picker.py     #   calendar/clock popup inputs, shared across the program and schedule editors
 │   ├── geolocation.py         #   browser-based "use current location" button
-│   ├── api_routes.py          #   /api/dwarfs + /api/schedule, for the external target-catalog page (incl. auto load-balancing across same-model devices)
+│   ├── api_routes.py          #   /api/dwarfs + /api/schedule + /api/program + /api/sites, for the external target-catalog page and the Milky Way mosaic planner (incl. auto load-balancing across same-model devices)
 │   └── ...
 ├── pages/                     # one file per route (dashboard, session, programs, explorer, settings, pairing, manual_config, sites, watch_dashboard, watch_device, logs)
 ├── images/                    # device-model icons shown on the dashboard
+├── milky_way_mosaic_planner_en.html / _fr.html   # standalone Milky Way mosaic planner, served at /mosaic-planner-{lang}
 └── dwarf_python_api/          # device-control library (WebSocket/protobuf + HTTP), a separate project
 ```
 

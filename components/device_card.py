@@ -366,6 +366,14 @@ class DeviceCardView:
             self._idle_name_label.set_text(full_label)
             battery = full_status.get("BatteryLevelDwarf")
             self._idle_battery_label.set_text(f"{battery}%" if battery is not None else "")
+            # Charging icon (user-requested Sep 2026) - IsCharging comes
+            # from get_client_status() (dwarf_python_api), None until
+            # the first GET_DEVICE_STATE_INFO response after connecting
+            # - falls back to the plain battery icon meanwhile, same as
+            # when it's confirmed False.
+            self._idle_battery_icon.props(
+                f"name={'battery_charging_full' if full_status.get('IsCharging') else 'battery_full'}"
+            )
             _apply_warning_style(
                 self._idle_battery_icon, self._idle_battery_label,
                 battery is not None and battery < _LOW_BATTERY_PCT,
@@ -406,6 +414,10 @@ class DeviceCardView:
         else:
             battery = full_status.get("BatteryLevelDwarf")
             self._battery_label.set_text(f"{battery}%" if battery is not None else "")
+            # Same charging-icon reasoning as the idle layout above.
+            self._battery_icon.props(
+                f"name={'battery_charging_full' if full_status.get('IsCharging') else 'battery_full'}"
+            )
             _apply_warning_style(
                 self._battery_icon, self._battery_label,
                 battery is not None and battery < _LOW_BATTERY_PCT,

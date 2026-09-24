@@ -24,7 +24,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_sto
 from dwarf_python_api.lib.dwarf_utils import perform_read_astro_stacking_status_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_exposure_by_name_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_gain_v3
-from dwarf_python_api.lib.dwarf_utils import perform_set_ir_filter_v3
+from dwarf_python_api.lib.dwarf_utils import perform_set_astro_ir_filter_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_stack_count_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_mosaic_count_v3
 from dwarf_python_api.lib.dwarf_utils import perform_start_mosaic_v3
@@ -99,6 +99,7 @@ STEP_DESCRIPTIONS = {
     "step_1b": "Do EQ Solving",
     "step_1c": "Do Automatic Autofocus",
     "step_1d": "Do Infinite Autofocus",
+    "step_1e": "Entering Astro/DSO (or Solar) shooting mode",
     "step_2": "Set Exposure to 1s for Calibration",
     "step_3": "Set Gain to 80 for Calibration",
     "step_4": "Set IR Filter for Calibration",
@@ -225,8 +226,8 @@ def _ir_filter_display_name(dwarf_id, IR_val: str) -> str:
     out of the model-dependent naming ternary already used a few lines
     below for the "To do => Astro Photo" log block, so both that block
     and the step-trace notice added for verification (see the
-    perform_set_ir_filter_v3() call site) show the SAME real name
-    rather than duplicating (and risking drifting) this per-model
+    perform_set_astro_ir_filter_v3() call sites) show the SAME real
+    name rather than duplicating (and risking drifting) this per-model
     mapping in two places."""
     dwarf_type = config_to_dwarf_id_str(dwarf_id)
     if dwarf_type == "3":
@@ -421,7 +422,11 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
         else:
             log.notice("Entering Astro/DSO shooting mode")
             continue_action = perform_enter_astro_mode(session=session)
-        verify_action(continue_action, "step_1a", progress_callback=progress_callback)
+        # user-reported Sep 2026: "on utilise plusieurs fois [step_1a]
+        # alors qu'on fait autre chose" - this is entering a shooting
+        # mode, not the Go Live call step_1a's own label actually
+        # describes.
+        verify_action(continue_action, "step_1e", progress_callback=progress_callback)
 
         # Auto Focus
         if auto_focus:
@@ -534,7 +539,15 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 log.notice("    Set IR to Astro Filter")
             else:
                 log.notice("    Set IR to IR_PASS")
-            continue_action = perform_set_ir_filter_v3("1", session=session)
+            # All three models confirmed on the modern path (user-
+            # updated Sep 2026, THREE independent network captures -
+            # D3, Mini, and now D2 too): same param_id, values sent
+            # and matching each model's own name set (D2: IR_CUT/
+            # IR_PASS at 0/1; D3/Mini: Astro/Duo-Band at 1/2, VIS or
+            # DARK at 0) - only the NAMES differ per model, the actual
+            # mechanism is universal. No legacy fallback needed
+            # anymore for this call.
+            continue_action = perform_set_astro_ir_filter_v3(1, session=session)
             if interrupted(): return
             verify_action(continue_action, "step_4", progress_callback=progress_callback)
             
@@ -635,7 +648,11 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 if progress_callback:
                     progress_callback(f"Gain: {gain_val}", "success")
             if IR_val:
-                continue_action = perform_set_ir_filter_v3(IR_val, session=session)
+                # All three models confirmed on the modern path - see
+                # this file's other call site (a few hundred lines up)
+                # for the full reasoning (three independent network
+                # captures, D2/D3/Mini).
+                continue_action = perform_set_astro_ir_filter_v3(int(IR_val), session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
                 if progress_callback:
@@ -704,7 +721,21 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 log.notice(f"Starting Mosaic Session : framingX={framing_x/100:.2f}x framingY={framing_y/100:.2f}x")
                 continue_action = perform_start_mosaic_v3(framing_x, framing_y, session=session)
             else:
-                continue_action = perform_takeAstroPhoto(session=session)
+                # User-found root cause (Sep 2026) of the whole IR
+                # filter mystery from earlier tonight: this call has
+                # its OWN ir_index parameter (ReqCaptureRawLiveStacking,
+                # V3-only field, per perform_takeAstroPhoto()'s own
+                # docstring) - it was left at the function's default
+                # (1 = Astro Filter) every single time, silently
+                # re-applying/overriding Astro Filter at the exact
+                # moment capture actually starts, no matter what
+                # perform_set_astro_ir_filter_v3()/perform_set_ir_
+                # filter_v3() had set moments earlier. Not a device-
+                # side "mode drop" or a wrong param_id after all -
+                # this one line was the entire explanation.
+                continue_action = perform_takeAstroPhoto(
+                    ir_index=int(IR_val) if IR_val else 1, session=session
+                )
             if interrupted(): return
             verify_action(continue_action, "step_11", progress_callback=progress_callback)
 
@@ -763,21 +794,27 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 # session for tele.
                 log.notice("Entering Astro/DSO shooting mode (again, for wide)")
                 continue_action = perform_enter_astro_mode(session=session)
-                verify_action(continue_action, "step_1a", progress_callback=progress_callback)
+                verify_action(continue_action, "step_1e", progress_callback=progress_callback)
 
             log.notice(f"Processing Astro Wide Photo Session : {wide_count_val} images")
             if wide_exp_val:
                 continue_action = perform_set_astro_exposure_by_name_v3(wide_exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), camera="wide", session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_13", progress_callback=progress_callback)
+                if progress_callback:
+                    progress_callback(f"Exposure: {wide_exp_val}", "success")
             if wide_gain_val:
                 continue_action = perform_set_astro_gain_v3(int(wide_gain_val), camera="wide", session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_13", progress_callback=progress_callback)
+                if progress_callback:
+                    progress_callback(f"Gain: {wide_gain_val}", "success")
             if wide_count_val:
                 continue_action = perform_set_astro_stack_count_v3(int(wide_count_val), camera="wide", session=session)
                 if interrupted(): return
                 verify_action(continue_action, "step_13", progress_callback=progress_callback)
+                if progress_callback:
+                    progress_callback(f"Total Count: {int(wide_count_val)}", "success")
             
             time.sleep(5)
             if interrupted(): return

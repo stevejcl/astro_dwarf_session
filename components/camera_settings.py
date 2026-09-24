@@ -44,6 +44,7 @@ from dwarf_python_api.lib.dwarf_utils import (
     perform_set_astro_exposure_by_name_v3,
     perform_set_astro_gain_v3,
     perform_set_ir_filter_v3,
+    perform_set_astro_ir_filter_v3,
 )
 
 from components import connection_health
@@ -62,7 +63,7 @@ from components.i18n import t
 # AllowedIRFilterD2/AllowedIRFilterMini. _ir_filter_table() below
 # dispatches by dwarf_type, same pattern as _exposure_table().
 #
-# perform_set_ir_filter_v3() is called with the raw INTEGER index here,
+# perform_set_astro_ir_filter_v3() is called with the raw INTEGER index here,
 # never the name string - it also accepts a name via a single SHARED
 # global table (get_ir_filter_index_by_name(), matching D3's table
 # only), which would silently resolve a D2/Mini name to the wrong
@@ -70,12 +71,6 @@ from components.i18n import t
 # awareness at all. Passing the index directly, already resolved from
 # the correct PER-MODEL table here, sidesteps that entirely.
 #
-# WRITE-ONLY: there is no perform_read_ir_filter_v3()-style function at
-# all - websockets_utils.py decodes CMD_CAMERA_TELE_GET_IRCUT responses
-# but never caches the resulting value anywhere retrievable, unlike
-# exposure/gain's own cameraParamsDwarf cache. The dropdown below
-# therefore never shows a pre-selected current value (always starts at
-# None) - same limitation as actions_section.py's own Toggle Lights.
 
 
 def _ir_filter_table(dwarf_type: str):
@@ -87,7 +82,22 @@ def _ir_filter_table(dwarf_type: str):
 
 
 def _ir_filter_names(dwarf_type: str) -> list[str]:
-    return [v["name"] for v in _ir_filter_table(dwarf_type).values]
+    names = [v["name"] for v in _ir_filter_table(dwarf_type).values]
+    if dwarf_type == "5":
+        # DARK excluded from the Mini's own SELECTABLE list (user-
+        # confirmed Sep 2026, real network capture): it's never sent as
+        # a manual filter-adjust value at all - only Astro(1)/Duo-Band
+        # (2) are, via the same CMD_PARAM_SET_GENERAL_INT_PARAM path
+        # already confirmed for the D3 (see dwarf_python_api's
+        # PARAM_ID_ASTRO_IR_FILTER_TELE). DARK only ever showed up
+        # bundled inside the official app's dedicated "Take Dark"
+        # calibration action, not as something this dropdown should
+        # offer to set directly. allowed_ir_filterMini itself is left
+        # untouched (still used for index lookups/display labels
+        # elsewhere, e.g. if the device ever reports DARK back mid-
+        # calibration) - only the user-facing option LIST drops it.
+        names = [n for n in names if n != "DARK"]
+    return names
 
 
 def _ir_filter_index_by_name(dwarf_type: str, name: str) -> int:
@@ -296,7 +306,7 @@ async def _handle_set_ir_filter(session, dwarf_type: str, name) -> None:
         return
     index = _ir_filter_index_by_name(dwarf_type, name)
     try:
-        result = await run.io_bound(perform_set_ir_filter_v3, index, session=session)
+        result = await run.io_bound(perform_set_astro_ir_filter_v3, index, session=session)
     finally:
         connection_health.release_command_slot(dwarf_uid)
     success = result is not False  # see _handle_set_exposure() for why

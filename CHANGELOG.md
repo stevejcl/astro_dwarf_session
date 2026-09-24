@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.0.8] - 2026-09-24
+### Improvements
+    Updates the modern IR filter API and capture behavior
+    Adds saved-site lookup for Milky Way mosaic planner
+    Exposes manual IP updates in settings no bluetooth needed
+    Improves monitoring labels for battery charging and running state.
+
+### Bug
+    This patch fixes command-slot race conditions between periodic health checks and scheduled/manual actions
+    Correct fatal bug during testing the D2 
+    A watchdog now force-cleans stuck runs
+    UI labels were corrected
+
 ## [3.0.7] - 2026-09-21
 ### Improvements
     Add a replaceable Milky Way mosaic planner (English + French HTML) and a small API test page

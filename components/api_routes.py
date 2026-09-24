@@ -93,6 +93,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_get_last_sync_error
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 from device_registry import list_device_entries
+from site_registry import list_site_entries
 from components import connection_health, scheduler_runner
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
@@ -300,6 +301,32 @@ def register_api_routes() -> None:
     @app.get("/api/dwarfs")
     def api_dwarfs():
         return JSONResponse({"devices": _devices_snapshot()})
+
+    @app.get("/api/sites")
+    def api_sites():
+        """User-requested Sep 2026: browser geolocation
+        (navigator.geolocation) needs a secure context (HTTPS, or
+        exactly localhost/127.0.0.1) - a LAN IP over plain HTTP never
+        qualifies, so it silently fails on Android for the Milky Way
+        mosaic planner and any other standalone HTML page. Sites
+        already have lat/lon stored server-side (pages/sites.py) for
+        exactly this purpose elsewhere in the app - exposing them here
+        sidesteps the whole secure-context problem: no browser
+        permission needed at all, just pick a Site by name. wifi_ssid/
+        wifi_password are deliberately NOT included - irrelevant to
+        any caller of this endpoint and no reason for them to leave
+        the server."""
+        sites = [
+            {
+                "name": s.name,
+                "latitude": s.latitude,
+                "longitude": s.longitude,
+                "timezone": s.timezone,
+            }
+            for s in list_site_entries()
+            if s.latitude is not None and s.longitude is not None
+        ]
+        return JSONResponse({"sites": sites})
 
     @app.post("/api/schedule")
     async def api_schedule(request: Request):

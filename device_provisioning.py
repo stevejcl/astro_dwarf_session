@@ -222,3 +222,38 @@ def write_manual_config(data: ManualDeviceInput) -> tuple[str, str]:
     apply_site_to_ini(config_ini, data.site, include_wifi=True)
 
     return config_py, config_ini
+
+
+def update_dwarf_ip(config_py_path: str, new_ip: str) -> None:
+    """Rewrites ONLY the DWARF_IP line of an EXISTING config.py in
+    place, preserving every other line exactly (uid/model/ble_psd/...)
+    - user-requested Sep 2026: someone who configured a device manually
+    (no Bluetooth working at all on that machine) has no way to recover
+    when their router later hands the Dwarf a different DHCP lease -
+    settings.py's own "Force Bluetooth reconnect" already covers this
+    same scenario, but needs Bluetooth to work in the first place,
+    which is exactly what this person doesn't have.
+
+    DWARF_IP (not config.ini's own "dwarf_ip") is the field that
+    matters here - DwarfConfig.from_files() (dwarf_python_api) reads
+    config.py's value FIRST, only falling back to config.ini's if
+    config.py's is empty (see that function's own "alternate_dwarf_ip"
+    handling) - and write_manual_config() above leaves config.ini's
+    dwarf_ip blank by default, so for a manually-configured device
+    config.py is the sole real source in practice.
+
+    Raises ValueError if no DWARF_IP line is found (a config.py that
+    doesn't look like this app's own format at all) rather than
+    silently appending a second, conflicting DWARF_IP line."""
+    path = Path(config_py_path)
+    content = path.read_text(encoding="utf-8")
+    new_content, count = re.subn(
+        r'^DWARF_IP\s*=\s*".*"\s*$',
+        f'DWARF_IP = "{new_ip}"',
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count == 0:
+        raise ValueError(f"No DWARF_IP line found in {config_py_path}")
+    path.write_text(new_content, encoding="utf-8")

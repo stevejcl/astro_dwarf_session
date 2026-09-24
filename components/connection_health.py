@@ -73,18 +73,23 @@ If all auto-reconnect attempts fail, the device is left in the existing
 session.py's Reconnect button, which also clears the "exhausted" flag
 so auto-reconnect gets another fresh shot next time.
 
-PRIORITY OVER SCHEDULED STARTS (user-reported Sep 2026, real overnight
-log): a scheduled program's start was starved for a full 18 minutes -
-this module's own ~_CHECK_INTERVAL_S poll cadence happened to phase-
-lock against scheduler_loop's own retry cadence (same interval), so
-every single scheduler_runner.start_run() attempt lost the slot-acquire
-race to a health_check that had *just* grabbed it moments earlier, over
-and over, until health_check finally stalled to its full 150s worst
-case (see the latency note above) and released it for good. mark_start_
-pending()/clear_start_pending() (called from scheduler_runner.py around
-its own acquire attempt) make maybe_check() back off entirely while a
-program start is pending for a uid, so it always gets the very next
-opening instead of having to out-race a periodic check indefinitely.
+PRIORITY OVER SCHEDULED STARTS AND MANUAL ACTIONS (user-reported Sep
+2026, real overnight log): a scheduled program's start was starved for
+a full 18 minutes - this module's own ~_CHECK_INTERVAL_S poll cadence
+happened to phase-lock against scheduler_loop's own retry cadence (same
+interval), so every single scheduler_runner.start_run() attempt lost
+the slot-acquire race to a health_check that had *just* grabbed it
+moments earlier, over and over, until health_check finally stalled to
+its full 150s worst case (see the latency note above) and released it
+for good. The same race hits a one-off manual action button too
+(components/actions_section.py's _run_and_notify(), user-reported
+separately: "appareil occupe" when clicking an Actions button, roughly
+every ~_CHECK_INTERVAL_S). mark_priority_pending()/clear_priority_
+pending() (called from both start_run() and _run_and_notify() around
+their own acquire attempt) make maybe_check() back off entirely while
+either kind of higher-priority request is pending for a uid, so it
+always gets the very next opening instead of having to out-race a
+periodic check indefinitely.
 
 EVENT LOOP CLEANUP: a device-initiated disconnect (CMD_NOTIFY_POWER_OFF)
 calls WebSocketClient.disconnect() internally (websockets_utils.py) and
@@ -166,34 +171,40 @@ _command_in_flight_caller: dict[str, str] = {}
 _auto_reconnect_exhausted: set[str] = set()
 _auto_reconnect_in_progress: set[str] = set()
 
-# uids where a scheduler_runner.start_run() attempt is currently trying
-# to acquire the command slot (user-reported Sep 2026, real overnight
-# log: a scheduled program's start was starved for a FULL 18 minutes -
-# health_check's own ~15s poll cadence happened to phase-lock against
-# scheduler_loop's own ~15s tick, so every single retry lost the race to
-# a health_check that had *just* grabbed the slot moments earlier, over
-# and over, until health_check finally stalled to its full 150s worst
-# case and released it for good). maybe_check() below backs off
-# entirely while a uid is marked here, so a pending program start
-# always gets the very next opening instead of having to out-race a
-# periodic check indefinitely.
-_start_pending: set[str] = set()
+# uids where a HIGHER-PRIORITY acquire attempt is currently in flight -
+# either scheduler_runner.start_run() (user-reported Sep 2026, real
+# overnight log: a scheduled program's start was starved for a FULL 18
+# minutes - health_check's own ~15s poll cadence happened to phase-lock
+# against scheduler_loop's own ~15s tick, so every single retry lost
+# the race to a health_check that had *just* grabbed the slot moments
+# earlier, over and over, until health_check finally stalled to its
+# full 150s worst case and released it for good) OR a manual action
+# button (components/actions_section.py's _run_and_notify() - same
+# race, user-reported Sep 2026: "appareil occupe... du a la commande
+# qui tourne toutes les 12 secondes" while just trying to fire a single
+# one-off command from the Actions section). maybe_check() below backs
+# off entirely while a uid is marked here, so either kind of pending
+# request always gets the very next opening instead of having to
+# out-race a periodic check indefinitely.
+_priority_pending: set[str] = set()
 
 
-def mark_start_pending(dwarf_uid: str) -> None:
+def mark_priority_pending(dwarf_uid: str) -> None:
     """Call right before attempting to acquire the command slot for a
-    NEW scheduler_runner run (see start_run()) - not while a run is
-    already established and holding the slot itself, only during the
-    brief acquire race this exists to protect."""
-    _start_pending.add(dwarf_uid)
+    higher-priority request (a NEW scheduler_runner run, or a manual
+    action button click) - not while that request already holds the
+    slot itself, only during the brief acquire race this exists to
+    protect."""
+    _priority_pending.add(dwarf_uid)
 
 
-def clear_start_pending(dwarf_uid: str) -> None:
+def clear_priority_pending(dwarf_uid: str) -> None:
     """Call once the acquire attempt above has resolved, success or
     failure - this flag's only job is to win that one race, not to
-    keep suppressing health checks for the run's entire duration (the
-    slot itself, once actually held, already does that)."""
-    _start_pending.discard(dwarf_uid)
+    keep suppressing health checks for the whole duration of whatever
+    comes after (the slot itself, once actually held, already does
+    that)."""
+    _priority_pending.discard(dwarf_uid)
 
 
 def try_acquire_command_slot(dwarf_uid: str, caller: str = "?") -> bool:
@@ -229,6 +240,20 @@ def release_command_slot(dwarf_uid: str) -> None:
         held_for = time.monotonic() - held_since
         log_fn = log.warning if held_for > 5.0 else log.debug
         log_fn(f"[{dwarf_uid}] slot released by {caller!r} after {held_for:.1f}s.")
+
+
+def command_in_flight_duration(dwarf_uid: str) -> float | None:
+    """Seconds since the current slot holder (if any) acquired it, or
+    None if the slot is free right now. User-requested Sep 2026, after
+    a confirmed real stuck-thread incident: scheduler_runner.py's own
+    watchdog (see its check_stuck_runs()) uses this to force-release a
+    run that's been holding the slot far longer than any real capture
+    should - a leaked thread stuck forever inside dwarf_python_api's
+    own send_socket_message() (its future_cnx.done() busy-wait can spin
+    forever if session.event_loop was torn down mid-wait, e.g. by a
+    disconnect during an active capture)."""
+    since = _command_in_flight_since.get(dwarf_uid)
+    return (time.monotonic() - since) if since is not None else None
 
 def is_busy(dwarf_uid: str) -> bool:
     """Read-only check - does NOT claim the slot. For UI/API code that
@@ -358,7 +383,7 @@ async def maybe_check(session: DwarfSession) -> None:
         return
 
     uid = session.dwarf_uid
-    if uid in _start_pending:
+    if uid in _priority_pending:
         return
     now = time.monotonic()
     if now - _last_check_at.get(uid, 0.0) < _CHECK_INTERVAL_S:

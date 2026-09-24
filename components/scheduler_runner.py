@@ -84,8 +84,10 @@ from datetime import datetime
 
 from nicegui import background_tasks, run
 
+import dwarf_python_api.lib.my_logger as log
 import dwarf_session as astro_dwarf_session
 from dwarf_session import STEP_DESCRIPTIONS
+from dwarf_python_api.lib.dwarf_session import get_manager
 
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
@@ -122,6 +124,26 @@ class RunState:
     # mirrored here too so program_section.py's LIVE view can show them
     # right after a run finishes without re-reading the just-written
     # Done/Error JSON file back off disk.
+    # Same mirroring, for exposure/gain (user-reported Sep 2026: these
+    # were missing from program_section.py's own live/just-finished
+    # view - "expo, gain et count total se sont pas affiches dans les
+    # infos en cours" - _capture_actual_camera_settings() already wrote
+    # them onto id_command, just never got mirrored here like shots_
+    # taken/stacked were). "Count total" itself doesn't need a new
+    # field - requested_count_tele/requested_count_wide below already
+    # cover that.
+    exposure_actual: str = ""
+    gain_actual: str = ""
+    # Filled LIVE from on_progress()'s own "Exposure:"/"Gain:"/"IR
+    # Filter:" parsing below (user-requested Sep 2026: "les parametres
+    # affiches ne sont pas bon, il se rafraichissent juste a la fin" -
+    # program_section.py's own display, and watch_device.py's Dwarf-II-
+    # during-capture fallback, both want a value available THROUGH the
+    # run, not just once _capture_actual_camera_settings() runs at the
+    # very end) - a plain live echo of what dwarf_session.py itself
+    # just configured, not a fresh device read like the end-of-run
+    # mirroring above.
+    ir_filter_actual: str = ""
     end_time_display: str = ""  # "" when no scheduled end time was set for this run
     # user-reported Sep 2026: the device's own progress notification
     # carries a total_count field, but dwarf_python_api only logs it
@@ -178,24 +200,33 @@ def _write_json(path: str, data: dict) -> None:
         json.dump(data, f, indent=4)
 
 
-def _capture_actual_camera_settings(id_command: dict, session) -> None:
+def _capture_actual_camera_settings(id_command: dict, session, is_wide: bool = False) -> None:
     """Best-effort, mirrors astro_dwarf_scheduler.py's own try/except
     around this HTTP read - it may simply be unavailable, not worth
-    failing an otherwise-successful run over."""
+    failing an otherwise-successful run over.
+
+    is_wide (user-reported Sep 2026: "je n'ai rien pour wide" - this
+    used to always read cameras[0], which is the TELE camera's own
+    params (see components/camera_stream.py's own cam_id mapping:
+    0=Tele, 1=Wide) - so a Wide-only program's actual exposure/gain
+    never showed up anywhere, on the dashboard OR the Programs page,
+    silently reading the WRONG camera's settings instead of failing
+    loudly)."""
     try:
         camera_settings = perform_read_camera_params_http_v3(mode_id=2, session=session)
-        tele_cam = (
-            camera_settings.get("cameras", {}).get(0)
+        cam_index = 1 if is_wide else 0
+        active_cam = (
+            camera_settings.get("cameras", {}).get(cam_index)
             if isinstance(camera_settings, dict)
             else None
         )
-        if tele_cam:
-            ir_cut_value = tele_cam.get("filterType")
+        if active_cam:
+            ir_cut_value = active_cam.get("filterType")
             if ir_cut_value is not None:
                 ir_mapping = {0: "Vis", 1: "Astro Filter", 2: "DUAL Band"}
                 id_command["ir_actual"] = ir_mapping.get(ir_cut_value, f"Unknown({ir_cut_value})")
-            exposure_info = tele_cam.get("exposure") or {}
-            gain_info = tele_cam.get("gain") or {}
+            exposure_info = active_cam.get("exposure") or {}
+            gain_info = active_cam.get("gain") or {}
             id_command["exposure_actual"] = exposure_info.get("name")
             id_command["gain_actual"] = gain_info.get("value")
     except Exception:
@@ -300,6 +331,97 @@ def is_running(dwarf_uid: str) -> bool:
     return bool(state and state.running)
 
 
+# Generous safety ceiling (user-agreed Sep 2026, after a confirmed real
+# incident) - deliberately loose: a single program's capture step is
+# allowed to run essentially all night, since a long winter night in a
+# temperate/high latitude can mean 14-16+ hours of real darkness, and
+# someone may well want one very long single-target integration in one
+# program, not just short mosaic tiles. This only needs to be shorter
+# than "an entire day", to still catch a genuinely stuck/leaked thread
+# (see check_stuck_runs()'s own docstring) rather than cap any
+# realistic legitimate capture.
+_MAX_RUN_SECONDS = 20 * 3600
+
+
+def check_stuck_runs() -> None:
+    """Background watchdog (app.timer, astro_dwarf_ui.py) - user-agreed
+    Sep 2026, after a confirmed real-world incident: a disconnect
+    during an active capture (the ORIGINAL trigger for that specific
+    case is now fixed - see dwarf_python_api's result_notification_
+    messages() and its own reset_timeout comment) left scheduler_
+    runner.start_run() holding the command slot forever, because the
+    thread blocked inside it never returned - dwarf_python_api's
+    send_socket_message() busy-waits on future_cnx.done(), which can
+    spin forever if session.event_loop was torn down while that future
+    was still pending. That stuck thread ALSO permanently blocked every
+    other operation on the device (health_check, any later start_run
+    attempt, everything) until the whole app was restarted - "un
+    blocage complet n'est pas permis".
+
+    This does NOT fix the leaked thread itself (it's still running,
+    accomplishing nothing) - it only stops that leak from ALSO
+    starving every future operation forever, by forcing the SLOT and
+    this run's own state back to a normal "not running" shape once
+    it's been held unreasonably long. A real, still-healthy multi-hour
+    capture never approaches _MAX_RUN_SECONDS, so this should never
+    fire during normal use.
+
+    FASTER TRIGGER (user-confirmed Sep 2026, a second real incident -
+    this time a genuine WiFi drop, not the reset_timeout bug, which
+    left the SAME kind of stuck thread behind): waiting the full 20h
+    ceiling is far too slow when the session has ALREADY visibly
+    disconnected (session.is_connected is False) - that's a much
+    stronger, more immediate signal that the run backing this slot is
+    never coming back, vs. still being a legitimate long capture. Only
+    acts once the slot has ALSO been held a couple of minutes past
+    that disconnect (not instantly) so a normal, fast reconnect isn't
+    mistaken for a stuck thread - the app's own reconnect logic
+    (health_check/scheduler_loop) gets a real chance to recover on its
+    own first."""
+    _DISCONNECTED_GRACE_SECONDS = 120
+
+    def _force_stop(dwarf_uid: str, state: RunState, reason: str) -> None:
+        log.warning(f"[{dwarf_uid}] Run force-stopped: {reason}")
+        state.running = False
+        state.finished_ok = False
+        state.error = f"Run force-stopped: {reason}"
+        connection_health.release_command_slot(dwarf_uid)
+
+    manager = get_manager()
+    for dwarf_uid, state in list(_runs.items()):
+        if not state.running:
+            continue
+        duration = connection_health.command_in_flight_duration(dwarf_uid)
+        if duration is None:
+            continue
+
+        try:
+            session = manager.get(dwarf_uid)
+        except KeyError:
+            session = None
+
+        if (
+            session is not None
+            and not session.is_connected
+            and duration > _DISCONNECTED_GRACE_SECONDS
+        ):
+            _force_stop(
+                dwarf_uid,
+                state,
+                f"session disconnected and slot still held {duration:.0f}s later "
+                "(likely a leaked thread after a network drop).",
+            )
+            continue
+
+        if duration > _MAX_RUN_SECONDS:
+            _force_stop(
+                dwarf_uid,
+                state,
+                f"slot held {duration:.0f}s > {_MAX_RUN_SECONDS}s - far longer than "
+                "any real capture should take (likely a leaked thread).",
+            )
+
+
 def device_is_actively_capturing(session) -> bool:
     """Checks the DEVICE's real, live state via a FRESH
     CMD_GLOBAL_TASK_GET_DEVICE_STATE_INFO query - NOT get_client_status()'s
@@ -352,12 +474,12 @@ def _run_starting_blocking(
             return
     finally:
         # try/finally (not a plain call after the acquire, as in an
-        # earlier version) so mark_start_pending() from start_run()
+        # earlier version) so mark_priority_pending() from start_run()
         # below always gets cleared here even if something above raises
         # - a leaked pending flag would otherwise starve health_check
         # for this device FOREVER, the same failure mode this exists to
         # fix, just permanent instead of an 18-minute window.
-        connection_health.clear_start_pending(dwarf_uid)
+        connection_health.clear_priority_pending(dwarf_uid)
 
     _run_blocking(
         program,
@@ -409,6 +531,22 @@ def _run_blocking(
         seq += 1
         label = STEP_DESCRIPTIONS.get(step_key, step_key)
         state.steps.append(StepEvent(key=step_key, label=label, status=status, seq=seq))
+        # Live echo (user-requested Sep 2026) - dwarf_session.py already
+        # sends these exact "Exposure: X"/"Gain: X"/"IR Filter: X"
+        # messages right when it configures them, well before capture
+        # actually starts (Setup Astro Photo Parameters, both Tele and
+        # Wide) - parsing them here as they arrive gives program_
+        # section.py's live view and watch_device.py's Dwarf-II fallback
+        # a value for the WHOLE run, not just once it finishes.
+        if status == "success" and ":" in step_key:
+            prefix, _, value = step_key.partition(":")
+            value = value.strip()
+            if prefix == "Exposure":
+                state.exposure_actual = value
+            elif prefix == "Gain":
+                state.gain_actual = value
+            elif prefix == "IR Filter":
+                state.ir_filter_actual = value
 
     # MAX_RETRIES: see module docstring - astro_dwarf_scheduler.py's own
     # retry_procedure() would do this, but it's never actually called
@@ -468,13 +606,18 @@ def _run_blocking(
             id_command["result"] = True
             id_command["message"] = "Session completed successfully"
             _set_dwarf_field(id_command, session)
-            _capture_actual_camera_settings(id_command, session)
+            _capture_actual_camera_settings(
+                id_command, session,
+                is_wide=bool(program.get("setup_wide_camera", {}).get("do_action")),
+            )
             _capture_eq_solving_result(id_command, session)
             _capture_shots_result(id_command, session)
             id_command["count_info"] = state.requested_count_tele if state.requested_count_tele else state.requested_count_wide
             id_command["mosaic_info"] =  program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action")
             state.shots_taken = id_command.get("shots_taken")
             state.shots_stacked = id_command.get("shots_stacked")
+            state.exposure_actual = id_command.get("exposure_actual") or ""
+            state.gain_actual = id_command.get("gain_actual") or ""
 
             if current_path is not None:
                 dirs = session_dirs_for(session)
@@ -548,9 +691,9 @@ def start_run(
     # retry cadence, so it kept winning the slot-acquire race every
     # single time). Cleared in _run_starting_blocking() below the
     # moment its own acquire attempt actually resolves - see
-    # connection_health.clear_start_pending()'s own docstring for why
+    # connection_health.clear_priority_pending()'s own docstring for why
     # this shouldn't linger any longer than that.
-    connection_health.mark_start_pending(dwarf_uid)
+    connection_health.mark_priority_pending(dwarf_uid)
 
     # Neither check above knows about activity astro_dwarf_session didn't
     # itself start (a manual session from the official Dwarf app, or an

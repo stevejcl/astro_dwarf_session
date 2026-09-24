@@ -125,11 +125,11 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
     with ui.card().classes("w-full p-4"), ui.column().classes("w-full gap-3"):
         description = ui.input(t("prog_description"), value=cmd["id_command"]["description"]).classes("w-full")
 
-        with ui.row().classes("w-full gap-2"):
-            date_input = date_picker_input(t("prog_date"), cmd["id_command"]["date"]).classes("flex-1")
+        with ui.row().classes("w-full gap-2 flex-wrap"):
+            date_input = date_picker_input(t("prog_date"), cmd["id_command"]["date"]).classes("flex-1 min-w-[140px]")
             time_input = time_picker_input(
                 t("prog_time"), cmd["id_command"]["time"], with_seconds=True
-            ).classes("flex-1")
+            ).classes("flex-1 min-w-[140px]")
             retries_input = ui.number(
                 t("prog_max_retries"), value=cmd["id_command"]["max_retries"], min=1, max=10
             ).classes("w-32")

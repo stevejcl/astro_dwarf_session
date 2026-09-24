@@ -118,23 +118,45 @@ def build_program_section(session) -> None:
                     ui.label(
                         f"{state.shots_stacked or 0}/{state.shots_taken} {t('prog_shots_stacked')}"
                     ).classes("text-xs text-grey-6")
+                # Same reasoning as shots_taken/shots_stacked above -
+                # exposure/gain (user-reported Sep 2026 gap) plus the
+                # requested total, from the SAME RunState fields
+                # device_card.py's dashboard capturing banner already
+                # uses (requested_count_tele/wide - whichever camera
+                # this program's setup_camera/setup_wide_camera do_
+                # action actually was).
+                total = state.requested_count_tele or state.requested_count_wide
+                if state.exposure_actual or state.gain_actual or state.ir_filter_actual or total:
+                    bits = []
+                    if state.exposure_actual:
+                        bits.append(f"{t('exposure')}: {state.exposure_actual}")
+                    if state.gain_actual:
+                        bits.append(f"{t('gain')}: {state.gain_actual}")
+                    if state.ir_filter_actual:
+                        bits.append(f"{t('watch_filter')}: {state.ir_filter_actual}")
+                    if total:
+                        bits.append(f"{t('prog_count')}: {total}")
+                    ui.label(" \u00b7 ".join(bits)).classes("text-xs text-grey-6")
 
             # Hide the upload/Start controls while a run is actively
             # executing (user-requested) - nothing to upload towards and
             # you can't start a second one on this device anyway.
             idle_section.set_visibility(not (state is not None and state.running))
 
-            # Restore the idle button layout once nothing is running -
-            # but the timer itself is NEVER deactivated (see poll_timer's
-            # own comment below for the bug this fixes).
-            if state is None or not state.running:
-                start_button.set_visibility(True)
-                stop_button.set_visibility(False)
-                stop_button.enable()
-
-            if state and state.running:
+            # Restore the idle button layout once nothing is running, and
+            # flip it the other way the moment something IS (user-
+            # reported bug, Sep 2026: Start stayed visible even once a
+            # capture was actively running - this branch was simply
+            # missing before, only the "nothing running" side existed).
+            # The timer itself is NEVER deactivated either way (see
+            # poll_timer's own comment below for the bug THAT fixes).
+            if state is not None and state.running:
                 start_button.set_visibility(False)
                 stop_button.set_visibility(True)
+                stop_button.enable()
+            else:
+                start_button.set_visibility(True)
+                stop_button.set_visibility(False)
                 stop_button.enable()
 
         # ALWAYS active - never gated behind "only while I started a run

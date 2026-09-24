@@ -114,6 +114,19 @@
     <div class="btn-row">
       <button type="button" class="secondary" id="geoBtn">📍 Use my position</button>
     </div>
+    <!-- Site picker (user-requested Sep 2026): sidesteps the mobile
+         browser geolocation problem entirely - navigator.geolocation
+         needs a secure context (HTTPS or localhost), never the case on
+         a plain-HTTP LAN IP, so it silently fails on Android. Sites
+         already have lat/lon server-side (pages/sites.py) for this
+         same reason elsewhere in the app - /api/sites exposes them,
+         no browser permission needed at all. -->
+    <div class="row" style="margin-top: 0.6rem;">
+      <div>
+        <label for="siteSelect">Or pick a saved Site</label>
+        <select id="siteSelect"><option value="">\u2014</option></select>
+      </div>
+    </div>
     <div class="row" style="margin-top: 0.8rem;">
       <div>
         <label for="lat">Latitude (°, + = North)</label>
@@ -785,6 +798,32 @@ function updateFovHint() {
     `Wide FOV used: ${currentFov.h.toFixed(1)}° × ${currentFov.v.toFixed(1)}°` +
     (model ? ` (${model})` : ' (default - pick a device to refine)');
 }
+async function loadSites() {
+  const select = document.getElementById('siteSelect');
+  try {
+    const res = await fetch(`${apiBase()}/api/sites`);
+    const data = await res.json();
+    const sites = data.sites || [];
+    select.innerHTML = '<option value="">\u2014</option>' + sites.map(s =>
+      `<option value="${s.name}" data-lat="${s.latitude}" data-lon="${s.longitude}">${s.name}</option>`
+    ).join('');
+  } catch (e) {
+    select.innerHTML = '<option value="">Server connection error</option>';
+  }
+}
+document.getElementById('siteSelect').addEventListener('change', () => {
+  const select = document.getElementById('siteSelect');
+  const opt = select.options[select.selectedIndex];
+  if (!opt || !opt.value) return;
+  document.getElementById('lat').value = opt.dataset.lat;
+  document.getElementById('lon').value = opt.dataset.lon;
+  document.getElementById('geoStatus').textContent = `Using Site "${opt.value}" position.`;
+  drawSkyChart();
+  updateTwilightTimes();
+});
+loadSites();
+serverInput.addEventListener('change', loadSites);
+
 loadDwarfs();
 updateFovHint();
 document.getElementById('refreshDwarfsBtn').addEventListener('click', loadDwarfs);

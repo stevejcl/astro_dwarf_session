@@ -54,6 +54,7 @@ from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import get_manager
 
 from device_registry import find_shared_config_value
+from device_provisioning import update_dwarf_ip
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
 from components import connection_health
@@ -438,3 +439,38 @@ def build_settings_page() -> None:
                     force_ble_button.enable()
 
                 force_ble_button.on("click", _handle_force_ble)
+
+            # Manual IP update (user-requested Sep 2026) - for someone
+            # who configured this device manually in the first place
+            # (pages/manual_config.py, no Bluetooth working on their
+            # machine at all) and later needs to fix a changed IP (e.g.
+            # a DHCP lease renewal) - the "Force Bluetooth reconnect"
+            # section above already covers this same scenario, but
+            # needs Bluetooth to work, which is exactly what got them
+            # onto the manual-config path to begin with. No slot
+            # needed - like _do_force_bluetooth, this disconnects first
+            # if currently connected, before touching session.config
+            # underneath a live connection.
+            with ui.card().classes("w-full p-0 mt-2"), ui.expansion(t("settings_manual_ip_title"), icon="edit_location_alt", value=False).classes("w-full"):
+                ui.label(t("settings_manual_ip_hint")).classes("text-xs text-grey-6")
+                manual_ip_input = ui.input(t("settings_manual_ip_label"), value=session.config.dwarf_ip or "").classes("w-full")
+                manual_ip_status = ui.label("").classes("text-xs")
+
+                def _handle_manual_ip_update() -> None:
+                    new_ip = manual_ip_input.value.strip()
+                    if not new_ip:
+                        ui.notify(t("settings_manual_ip_required"), type="negative")
+                        return
+                    if session.is_connected:
+                        perform_disconnect(session=session)
+                    try:
+                        update_dwarf_ip(session.config.config_py_path, new_ip)
+                    except (OSError, ValueError) as e:
+                        manual_ip_status.set_text(str(e))
+                        manual_ip_status.classes(replace="text-xs text-red-700")
+                        return
+                    session.config.dwarf_ip = new_ip
+                    manual_ip_status.set_text(t("settings_manual_ip_success", ip=new_ip))
+                    manual_ip_status.classes(replace="text-xs text-green-700")
+
+                ui.button(t("settings_manual_ip_button"), icon="save", on_click=_handle_manual_ip_update)

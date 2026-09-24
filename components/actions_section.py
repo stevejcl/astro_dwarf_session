@@ -153,7 +153,22 @@ async def _run_and_notify(
     display_duration: float = 2.0,
     **kwargs,
 ) -> None:
-    if not connection_health.try_acquire_command_slot(dwarf_uid):
+    # Priority over the periodic health check (user-reported Sep 2026:
+    # "appareil occupe... du a la commande qui tourne toutes les 12
+    # secondes" - same phase-lock race scheduler_runner.start_run()
+    # already had fixed for it, see connection_health.py's own
+    # PRIORITY OVER SCHEDULED STARTS AND MANUAL ACTIONS note - a one-
+    # off manual action click can just as easily lose the slot-acquire
+    # race to health_check's own similar poll cadence). Cleared right
+    # after this acquire attempt resolves either way - its only job is
+    # to win THIS race, not to suppress health checks for the whole
+    # duration of whatever runs afterward.
+    connection_health.mark_priority_pending(dwarf_uid)
+    try:
+        acquired = connection_health.try_acquire_command_slot(dwarf_uid)
+    finally:
+        connection_health.clear_priority_pending(dwarf_uid)
+    if not acquired:
         ui.notify(t("device_busy"), type="warning")
         return
 
@@ -235,7 +250,14 @@ async def _handle_toggle_lights(session, dwarf_uid) -> None:
     is_on = _lights_on.get(dwarf_uid, False)
     fn = perform_powerCloseRGB if is_on else perform_powerOpenRGB
 
-    if not connection_health.try_acquire_command_slot(dwarf_uid):
+    # Same priority-over-health_check reasoning as _run_and_notify()
+    # above - see that function's own comment.
+    connection_health.mark_priority_pending(dwarf_uid)
+    try:
+        acquired = connection_health.try_acquire_command_slot(dwarf_uid)
+    finally:
+        connection_health.clear_priority_pending(dwarf_uid)
+    if not acquired:
         ui.notify(t("device_busy"), type="warning")
         return
     try:
@@ -258,7 +280,14 @@ async def _handle_toggle_power_lights(session, dwarf_uid) -> None:
     is_on = _power_lights_on.get(dwarf_uid, False)
     fn = perform_powerIndOff if is_on else perform_powerIndOn
 
-    if not connection_health.try_acquire_command_slot(dwarf_uid):
+    # Same priority-over-health_check reasoning as _run_and_notify()
+    # above - see that function's own comment.
+    connection_health.mark_priority_pending(dwarf_uid)
+    try:
+        acquired = connection_health.try_acquire_command_slot(dwarf_uid)
+    finally:
+        connection_health.clear_priority_pending(dwarf_uid)
+    if not acquired:
         ui.notify(t("device_busy"), type="warning")
         return
     try:

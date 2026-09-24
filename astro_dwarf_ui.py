@@ -102,6 +102,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from device_registry import bootstrap_devices
 from components.pwa import register_manifest_route
 from components import rtsp_worker
+from components import scheduler_runner
 from components.api_routes import register_api_routes
 from components.scheduler_loop import start_background_loop
 from pages.dashboard import build_dashboard_page
@@ -115,6 +116,7 @@ from pages.manual_config import build_manual_config_page
 from pages.sites import build_sites_page
 from pages.watch_dashboard import build_watch_dashboard_page
 from pages.watch_device import build_watch_device_page
+
 
 def _find_open_port(host: str, start_port: int = 8000, end_port: int = 8999) -> int:
     """Own replacement for nicegui.native.find_open_port() (user-
@@ -134,6 +136,7 @@ def _find_open_port(host: str, start_port: int = 8000, end_port: int = 8999) -> 
         except OSError:
             continue
     raise OSError("No open port found")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Astro Dwarf UI")
@@ -197,6 +200,7 @@ def main() -> None:
         app.storage.general["LAN_PORT"] = PORT
 
     app.on_startup(_publish_lan_port)
+
     # Device-type icons (dashboard's model badge, see device_card.py) -
     # served from /images/<name>.png. Resolved relative to THIS file
     # (not the current working directory), so it works regardless of
@@ -262,6 +266,9 @@ def main() -> None:
     build_sites_page()
     build_manual_config_page()
     build_logs_page()
+    # Read-only spectator mode (user-requested Sep 2026) - separate
+    # dashboard/device pages, no capture/connect/settings controls
+    # anywhere in their code - see their own module docstrings.
     build_watch_dashboard_page()
     build_watch_device_page()
 
@@ -270,6 +277,12 @@ def main() -> None:
     # program must fire at its due time regardless of whether anyone
     # currently has a browser tab open.
     start_background_loop(get_manager())
+
+    # Same reasoning, own app.timer - a stuck/leaked run must eventually
+    # get cleaned up (see check_stuck_runs()'s own docstring) whether or
+    # not anyone has a browser tab open to notice it. Every 5 minutes is
+    # plenty frequent against a 6-hour ceiling.
+    app.timer(300.0, scheduler_runner.check_stuck_runs)
 
     ui.run(
         title="Astro Dwarf Session",

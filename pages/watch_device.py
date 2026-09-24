@@ -47,6 +47,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
 from components.camera_stream import build_camera_stream_section
 from components.camera_settings import ir_filter_display_label
 from components import scheduler_runner
+from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme, theme_toggle_button
@@ -224,39 +225,107 @@ def build_watch_device_page() -> None:
                 # astro/DSO mode (mode_id=2) - see that function's own
                 # docstring - so every read below falls back to the
                 # existing "—" placeholder rather than raising.
-                http_params = perform_read_camera_params_http_v3(mode_id=2, session=session)
-                tele_cam = (
-                    http_params.get("cameras", {}).get(0)
-                    if isinstance(http_params, dict)
-                    else None
+                #
+                # Skipped entirely for the Dwarf II while a capture is
+                # actively running (user-reported Sep 2026, real
+                # incident: this exact poll, hitting a Dwarf II every
+                # _POLL_INTERVAL_S while it was also mid-capture and a
+                # second device was connected, reproducibly crashed the
+                # Dwarf II at the firmware level - solid red status LED,
+                # needed a physical power cycle - three times in a row
+                # under that combination, never otherwise; root cause
+                # still not pinned down, see protocol-learnings.md, but
+                # this value doesn't change mid-capture anyway, so there
+                # is nothing to lose by not polling it then). Shows a
+                # live-echoed value instead of polling - see
+                # skip_http_poll's own block below for where that comes
+                # from - so the display stays accurate for the whole
+                # run, not just blank/stale until it finishes.
+                skip_http_poll = (
+                    config_to_dwarf_id_str(session.config.dwarf_model_id) == "2"
+                    and scheduler_runner.is_running(dwarf_uid)
                 )
-
-                exposure_name = None
-                gain_value = None
-                filter_name = None
-                if tele_cam:
-                    exposure_info = tele_cam.get("exposure")
-                    if exposure_info:
-                        exposure_name = exposure_info.get("name")
-                    gain_info = tele_cam.get("gain")
-                    if gain_info:
-                        gain_value = gain_info.get("value")
-                    if "filterType" in tele_cam:
-                        filter_name = ir_filter_display_label(
-                            _ir_filter_display_name(
-                                session.config.dwarf_model_id, str(tele_cam["filterType"])
-                            )
+                if skip_http_poll:
+                    # Live echo instead of a live HTTP poll (user-
+                    # requested Sep 2026: "les parametres affiches ne
+                    # sont pas bon, il se rafraichissent juste a la
+                    # fin") - dwarf_session.py sends the exact same
+                    # Exposure/Gain/IR Filter values via progress_
+                    # callback right when it configures them, moments
+                    # before capture actually starts; on_progress()
+                    # (scheduler_runner.py) already parses those into
+                    # RunState, so this is a real value for the whole
+                    # run, not a blank placeholder - just not a fresh
+                    # per-tick device read, which is exactly the point.
+                    exposure_metric.clear()
+                    with exposure_metric:
+                        _metric(t("exposure"), run_state.exposure_actual if run_state else None)
+                    gain_metric.clear()
+                    with gain_metric:
+                        _metric(t("gain"), run_state.gain_actual if run_state else None)
+                    filter_metric.clear()
+                    with filter_metric:
+                        _metric(
+                            t("watch_filter"),
+                            run_state.ir_filter_actual if run_state else None,
+                            value_classes="text-lg font-medium",
                         )
+                http_params = (
+                    perform_read_camera_params_http_v3(mode_id=2, session=session)
+                    if not skip_http_poll
+                    else False
+                )
+                # Which camera's params to actually read (user-reported
+                # Sep 2026: this used to always read cameras[0] - Tele -
+                # even during a Wide-only capture, so exposure/gain
+                # showed nothing useful/wrong while Wide was running).
+                # Same resolver device_card.py's own dashboard banner
+                # and the Results-tab mirroring already use.
+                #
+                # The whole block below (through the widget updates) is
+                # skipped when skip_http_poll is set, leaving whatever
+                # was last shown on screen untouched rather than
+                # blanking it to "—" - see skip_http_poll's own comment
+                # above for why.
+                if not skip_http_poll:
+                    is_tele = scheduler_runner.resolve_active_camera_is_tele(dwarf_uid, full_status)
+                    active_cam = (
+                        http_params.get("cameras", {}).get(0 if is_tele else 1)
+                        if isinstance(http_params, dict)
+                        else None
+                    )
 
-                exposure_metric.clear()
-                with exposure_metric:
-                    _metric(t("exposure"), exposure_name)
-                gain_metric.clear()
-                with gain_metric:
-                    _metric(t("gain"), gain_value)
-                filter_metric.clear()
-                with filter_metric:
-                    _metric(t("watch_filter"), filter_name, value_classes="text-lg font-medium")
+                    exposure_name = None
+                    gain_value = None
+                    filter_name = None
+                    if active_cam:
+                        exposure_info = active_cam.get("exposure")
+                        if exposure_info:
+                            exposure_name = exposure_info.get("name")
+                        gain_info = active_cam.get("gain")
+                        if gain_info:
+                            gain_value = gain_info.get("value")
+                        # Wide has no IR filter selection at all (user-
+                        # confirmed Sep 2026: "pas de filtres alors") -
+                        # left as the existing "—" placeholder rather than
+                        # reading a filterType that wouldn't mean anything
+                        # for this camera.
+                        if is_tele and "filterType" in active_cam:
+                            filter_name = ir_filter_display_label(
+                                _ir_filter_display_name(
+                                    session.config.dwarf_model_id, str(active_cam["filterType"])
+                                )
+                            )
+
+                    exposure_metric.clear()
+                    with exposure_metric:
+                        _metric(t("exposure"), exposure_name)
+                    gain_metric.clear()
+                    with gain_metric:
+                        _metric(t("gain"), gain_value)
+                    filter_metric.clear()
+                    with filter_metric:
+                        _metric(t("watch_filter"), filter_name, value_classes="text-lg font-medium")
 
             _refresh()
             ui.timer(_POLL_INTERVAL_S, _refresh)

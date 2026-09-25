@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.1.0] - 2026-09-25
+    This change adds orphaned Current/ reconciliation during reconnect and connect-all flows.
+    It re-queues stale interrupted jobs back to ToDo
+    Resumes valid interrupted captures using fresh device status checks, and finalizes orphaned files to Error when no active capture matches them.
+    The patch also writes last-step metadata to the current program state for better recovery, and fixes the Wide camera retry path in the session flow so resumed captures are tracked correctly.
+
 ## [3.0.9] - 2026-09-25
     WIP - Improve stop and reconnect handling
     This change shortens the stale-run watchdog grace period and ensures disconnected sessions quickly release command slots so auto-reconnect can resume.

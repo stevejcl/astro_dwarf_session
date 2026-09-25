@@ -183,13 +183,36 @@ def _wait_for_astro_end(stop_fn, end_time, interrupted, session, camera_type="Te
     called unconditionally from both call sites below - no more direct
     perform_waitEndAstroPhoto()/perform_waitEndAstroWidePhoto() calls
     outside of this function."""
+    STOP_CONFIRM_TIMEOUT = 30  # seconds, safety net if no notification arrives
+
+    def _confirm_stopped():
+        deadline = time.monotonic() + STOP_CONFIRM_TIMEOUT
+        while time.monotonic() < deadline:
+            status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
+            if status and status.get("error_connection"):
+                log.warning("Connection error while confirming stop - giving up on confirmation")
+                return False
+            if status and not status.get("capturing"):
+                return True
+            time.sleep(2)
+        log.warning("Timed out waiting for device to confirm capture stopped")
+        return False
+
     while True:
         if interrupted():
+            status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
+            if status and status.get("error_connection"):
+                log.warning("Stop requested but connection already down - skipping stop command")
+                return False
             log.notice("Stop requested - sending stop capture command to device")
             stop_fn(session=session)
+            _confirm_stopped()
             return False
 
         status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
+        if status and status.get("error_connection"):
+            log.warning("Connection error reported by device - aborting wait")
+            return False
         if status and not status.get("capturing"):
             return True
 
@@ -200,6 +223,7 @@ def _wait_for_astro_end(stop_fn, end_time, interrupted, session, camera_type="Te
             if progress_callback:
                 progress_callback("step_16", "success")
             stop_fn(session=session)
+            _confirm_stopped()
             return True
 
         time.sleep(2)

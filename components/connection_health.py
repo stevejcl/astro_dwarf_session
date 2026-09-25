@@ -118,6 +118,7 @@ from dwarf_python_api.lib.dwarf_utils import (
     perform_disconnect,
     perform_enter_astro_mode,
     perform_get_device_state_info,
+    perform_read_astro_stacking_status_v3
 )
 
 # How often to actively probe a session that LOOKS connected (seconds).
@@ -187,6 +188,19 @@ _auto_reconnect_in_progress: set[str] = set()
 # request always gets the very next opening instead of having to
 # out-race a periodic check indefinitely.
 _priority_pending: set[str] = set()
+
+_manual_disconnect: set[str] = set()
+
+def mark_manual_disconnect(dwarf_uid: str) -> None:
+    """Called by the UI's own Disconnect action - suppresses auto_
+    reconnect() for this device until the user reconnects it themselves
+    (mark_just_connected() or an explicit new connect action clears
+    this)."""
+    _manual_disconnect.add(dwarf_uid)
+
+
+def clear_manual_disconnect(dwarf_uid: str) -> None:
+    _manual_disconnect.discard(dwarf_uid)
 
 
 def mark_priority_pending(dwarf_uid: str) -> None:
@@ -307,14 +321,21 @@ async def _auto_reconnect(session: DwarfSession) -> None:
     try:
         for attempt in range(1, _MAX_AUTO_RECONNECT_ATTEMPTS + 1):
             if not try_acquire_command_slot(uid, caller="auto_reconnect"):
-                # A manual action (or another auto-reconnect pass)
-                # already has the slot - back off rather than fight over
-                # it; the next failed check will try again later.
                 return
             try:
                 await run.io_bound(perform_disconnect, session=session)
                 result = await run.io_bound(perform_get_device_state_info, session=session)
                 success = result is not False
+                if success:
+                    # Reconciliation runs here, still holding the slot -
+                    # see reconcile_after_reconnect()'s own docstring
+                    # (user-reported Sep 2026: a force-stopped run's
+                    # device can go on to finish its capture on its own;
+                    # done here, before release, so no new run can start
+                    # sending commands to this device concurrently while
+                    # we're correcting its Error/Done file).
+                    from components import scheduler_runner
+                    await run.io_bound(scheduler_runner.reconcile_after_reconnect, uid, session)
             finally:
                 release_command_slot(uid)
 
@@ -326,12 +347,9 @@ async def _auto_reconnect(session: DwarfSession) -> None:
             if attempt < _MAX_AUTO_RECONNECT_ATTEMPTS:
                 await asyncio.sleep(_AUTO_RECONNECT_DELAY_S)
 
-        # All attempts failed - stop auto-retrying for this uid until a
-        # manual reconnect (mark_just_connected()) clears this.
         _auto_reconnect_exhausted.add(uid)
     finally:
         _auto_reconnect_in_progress.discard(uid)
-
 
 async def _cleanup_stale_event_loop(session: DwarfSession) -> None:
     """See the module docstring's EVENT LOOP CLEANUP section.
@@ -381,7 +399,11 @@ async def maybe_check(session: DwarfSession) -> None:
         await _cleanup_stale_event_loop(session)
         forget(session.dwarf_uid)
         uid = session.dwarf_uid
-        if uid not in _auto_reconnect_exhausted and uid not in _auto_reconnect_in_progress:
+        if (
+            uid not in _manual_disconnect
+            and uid not in _auto_reconnect_exhausted
+            and uid not in _auto_reconnect_in_progress
+        ):
             background_tasks.create(_auto_reconnect(session), name=f"auto-reconnect-{uid}")
         return
 

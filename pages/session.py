@@ -525,52 +525,11 @@ async def _handle_disconnect(session, dwarf_uid: str, refresh_view: Callable[[],
     if thread is not None:
         unregister_thread_device_label(thread.ident)
     connection_health.forget(dwarf_uid)
+    connection_health.mark_manual_disconnect(dwarf_uid)  # <-- ADD: suppresses
+        # auto_reconnect() until the user reconnects again themselves -
+        # otherwise maybe_check() sees is_connected=False right after this
+        # and immediately undoes the user's own Disconnect click.
     _safe_notify(t("disconnected"), type="warning")
-    refresh_view()
-
-
-async def _handle_reconnect(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
-    """For the connection_lost case: session.client_instance is still
-    set to a dead connection, so a plain 'connect' call would just
-    reuse it and time out again (connect_socket() only goes through
-    init_socket() when client_instance is None/start_client is False).
-    A real reconnect needs a clean disconnect first."""
-    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.reconnect"):
-        _safe_notify(t("device_busy"), type="warning")
-        return
-    _busy_uids.add(dwarf_uid)
-    old_thread = getattr(session, "event_loop_thread", None)
-    notification = _safe_ongoing_notification(t("reconnecting_in_progress"))
-    try:
-        await run.io_bound(perform_disconnect, session=session)
-        if old_thread is not None:
-            unregister_thread_device_label(old_thread.ident)
-        success = await connection_health.connect_and_enter_astro_mode(session)
-    finally:
-        _busy_uids.discard(dwarf_uid)
-        connection_health.release_command_slot(dwarf_uid)
-
-    if not success:
-        # User-requested (Sep 2026): surface the REAL reason when one is
-        # known (currently: DEVICE_OCCUPIED, close code 4409 - another
-        # client, likely the official app, already connected) instead of
-        # always showing the generic "Connection failed". dwarf_python_
-        # api returns a stable CODE (not a hardcoded English sentence -
-        # it's a generic library, this app owns translation), mapped via
-        # a "conn_error_<code>" key so both languages work. Falls back
-        # to the generic message for any code without a mapped key.
-        error_code = perform_get_last_connection_error(session=session)
-        translation_key = f"conn_error_{error_code.lower()}" if error_code else None
-        specific_reason = t(translation_key) if translation_key and translation_key in _known_conn_error_keys else None
-        _finish_ongoing_notification(notification, specific_reason or t("connection_failed"), "negative")
-    else:
-        _finish_ongoing_notification(notification, t("connected"), "positive")
-        connection_health.mark_just_connected(dwarf_uid)
-        _label_thread_for_device(session)
-
-        pending = pending_schedules.get_pending(dwarf_uid)
-        if pending is not None:
-            await _offer_pending_schedule_sync(session, dwarf_uid, pending)
     refresh_view()
 
 

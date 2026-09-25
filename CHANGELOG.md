@@ -7,6 +7,18 @@
     The astro capture wait loop now checks for stop requests even when no scheduled end time is configured, and the retry logic stops the device immediately instead of waiting for a stale blocking call to finish.
     It also guards against late stale results overwriting forced-failure states.
 
+    Add manual-disconnect suppression and reconciliation so a user Disconnect isn't immediately auto-reconnected and force-stopped runs can be corrected if the device finished while offline.
+    Key changes:
+        - components/connection_health.py: track manual disconnects; skip auto-reconnect when set;
+          call reconcile_after_reconnect after successful reconnect.
+        - components/scheduler_runner.py: extend RunState (program/current_path/last_saved_path),
+          ensure force-stopped runs are moved to Error,
+          implement reconcile_after_reconnect to upgrade Error->Done when device confirms completion,
+          stash/restore shot counts.
+        - dwarf_session.py: confirm device stop via status polling.
+        - pages/session.py: mark manual disconnect on UI Disconnect.
+
+
 ## [3.0.8] - 2026-09-24
 ### Improvements
     Updates the modern IR filter API and capture behavior

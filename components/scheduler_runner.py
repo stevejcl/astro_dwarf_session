@@ -93,6 +93,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
 from dwarf_python_api.lib.dwarf_utils import perform_is_camera_actually_busy
+from dwarf_python_api.lib.dwarf_utils import perform_read_astro_stacking_status_v3
 
 from components import connection_health
 from components.session_dirs import session_dirs_for
@@ -108,6 +109,16 @@ class StepEvent:
 
 @dataclass
 class RunState:
+    program: dict | None = None  # raw program dict - kept so a force-stop
+                                 # (check_stuck_runs) can finalize the Current->Error
+                                 # file move even if this run's own worker thread
+                                 # never gets back to its finally block to do so
+    current_path: str | None = None   # Current-dir file path for this run, if any
+    last_saved_path: str | None = None  # absolute path of the Done/Error file this
+        # run last wrote - set by both _run_blocking()'s own finalization AND
+        # check_stuck_runs()'s _force_stop(), so a later reconciliation
+        # (reconcile_after_reconnect(), see below) can find and correct it
+        # without recomputing dirs/filenames from scratch.
     running: bool = True
     stop_event: threading.Event = field(default_factory=threading.Event)
     stop_requested: bool = False  # user-requested Sep 2026
@@ -413,6 +424,41 @@ def check_stuck_runs() -> None:
         state.force_stopped = True
         connection_health.release_command_slot(dwarf_uid)
 
+        # The worker thread's own finally block normally does the Current->
+        # Error file move (see _run_blocking()) - but a force-stopped run's
+        # thread is, by definition, stuck and may never reach it (or may
+        # arrive too late, after force_stopped already made it skip that
+        # block on purpose). Without this, the program's file is left
+        # sitting in Current/ forever: never Done, never Error, invisible
+        # on the Results tab.
+        program = state.program
+        if program is not None:
+            id_command = program.setdefault("id_command", {})
+            id_command["process"] = "error"
+            id_command["result"] = False
+            id_command["message"] = f"Session failed: {reason}"
+            try:
+                session = get_manager().get(dwarf_uid)
+            except KeyError:
+                session = None
+            if session is not None:
+                _set_dwarf_field(id_command, session)
+                _capture_shots_result(id_command, session)
+
+            if state.current_path is not None and os.path.exists(state.current_path):
+                try:
+                    dirs = session_dirs_for(session) if session is not None else None
+                    if dirs is not None:
+                        full_program = {"command": program}
+                        error_path = os.path.join(dirs["ERROR_DIR"], os.path.basename(state.current_path))
+                        os.makedirs(dirs["ERROR_DIR"], exist_ok=True)
+                        _update_process_status(full_program, "done")
+                        _write_json(error_path, full_program)
+                        os.remove(state.current_path)
+                        state.last_saved_path = error_path
+                except OSError:
+                    log.warning(f"[{dwarf_uid}] Could not move force-stopped run's file to Error dir.")
+
     manager = get_manager()
     for dwarf_uid, state in list(_runs.items()):
         if not state.running:
@@ -446,6 +492,74 @@ def check_stuck_runs() -> None:
                 f"slot held {duration:.0f}s > {_MAX_RUN_SECONDS}s - far longer than "
                 "any real capture should take (likely a leaked thread).",
             )
+
+
+def reconcile_after_reconnect(dwarf_uid: str, session) -> None:
+    """Called by connection_health._auto_reconnect() right after a
+    successful reconnect - user-reported Sep 2026: a real network-drop
+    test showed the DEVICE finish its capture naturally (20/20,
+    "Success ASTRO CAPTURE ENDING") well AFTER check_stuck_runs() had
+    already force-stopped the run and written it to Error/ as failed -
+    the app had no way to know at force-stop time whether the device
+    would come back and finish on its own. ONE-SHOT correction, not
+    resumed monitoring: a single status check right after reconnect,
+    upgrading the already-written Error file to Done only if the
+    device confirms it genuinely finished (not capturing, count >=
+    what was requested)."""
+    state = _runs.get(dwarf_uid)
+    if state is None or not state.force_stopped or state.program is None:
+        return
+    if state.last_saved_path is None or not os.path.exists(state.last_saved_path):
+        return
+
+    camera_type = "Wide" if state.requested_count_wide and not state.requested_count_tele else "Tele"
+    status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
+    if not status or status.get("error_connection") or status.get("capturing"):
+        return
+
+    try:
+        requested = int(state.requested_count_tele or state.requested_count_wide or 0)
+    except (TypeError, ValueError):
+        requested = 0
+    current_count = status.get("current_count") or 0
+    if not requested or current_count < requested:
+        return  # didn't actually reach the target - leave it recorded as failed
+
+    # right before writing anything:
+    if _runs.get(dwarf_uid) is not state:
+        log.notice(f"[{dwarf_uid}] A new run started before reconciliation finished - skipping.")
+        return
+
+    program = state.program
+    id_command = program.setdefault("id_command", {})
+    id_command["process"] = "done"
+    id_command["result"] = True
+    id_command["message"] = "Session completed successfully (confirmed after reconnect)"
+    id_command["shots_taken"] = current_count
+    id_command["shots_stacked"] = status.get("stacked_count")
+    _set_dwarf_field(id_command, session)
+
+    dirs = session_dirs_for(session)
+    starting_date = id_command.get("starting_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    dt_str = starting_date.replace(":", "-").replace(" ", "-")
+    new_filename_base = re.sub(
+        r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}_", "", os.path.basename(state.last_saved_path)
+    )
+    done_path = os.path.join(dirs["DONE_DIR"], f"{dt_str}_{new_filename_base}")
+    os.makedirs(dirs["DONE_DIR"], exist_ok=True)
+
+    full_program = {"command": program}
+    _update_process_status(full_program, "done")
+    _write_json(done_path, full_program)
+    if os.path.exists(state.last_saved_path):
+        os.remove(state.last_saved_path)
+
+    state.finished_ok = True
+    state.error = None
+    state.shots_taken = current_count
+    state.shots_stacked = status.get("stacked_count")
+    state.last_saved_path = done_path
+    log.notice(f"[{dwarf_uid}] Force-stopped run reconciled as successful after reconnect ({current_count}/{requested}).")
 
 
 def device_is_actively_capturing(session) -> bool:
@@ -546,9 +660,23 @@ def _run_blocking(
         id_command["process"] = "running"
         id_command["result"] = False
         id_command["message"] = "Session started"
+        id_command.pop("shots_taken", None)
+        id_command.pop("shots_stacked", None)
+        id_command.pop("exposure_actual", None)
+        id_command.pop("gain_actual", None)
+        id_command.pop("ir_actual", None)
+        id_command.pop("eq_azimut_error", None)
+        id_command.pop("eq_altitude_error", None)
         _update_process_status(full_program, "pending")
         id_command["time"] = datetime.now().strftime("%H:%M:%S")
         _write_json(current_path, full_program)
+
+    # Stashed on RunState so check_stuck_runs()'s _force_stop() can finalize
+    # the Current->Error file move itself, in case this run's own worker
+    # thread never gets back to its finally block to do so (see RunState.
+    # program/current_path docstrings).
+    state.program = program
+    state.current_path = current_path
 
     seq = 0
 
@@ -666,7 +794,7 @@ def _run_blocking(
                 _write_json(done_path, full_program)
                 if os.path.exists(current_path):
                     os.remove(current_path)
-
+                state.last_saved_path = done_path
         else:
             e = last_exception
             state.error = str(e)
@@ -677,6 +805,13 @@ def _run_blocking(
                 f"Session failed after {attempt} attempt(s): {e}" if attempt > 1 else f"Session failed: {e}"
             )
             _set_dwarf_field(id_command, session)
+            _capture_shots_result(id_command, session)  # <-- ADD: best-effort - if this
+                # run made real progress before failing, record it here instead of
+                # leaving shots_taken/shots_stacked empty (see id_command.pop() reset
+                # at run start - this is what fills them back in when there IS
+                # genuine data for THIS run).
+            state.shots_taken = id_command.get("shots_taken")
+            state.shots_stacked = id_command.get("shots_stacked")
 
             if current_path is not None:
                 dirs = session_dirs_for(session)
@@ -686,7 +821,7 @@ def _run_blocking(
                 _write_json(error_path, full_program)
                 if os.path.exists(current_path):
                     os.remove(current_path)
-
+                state.last_saved_path = error_path
     finally:
         state.running = False
         #clear_run(session.dwarf_uid)

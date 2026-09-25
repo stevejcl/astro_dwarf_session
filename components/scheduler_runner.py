@@ -109,6 +109,7 @@ class StepEvent:
 
 @dataclass
 class RunState:
+    dwarf_uid: str
     program: dict | None = None  # raw program dict - kept so a force-stop
                                  # (check_stuck_runs) can finalize the Current->Error
                                  # file move even if this run's own worker thread
@@ -561,6 +562,257 @@ def reconcile_after_reconnect(dwarf_uid: str, session) -> None:
     state.last_saved_path = done_path
     log.notice(f"[{dwarf_uid}] Force-stopped run reconciled as successful after reconnect ({current_count}/{requested}).")
 
+_ORPHAN_CORRELATION_MAX_AGE_S = 300
+
+def _requeue_orphan_to_todo(dwarf_uid, dirs, filename, path, program, id_command) -> None:
+    """Puts an interrupted-before-any-real-progress session back into
+    ToDo/ instead of marking it a permanent Error - scheduler_loop.py's
+    own _next_due_file() treats a past-due date/time as immediately
+    due, so this just gets picked up and re-run from scratch on the
+    next tick, no date adjustment needed."""
+    id_command["process"] = "pending"
+    id_command.pop("shots_taken", None)
+    id_command.pop("shots_stacked", None)
+    id_command.pop("exposure_actual", None)
+    id_command.pop("gain_actual", None)
+    id_command.pop("ir_actual", None)
+    id_command.pop("eq_azimut_error", None)
+    id_command.pop("eq_altitude_error", None)
+    id_command.pop("last_step", None)
+    id_command.pop("last_step_time", None)
+
+    todo_path = os.path.join(dirs["TODO_DIR"], filename)
+    os.makedirs(dirs["TODO_DIR"], exist_ok=True)
+    try:
+        _write_json(todo_path, {"command": program})
+        os.remove(path)
+        log.notice(f"[{dwarf_uid}] Orphaned Current/ file requeued to ToDo: {filename}")
+    except OSError:
+        log.warning(f"[{dwarf_uid}] Could not requeue orphaned file {filename} to ToDo.")
+
+_RESUME_POLL_INTERVAL_S = 2
+_RESUME_BUSY_CHECK_EVERY_S = 20  # how often to cross-check with a FRESH device query
+_RESUME_ACQUIRE_ATTEMPTS = 3
+_RESUME_ACQUIRE_DELAY_S = 3
+
+def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted) -> int:
+    """Returns the final current_count once the resumed capture is
+    considered finished.
+
+    Deliberately does NOT reuse _wait_for_astro_end()'s "capturing" flag
+    (perform_read_astro_stacking_status_v3()'s AstroCapture/
+    AstroWideCapture) - field-confirmed (Sep 2026) unreliable here: that
+    flag only flips True on a notification whose state matches
+    self.command == the exact command THIS process itself last sent (see
+    perform_is_camera_actually_busy()'s own docstring in dwarf_utils.py).
+    A resumed capture was started by the PREVIOUS process instance
+    (before the app restart), so this process's self.command never
+    matches it - the flag reads False from the very first poll, and
+    _wait_for_astro_end() exited almost immediately in real testing,
+    finalizing the run at 7/20 shots.
+
+    Uses current_count reaching requested_count as the primary success
+    signal, with a periodic FRESH device query (device_is_actively_
+    capturing(), reliable regardless of who started the activity) as the
+    fallback stop condition if the count stops moving before reaching
+    the target."""
+    last_count = 0
+    last_busy_check_at = 0.0
+
+    while not interrupted():
+        status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
+        if not status or status.get("error_connection"):
+            time.sleep(_RESUME_POLL_INTERVAL_S)
+            continue
+
+        current_count = status.get("current_count") or 0
+        if current_count != last_count:
+            last_count = current_count
+
+        if requested_count and current_count >= requested_count:
+            return current_count
+
+        now = time.monotonic()
+        if now - last_busy_check_at >= _RESUME_BUSY_CHECK_EVERY_S:
+            last_busy_check_at = now
+            if not device_is_actively_capturing(session):
+                # Confirmed by a fresh query, not the stale local flag -
+                # the device genuinely isn't shooting anymore.
+                return current_count
+
+        time.sleep(_RESUME_POLL_INTERVAL_S)
+
+    return last_count
+
+
+def _parse_requested_count(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_command) -> None:
+    from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_stopAstroWidePhoto
+    # note: no longer imports _wait_for_astro_end/_parse_end_time - see
+    # _wait_for_resumed_capture()'s own docstring for why.
+
+    take_photo = program.get('setup_camera', {}).get('do_action')
+    take_widephoto = program.get('setup_wide_camera', {}).get('do_action')
+    if not take_photo and not take_widephoto:
+        return
+
+    state = RunState(dwarf_uid=dwarf_uid, program=program, current_path=path)
+    state.requested_count_tele = (program.get("setup_camera", {}).get("count") if take_photo else "") or ""
+    state.requested_count_wide = (program.get("setup_wide_camera", {}).get("count") if take_widephoto else "") or ""
+    state.program_name = id_command.get("description") or ""
+    _runs[dwarf_uid] = state
+
+    acquired = False
+    for attempt in range(1, _RESUME_ACQUIRE_ATTEMPTS + 1):
+        acquired = connection_health.try_acquire_command_slot(
+            dwarf_uid, caller="scheduler_runner.resume_capture"
+        )
+        if acquired:
+            break
+        if attempt < _RESUME_ACQUIRE_ATTEMPTS:
+            time.sleep(_RESUME_ACQUIRE_DELAY_S)
+
+    if not acquired:
+        state.running = False
+        state.error = "Could not acquire command slot to resume orphaned capture."
+        log.warning(f"[{dwarf_uid}] {state.error} Will retry on next reconnect/orphan check.")
+        return
+
+    def interrupted() -> bool:
+        return state.stop_requested
+
+    success = True
+    try:
+        try:
+            if take_photo:
+                requested = _parse_requested_count(state.requested_count_tele)
+                final_count = _wait_for_resumed_capture(session, "Tele", requested, interrupted)
+                if interrupted():
+                    perform_stopAstroPhoto(session=session)
+                    success = False
+                elif requested and final_count < requested:
+                    success = False  # device stopped short of the target
+
+            if success and take_widephoto:
+                requested = _parse_requested_count(state.requested_count_wide)
+                final_count = _wait_for_resumed_capture(session, "Wide", requested, interrupted)
+                if interrupted():
+                    perform_stopAstroWidePhoto(session=session)
+                    success = False
+                elif requested and final_count < requested:
+                    success = False
+        except Exception as e:
+            log.warning(f"[{dwarf_uid}] Resume of orphaned capture failed: {e}")
+            success = False
+
+        full_program = {"command": program}
+        _set_dwarf_field(id_command, session)
+        _capture_shots_result(id_command, session)
+
+        if _runs.get(dwarf_uid) is not state:
+            return
+
+        id_command["process"] = "done" if success else "error"
+        id_command["result"] = success
+        id_command["message"] = (
+            "Session completed successfully (resumed after restart)"
+            if success else "Session failed (resumed after restart)"
+        )
+        _update_process_status(full_program, "done")
+
+        dest_dir = dirs["DONE_DIR"] if success else dirs["ERROR_DIR"]
+        dest_path = os.path.join(dest_dir, filename)
+        os.makedirs(dest_dir, exist_ok=True)
+        try:
+            _write_json(dest_path, full_program)
+            os.remove(path)
+            state.last_saved_path = dest_path
+            log.notice(f"[{dwarf_uid}] Resumed orphaned capture finalized: {filename} -> {'Done' if success else 'Error'} ({id_command.get('shots_taken')}/{state.requested_count_tele or state.requested_count_wide})")
+        except OSError:
+            log.warning(f"[{dwarf_uid}] Could not finalize resumed orphaned file {filename}.")
+
+        state.finished_ok = success
+        state.shots_taken = id_command.get("shots_taken")
+        state.shots_stacked = id_command.get("shots_stacked")
+    finally:
+        state.running = False
+        connection_health.release_command_slot(dwarf_uid)
+
+
+def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
+    if dwarf_uid in _runs and _runs[dwarf_uid].running:
+        return
+    dirs = session_dirs_for(session)
+    current_dir = dirs["CURRENT_DIR"]
+    if not os.path.isdir(current_dir):
+        return
+    leftover_files = [f for f in os.listdir(current_dir) if f.endswith(".json")]
+    if not leftover_files:
+        return
+
+    parsed = []
+    for filename in leftover_files:
+        path = os.path.join(current_dir, filename)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                full_program = json.load(f)
+            program = full_program.get("command", full_program)
+        except (OSError, json.JSONDecodeError):
+            continue
+        id_command = program.setdefault("id_command", {})
+        last_step_time = id_command.get("last_step_time")
+        try:
+            ts = datetime.strptime(last_step_time, "%Y-%m-%d %H:%M:%S") if last_step_time else None
+        except ValueError:
+            ts = None
+        if ts is None:
+            try:
+                ts = datetime.fromtimestamp(os.path.getmtime(path))
+            except OSError:
+                ts = datetime.min
+        parsed.append((ts, filename, path, program, id_command))
+    if not parsed:
+        return
+
+    # Only the most recent file is ever a plausible match for what the device
+    # is doing right now. Any older leftovers (shouldn't normally happen) are
+    # not a match for anything - finalize them straight to Error.
+    parsed.sort(key=lambda item: item[0], reverse=True)
+    newest, *older = parsed
+    for ts, filename, path, program, id_command in older:
+        _finalize_orphan_to_error(dwarf_uid, dirs, filename, path, program, id_command)
+
+    ts, filename, path, program, id_command = newest
+    device_busy = device_is_actively_capturing(session)
+    if device_busy:
+        age = (datetime.now() - ts).total_seconds()
+        if age <= _ORPHAN_CORRELATION_MAX_AGE_S:
+            background_tasks.create(
+                run.io_bound(
+                    _resume_capture, dwarf_uid, session, dirs, filename, path, program, id_command
+                ),
+                name=f"resume-orphan-{dwarf_uid}",
+            )
+        return
+    _requeue_orphan_to_todo(dwarf_uid, dirs, filename, path, program, id_command)
+
+def _finalize_orphan_to_error(dwarf_uid, dirs, filename, path, program, id_command) -> None:
+    id_command["process"] = "error"
+    error_path = os.path.join(dirs["ERROR_DIR"], filename)
+    os.makedirs(dirs["ERROR_DIR"], exist_ok=True)
+    try:
+        _write_json(error_path, {"command": program})
+        os.remove(path)
+        log.notice(f"[{dwarf_uid}] Stale orphaned Current/ file moved to Error: {filename}")
+    except OSError:
+        log.warning(f"[{dwarf_uid}] Could not finalize stale orphaned file {filename} to Error.")        
+
 
 def device_is_actively_capturing(session) -> bool:
     """Checks the DEVICE's real, live state via a FRESH
@@ -685,6 +937,15 @@ def _run_blocking(
         seq += 1
         label = STEP_DESCRIPTIONS.get(step_key, step_key)
         state.steps.append(StepEvent(key=step_key, label=label, status=status, seq=seq))
+
+        if current_path is not None:
+            id_command["last_step"] = label
+            id_command["last_step_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                _write_json(current_path, full_program)
+            except OSError:
+                pass
+
         # Live echo (user-requested Sep 2026) - dwarf_session.py already
         # sends these exact "Exposure: X"/"Gain: X"/"IR Filter: X"
         # messages right when it configures them, well before capture
@@ -871,7 +1132,7 @@ def start_run(
     # not for a full manual start_dwarf_session() run, which actively
     # drives goto/calibration/capture from the first step.
 
-    state = RunState()
+    state = RunState(dwarf_uid=dwarf_uid)
     state.program_name = program.get("id_command", {}).get("description") or ""
     # Surfaced by device_card.py's "capturing"/"program_running" banner
     # (user-requested Sep 2026: "peut etre l'heure final si presente") -

@@ -336,6 +336,7 @@ async def _auto_reconnect(session: DwarfSession) -> None:
                     # we're correcting its Error/Done file).
                     from components import scheduler_runner
                     await run.io_bound(scheduler_runner.reconcile_after_reconnect, uid, session)
+                    await run.io_bound(scheduler_runner.reconcile_orphaned_current_files, session.dwarf_uid, session)
             finally:
                 release_command_slot(uid)
 

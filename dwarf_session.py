@@ -910,15 +910,15 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                     return
                 continue_action = try_attemps(
                     lambda: _wait_for_astro_end(
-                        perform_stopAstroWidePhoto, wide_end_time_val, interrupted, session, "Tele", progress_callback,
+                        perform_stopAstroWidePhoto, wide_end_time_val, interrupted, session, "Wide", progress_callback,
                     ),
-                    "Astro photo session completed", 5, interrupted=interrupted,
+                    "Wide Astro photo session completed", 5, interrupted=interrupted,
                 )
                 if interrupted():
                     log.notice("Stop requested during retry - sending stop capture command to device")
                     perform_stopAstroWidePhoto(session=session)
                     return
-                verify_action(continue_action, "step_12", progress_callback=progress_callback)
+                verify_action(continue_action, "step_15", progress_callback=progress_callback)
 
     except Exception as e:
         line_number = e.__traceback__.tb_lineno if e.__traceback__ else "unknown"

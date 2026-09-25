@@ -12,7 +12,7 @@ enough to detect a connection that died mid-session (e.g. a Wi-Fi
 glitch causing a command timeout, rather than a clean disconnect)."""
 from __future__ import annotations
 
-from nicegui import ui
+from nicegui import ui,run
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 
@@ -65,6 +65,8 @@ async def _handle_connect_all(button: ui.button | None = None) -> None:
             if success:
                 connected += 1
                 connection_health.mark_just_connected(session.dwarf_uid)
+                from components import scheduler_runner  # local import - avoids circular import
+                await run.io_bound(scheduler_runner.reconcile_orphaned_current_files, uid, session)
             else:
                 failed += 1
     finally:

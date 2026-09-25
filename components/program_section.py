@@ -95,7 +95,8 @@ def build_program_section(session) -> None:
                 if state.running:
                     with ui.row().classes("items-center gap-2"):
                         ui.spinner(size="1em")
-                        ui.label(t("program_running")).classes("text-xs text-grey-6")
+                        label_key = "program_stopping" if state.stop_requested else "program_running"
+                        ui.label(t(label_key)).classes("text-xs text-grey-6")
                 elif state.finished_ok is True:
                     ui.label(t("program_finished_ok")).classes(
                         "text-xs text-green-700 font-medium mt-1"

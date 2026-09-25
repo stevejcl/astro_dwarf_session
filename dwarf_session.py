@@ -19,7 +19,6 @@ from dwarf_python_api.lib.dwarf_utils import perform_takeAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_continue_shooting
 from dwarf_python_api.lib.dwarf_utils import perform_clear_needs_continue_shooting
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
-from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroPhoto, perform_waitRetryEndAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_stopAstroPhoto, perform_stopAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_read_astro_stacking_status_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_exposure_by_name_v3
@@ -30,7 +29,6 @@ from dwarf_python_api.lib.dwarf_utils import perform_set_astro_mosaic_count_v3
 from dwarf_python_api.lib.dwarf_utils import perform_start_mosaic_v3
 from dwarf_python_api.lib.dwarf_utils import perform_set_astro_stack_binning_v3
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroWidePhoto
-from dwarf_python_api.lib.dwarf_utils import perform_waitEndAstroWidePhoto, perform_waitRetryEndAstroWidePhoto
 from dwarf_python_api.lib.dwarf_utils import perform_start_autofocus
 from dwarf_python_api.lib.dwarf_utils import start_polar_align
 from dwarf_python_api.lib.dwarf_utils import perform_time
@@ -170,19 +168,32 @@ def _wait_for_astro_end(stop_fn, end_time, interrupted, session, camera_type="Te
     If `end_time` is reached first, stop_fn() is called - and awaited -
     on THIS thread, with nothing else reading the queue concurrently.
 
-    Only called when `end_time` is not None - see this function's two
-    call sites below, which call perform_waitEndAstroPhoto()/
-    perform_waitEndAstroWidePhoto() directly instead (unchanged from
-    before this feature existed) when no end time was set."""
+    `end_time` may be None (user-requested Sep 2026: "j'ai essaye
+    d'arreter la capture... mais cela n'a pas marche" - a real overnight
+    test confirmed the OLD design, calling perform_waitEndAstroPhoto()
+    directly whenever no end time was set, never checked interrupted()
+    at all once inside that single blocking call - clicking Stop just
+    set the flag with nothing left to notice it until the capture
+    finished naturally on its own, which for a long/cloudy session
+    could be many more minutes). With end_time=None this function skips
+    only the "reached scheduled end time" branch below and otherwise
+    behaves identically - still polling the local cache every 2s and
+    checking interrupted() each time, so Stop now takes effect within a
+    couple of seconds regardless of whether an end time was set. Now
+    called unconditionally from both call sites below - no more direct
+    perform_waitEndAstroPhoto()/perform_waitEndAstroWidePhoto() calls
+    outside of this function."""
     while True:
         if interrupted():
+            log.notice("Stop requested - sending stop capture command to device")
+            stop_fn(session=session)
             return False
 
         status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
         if status and not status.get("capturing"):
             return True
 
-        if datetime.now() >= end_time:
+        if end_time is not None and datetime.now() >= end_time:
             log.notice(
                 f"Reached scheduled end time ({end_time:%H:%M}) - image count not finished, stopping capture now"
             )
@@ -764,17 +775,30 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             time.sleep(2)
             if interrupted(): return
             try:
-                if end_time_val is not None:
-                    continue_action = _wait_for_astro_end(
-                        perform_stopAstroPhoto, end_time_val, interrupted, session, "Tele", progress_callback,
-                    )
-                else:
-                    continue_action = perform_waitEndAstroPhoto(session=session)
+                continue_action = _wait_for_astro_end(
+                    perform_stopAstroPhoto, end_time_val, interrupted, session, "Tele", progress_callback,
+                )
                 if interrupted(): return
                 verify_action(continue_action, "step_12", progress_callback=progress_callback)
+            #except Exception as e:
+            #    continue_action = try_attemps(lambda: perform_waitRetryEndAstroPhoto(session=session), "Astro photo session completed", 5, interrupted=interrupted)
+            #    if interrupted(): return
+            #    verify_action(continue_action, "step_12", progress_callback=progress_callback)
             except Exception as e:
-                continue_action = try_attemps(lambda: perform_waitRetryEndAstroPhoto(session=session), "Astro photo session completed", 5, interrupted=interrupted)
-                if interrupted(): return
+                if interrupted():
+                    log.notice("Stop requested - sending stop capture command to device")
+                    perform_stopAstroPhoto(session=session)
+                    return
+                continue_action = try_attemps(
+                    lambda: _wait_for_astro_end(
+                        perform_stopAstroPhoto, end_time_val, interrupted, session, "Tele", progress_callback,
+                    ),
+                    "Astro photo session completed", 5, interrupted=interrupted,
+                )
+                if interrupted():
+                    log.notice("Stop requested during retry - sending stop capture command to device")
+                    perform_stopAstroPhoto(session=session)
+                    return
                 verify_action(continue_action, "step_12", progress_callback=progress_callback)
 
         # Wide Photo
@@ -846,18 +870,31 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             time.sleep(2)
             if interrupted(): return
             try:
-                if wide_end_time_val is not None:
-                    continue_action = _wait_for_astro_end(
-                        perform_stopAstroWidePhoto, wide_end_time_val, interrupted, session, "Wide", progress_callback,
-                    )
-                else:
-                    continue_action = perform_waitEndAstroWidePhoto(session=session)
+                continue_action = _wait_for_astro_end(
+                    perform_stopAstroWidePhoto, wide_end_time_val, interrupted, session, "Wide", progress_callback,
+                )
                 if interrupted(): return
                 verify_action(continue_action, "step_15", progress_callback=progress_callback)
+            #except Exception as e:
+            #    continue_action = try_attemps(lambda: perform_waitRetryEndAstroWidePhoto(session=session), "Wide Astro photo session completed", 5, interrupted=interrupted)
+            #    if interrupted(): return
+            #    verify_action(continue_action, "step_15", progress_callback=progress_callback)
             except Exception as e:
-                continue_action = try_attemps(lambda: perform_waitRetryEndAstroWidePhoto(session=session), "Wide Astro photo session completed", 5, interrupted=interrupted)
-                if interrupted(): return
-                verify_action(continue_action, "step_15", progress_callback=progress_callback)
+                if interrupted():
+                    log.notice("Stop requested - sending stop capture command to device")
+                    perform_stopAstroWidePhoto(session=session)
+                    return
+                continue_action = try_attemps(
+                    lambda: _wait_for_astro_end(
+                        perform_stopAstroWidePhoto, wide_end_time_val, interrupted, session, "Tele", progress_callback,
+                    ),
+                    "Astro photo session completed", 5, interrupted=interrupted,
+                )
+                if interrupted():
+                    log.notice("Stop requested during retry - sending stop capture command to device")
+                    perform_stopAstroWidePhoto(session=session)
+                    return
+                verify_action(continue_action, "step_12", progress_callback=progress_callback)
 
     except Exception as e:
         line_number = e.__traceback__.tb_lineno if e.__traceback__ else "unknown"

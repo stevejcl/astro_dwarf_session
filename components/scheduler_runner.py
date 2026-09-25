@@ -110,6 +110,7 @@ class StepEvent:
 class RunState:
     running: bool = True
     stop_event: threading.Event = field(default_factory=threading.Event)
+    stop_requested: bool = False  # user-requested Sep 2026
     steps: list[StepEvent] = field(default_factory=list)
     error: str | None = None
     finished_ok: bool | None = None  # None while running, True/False once done
@@ -166,7 +167,12 @@ class RunState:
     # camera that was never part of this run shows no total at all.
     requested_count_tele: str = ""
     requested_count_wide: str = ""
-
+    force_stopped: bool = False  # set by check_stuck_runs()._force_stop() - lets a
+        # stuck _run_blocking() call that eventually unblocks anyway (late, after the
+        # stale event loop was torn down) recognize its result is stale: it must not
+        # overwrite the forced-failure outcome with a late "success", nor release a
+        # slot a LATER operation (auto_reconnect, a new run...) may have since
+        # legitimately acquired.
 
 # One RunState per dwarf_uid - a given device can only run one program at
 # a time (mirrors astro_dwarf_scheduler.py's own one-session-at-a-time
@@ -372,19 +378,39 @@ def check_stuck_runs() -> None:
     ceiling is far too slow when the session has ALREADY visibly
     disconnected (session.is_connected is False) - that's a much
     stronger, more immediate signal that the run backing this slot is
-    never coming back, vs. still being a legitimate long capture. Only
-    acts once the slot has ALSO been held a couple of minutes past
-    that disconnect (not instantly) so a normal, fast reconnect isn't
-    mistaken for a stuck thread - the app's own reconnect logic
-    (health_check/scheduler_loop) gets a real chance to recover on its
-    own first."""
-    _DISCONNECTED_GRACE_SECONDS = 120
+    never coming back, vs. still being a legitimate long capture.
+    ORIGINALLY only acted once the slot had ALSO been held a couple of
+    minutes past that disconnect, meant to give the app's own
+    auto-reconnect (connection_health.py's _auto_reconnect()) a chance
+    to recover first - but that reasoning was circular (Sep 2026,
+    confirmed via real log): _auto_reconnect() itself needs this exact
+    same command slot, so it was denied on every attempt for the whole
+    grace period, unable to do anything until THIS watchdog released
+    it. Shortened to _DISCONNECTED_GRACE_SECONDS instead - long enough
+    to not mistake a momentary is_connected flicker for a genuine
+    drop, short enough that auto_reconnect gets the slot back quickly
+    once a real disconnect is confirmed."""
+    
+    # Was 120 - see Sep 2026 finding: this grace period was meant to "give
+    # auto_reconnect a chance to recover on its own first" (see this
+    # function's own docstring), but auto_reconnect can NEVER get that
+    # chance during this window - it needs the SAME command slot this run
+    # is holding, so it's denied on every attempt until THIS watchdog
+    # releases the slot. The two mechanisms were deadlocked against each
+    # other: waiting longer here only delayed recovery, it never let
+    # anything recover in the meantime. Shortened so a real disconnect
+    # hands the slot to auto_reconnect quickly, while still being long
+    # enough that a session.is_connected blip lasting a couple of seconds
+    # (not a genuine drop) doesn't force-stop a run that was about to
+    # recover on its own via the normal WebSocket layer.
+    _DISCONNECTED_GRACE_SECONDS = 15
 
     def _force_stop(dwarf_uid: str, state: RunState, reason: str) -> None:
         log.warning(f"[{dwarf_uid}] Run force-stopped: {reason}")
         state.running = False
         state.finished_ok = False
         state.error = f"Run force-stopped: {reason}"
+        state.force_stopped = True
         connection_health.release_command_slot(dwarf_uid)
 
     manager = get_manager()
@@ -598,6 +624,10 @@ def _run_blocking(
             # loop runs up to 10x now instead of never running at all.
             time.sleep(3)
 
+    if state.force_stopped:
+        log.warning(f"[{session.dwarf_uid}] Stuck call finally returned after force-stop - discarding its stale result.")
+        return
+
     try:
         if succeeded:
             state.finished_ok = True
@@ -753,6 +783,7 @@ def request_stop(dwarf_uid: str) -> None:
     instantly."""
     state = _runs.get(dwarf_uid)
     if state:
+        state.stop_requested = True
         state.stop_event.set()
 
 

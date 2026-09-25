@@ -380,6 +380,9 @@ async def maybe_check(session: DwarfSession) -> None:
     if not session.is_connected:
         await _cleanup_stale_event_loop(session)
         forget(session.dwarf_uid)
+        uid = session.dwarf_uid
+        if uid not in _auto_reconnect_exhausted and uid not in _auto_reconnect_in_progress:
+            background_tasks.create(_auto_reconnect(session), name=f"auto-reconnect-{uid}")
         return
 
     uid = session.dwarf_uid

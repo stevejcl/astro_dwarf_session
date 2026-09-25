@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.9] - 2026-09-25
+    WIP - Improve stop and reconnect handling
+    This change shortens the stale-run watchdog grace period and ensures disconnected sessions quickly release command slots so auto-reconnect can resume.
+    It adds stop-request tracking to run state and the UI so the program panel shows a clear 'Stopping...' state while capture shutdown is in progress.
+    The astro capture wait loop now checks for stop requests even when no scheduled end time is configured, and the retry logic stops the device immediately instead of waiting for a stale blocking call to finish.
+    It also guards against late stale results overwriting forced-failure states.
+
 ## [3.0.8] - 2026-09-24
 ### Improvements
     Updates the modern IR filter API and capture behavior

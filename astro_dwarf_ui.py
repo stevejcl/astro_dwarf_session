@@ -282,7 +282,7 @@ def main() -> None:
     # get cleaned up (see check_stuck_runs()'s own docstring) whether or
     # not anyone has a browser tab open to notice it. Every 5 minutes is
     # plenty frequent against a 6-hour ceiling.
-    app.timer(300.0, scheduler_runner.check_stuck_runs)
+    app.timer(30.0, scheduler_runner.check_stuck_runs)
 
     ui.run(
         title="Astro Dwarf Session",

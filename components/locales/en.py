@@ -104,6 +104,7 @@ TRANSLATIONS: dict[str, str] = {
     "program_start":                "Start",
     "program_stop":                 "Stop",
     "program_running":              "Running...",
+    "program_stopping":             "Stopping...",
     "program_name_label":           "Program: {name}",
     "program_finished_ok":          "Program completed successfully.",
     "card_last_run_ok":             "Last run: OK",

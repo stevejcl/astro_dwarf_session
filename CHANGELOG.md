@@ -1,5 +1,37 @@
 # Changelog
 
+## [3.1.1] - 2026-09-26
+    Adds a combined "Programs" page (/Program-fr, /Program-en) showing, per
+    device and merged into a single time-sorted list, both astro_dwarf_session's
+    own local programs and the device's native on-device shooting schedule -
+    tagged Local/Natif so the two sources stay distinguishable.
+    A Tous/Futur filter (Futur by default) hides already-past entries; local
+    programs now include their Done/Error history too, not just what's still
+    pending, with each entry's real run start/end time (not just the originally
+    scheduled one) shown once it has actually run.
+    A small icon on the per-device Programs page opens this new page for that
+    device, in the app's current language.
+    Adds a persistent JSON-backed cache for the native schedule read, so it's
+    still shown (marked as cached) even when the device is offline or busy.
+    Also fixes a KeyError crash in the existing Shooting Schedule UI caused by
+    that same cache being written in two slightly different shapes by two
+    different callers.
+
+    Key changes:
+        - components/native_schedule.py (new): shared native-schedule parsing
+          and its persistent cache (native_schedule_cache.json).
+        - components/scheduler_loop.py: list_upcoming_programs() (ToDo/Done/
+          Error, with scheduled/actual start-end times) for the combined view.
+        - components/api_routes.py: new GET /api/programs, GET /Program-{lang}
+          (/{dwarfUid}) routes.
+        - pages/session.py: Shooting Schedule UI now shares the same cache/
+          parsing instead of its own now-fixed in-memory copy.
+        - program_fr.html / program_en.html (new): the combined page itself.
+        - pages/programs.py, components/locales/{fr,en}.py: the new launch icon
+          and its tooltip translation.
+        - buildAstroDwarfUI.py: bundles program_fr.html/program_en.html into the
+          packaged exe.
+
 ## [3.1.0] - 2026-09-25
     This change adds orphaned Current/ reconciliation during reconnect and connect-all flows.
     It re-queues stale interrupted jobs back to ToDo

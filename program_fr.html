@@ -43,6 +43,7 @@
   .tag.state-success { background: rgba(53,196,106,0.15); color: var(--ok); border-color: var(--ok); }
   .tag.state-failed, .tag.state-interrupted { background: rgba(224,92,92,0.15); color: var(--err); border-color: var(--err); }
   .task-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .capture-summary { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
   #refreshBtn {
     background: var(--accent); color: #fff; border: none; border-radius: 6px;
     padding: 8px 14px; font-size: 0.85rem; cursor: pointer;
@@ -184,6 +185,18 @@ function renderPrograms(entry) {
     // for anything not run yet (ToDo/).
     const startVal = p.realStart || p.scheduledAt;
     const endVal = p.realEnd || p.endAt;
+    const bits = [];
+    if (p.cameraType) bits.push(p.cameraType);
+    if (p.exposure) bits.push(`${p.exposure}s`);
+    if (p.gain) bits.push(`gain ${p.gain}`);
+    if (p.filterName) bits.push(p.filterName);
+    if (p.shotsTaken != null || p.requestedCount) {
+      const stacked = p.shotsStacked != null ? `${p.shotsStacked} stackées / ` : "";
+      const taken = p.shotsTaken != null ? p.shotsTaken : "?";
+      const total = p.requestedCount ? ` / ${p.requestedCount} demandées` : "";
+      bits.push(`${stacked}${taken} prises${total}`);
+    }
+    if (bits.length) detail += `<div class="capture-summary">${bits.join(" · ")}</div>`;
     rows.push({
       origin: "local",
       sortKey: sortKeyFromLocalStr(startVal),

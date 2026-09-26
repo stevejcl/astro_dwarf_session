@@ -131,6 +131,41 @@ def check_all(manager) -> None:
 _LOCAL_PROGRAM_DIRS = (("todo", "TODO_DIR"), ("done", "DONE_DIR"), ("error", "ERROR_DIR"))
 
 
+def _extract_capture_summary(cmd: dict, id_command: dict) -> dict:
+    """Camera/exposure/gain/filter/shot-count summary for the combined
+    /Program page's Detail column (user-requested Sep 2026: "capteur
+    Tele/Wide, Expo/Gain/Filtre et nb de stacked, nb shots sur nombre
+    total demandé"). Prefers the ACTUAL values a finished run recorded
+    (id_command's own exposure_actual/gain_actual/ir_actual/shots_taken/
+    shots_stacked - see scheduler_runner.py's _capture_actual_camera_
+    settings()/_capture_shots_result(), already human-readable strings,
+    no index-to-name lookup needed) over the originally PLANNED setup_
+    camera/setup_wide_camera values, for a ToDo/ program that hasn't
+    run yet. cameraType/requestedCount always come from whichever setup
+    dict has do_action=True - that never changes once the program was
+    saved, run or not. filterName is only ever the ACTUAL one (Tele
+    only, Wide has no filter) - the planned one is stored as a numeric
+    ircut index needing a dwarf-type-specific name lookup this function
+    deliberately doesn't do, matching the request's own "si présent"."""
+    camera_type = None
+    requested_count = None
+    for cam_key, label in (("setup_camera", "Tele"), ("setup_wide_camera", "Wide")):
+        setup = cmd.get(cam_key) or {}
+        if setup.get("do_action"):
+            camera_type = label
+            requested_count = setup.get("count")
+            break
+    return {
+        "cameraType": camera_type,
+        "requestedCount": requested_count,
+        "exposure": id_command.get("exposure_actual"),
+        "gain": id_command.get("gain_actual"),
+        "filterName": id_command.get("ir_actual"),
+        "shotsTaken": id_command.get("shots_taken"),
+        "shotsStacked": id_command.get("shots_stacked"),
+    }
+
+
 def _extract_end_time(cmd: dict, scheduled: datetime) -> str | None:
     """Combines a program's own "end_time" field (program_editor.py's
     optional "HH:MM", 24h, under whichever of setup_camera/setup_wide_
@@ -191,7 +226,7 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
             scheduled, data = parsed
             cmd = data.get("command", {})
             id_command = cmd.get("id_command", {})
-            out.append({
+            entry = {
                 "filename": filename,
                 "description": id_command.get("description") or "",
                 "scheduledAt": scheduled.strftime("%Y-%m-%d %H:%M:%S"),
@@ -209,7 +244,9 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
                 # a ToDo/ program that hasn't run yet.
                 "realStart": id_command.get("starting_date"),
                 "realEnd": id_command.get("processed_date"),
-            })
+            }
+            entry.update(_extract_capture_summary(cmd, id_command))
+            out.append(entry)
     out.sort(key=lambda p: p["scheduledAt"])
     return out
 

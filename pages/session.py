@@ -257,7 +257,7 @@ def _schedule_status_text(sc: dict) -> str:
         end_dt = datetime.fromtimestamp(sc["endTime"])
         end_fmt = f"{end_dt:%H:%M}" if start_dt.date() == end_dt.date() else f"{end_dt:%Y-%m-%d %H:%M}"
         return t("sched_planned_range", start=f"{start_dt:%Y-%m-%d %H:%M}", end=end_fmt)
-    return sc["state"]
+    return _schedule_state_label(sc["state_code"])
 
 # Per-dwarf_uid cache of the last CMD_GET_ALL_SHOOTING_SCHEDULE read - see
 # _handle_refresh_schedules(). Module-level (like connection_health's own
@@ -390,15 +390,18 @@ async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Calla
     else:
         _schedules_fetch_error.pop(dwarf_uid, None)
         # Shared parsing (components/native_schedule.py) - state_code is
-        # the raw int from the device; this UI additionally maps it to a
-        # translated label for display, on top of the shared shape (kept
-        # separate from _handle_refresh_schedules() so api_routes.py's
-        # /api/programs can return the exact same untranslated shape).
+        # the raw int from the device. BUG FIX (Sep 2026, user-reported
+        # KeyError 'state' crash): this used to also stamp a translated
+        # "state" label onto each dict before caching - but the SAME
+        # cache is also written by api_routes.py's /api/programs (via
+        # native_schedule.set_cached()), which never adds that label -
+        # whichever caller wrote last decided the cached shape, so this
+        # UI could easily render a cache entry with no "state" key at
+        # all. The cache now always stays in the canonical (label-free)
+        # shape; labels are derived at RENDER time instead (see
+        # _schedule_status_text() and the task-line rendering below),
+        # from state_code, which is always present.
         parsed = parse_native_schedule_info(info)
-        for sched in parsed:
-            sched["state"] = _schedule_state_label(sched["state_code"])
-            for tsk in sched["tasks"]:
-                tsk["state"] = _task_state_label(tsk["state_code"])
         native_schedule.set_cached(dwarf_uid, parsed)
         _schedules_shown_count[dwarf_uid] = 3  # reset paging on every fresh fetch
         # Explicit confirmation (user-reported Sep 2026: "je ne sais pas
@@ -919,7 +922,7 @@ def build_session_page() -> None:
                                     if tsk.get("stacked") is not None:
                                         detail_bits.append(f"{tsk['stacked']} stacked")
                                     detail = " · ".join(str(b) for b in detail_bits if b)
-                                    line = f"• {tsk['name']}: {tsk['state']}"
+                                    line = f"• {tsk['name']}: {_task_state_label(tsk['state_code'])}"
                                     if detail:
                                         line += f" ({detail})"
                                     ui.label(line).classes("text-xs text-grey-7")

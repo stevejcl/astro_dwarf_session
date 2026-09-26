@@ -174,13 +174,17 @@ function renderPrograms(entry) {
   const rows = [];
 
   for (const p of (entry.localPrograms || [])) {
+    let detail = "";
+    if (p.status === "done") detail = '<span class="tag state-success">Terminé</span>';
+    else if (p.status === "error") detail = '<span class="tag state-failed">Erreur</span>';
+    else if (p.due) detail = '<span class="tag due">dû</span>';
     rows.push({
       origin: "local",
       sortKey: sortKeyFromLocalStr(p.scheduledAt),
       name: p.description || p.filename,
       start: fmtLocalDate(p.scheduledAt),
       end: "-",
-      detail: p.due ? '<span class="tag due">dû</span>' : "",
+      detail,
     });
   }
 

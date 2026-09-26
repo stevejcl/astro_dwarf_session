@@ -128,30 +128,41 @@ def check_all(manager) -> None:
             pass
 
 
-def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
-    """Every local ToDo/ program for this device - due or not yet - for
-    the combined "everything scheduled" view (api_routes.py's
-    /api/programs, user-requested Sep 2026). Sorted earliest first."""
-    dirs = session_dirs_for(session)
-    todo_dir = dirs["TODO_DIR"]
-    if not os.path.isdir(todo_dir):
-        return []
+_LOCAL_PROGRAM_DIRS = (("todo", "TODO_DIR"), ("done", "DONE_DIR"), ("error", "ERROR_DIR"))
 
+
+def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
+    """Every local program for this device - ToDo/ (due or not yet),
+    PLUS already-finished ones from Done/ and Error/ - for the combined
+    "everything scheduled" view (api_routes.py's /api/programs, user-
+    requested Sep 2026). Originally ToDo/-only; extended (still Sep
+    2026) after the user noticed past programs (done or failed) were
+    missing entirely from the combined page - the page's own Tous/
+    Futur filter already handles hiding these by default, so this
+    function's job is simply to expose the full local history, not to
+    decide what's shown. Sorted earliest first; each entry carries its
+    own "status" (todo/done/error) so the page can tag it."""
+    dirs = session_dirs_for(session)
     out = []
-    for filename in os.listdir(todo_dir):
-        if not filename.endswith(".json"):
+    for status, dir_key in _LOCAL_PROGRAM_DIRS:
+        folder = dirs[dir_key]
+        if not os.path.isdir(folder):
             continue
-        parsed = _read_schedule(os.path.join(todo_dir, filename))
-        if parsed is None:
-            continue
-        scheduled, data = parsed
-        id_command = data.get("command", {}).get("id_command", {})
-        out.append({
-            "filename": filename,
-            "description": id_command.get("description") or "",
-            "scheduledAt": scheduled.strftime("%Y-%m-%d %H:%M:%S"),
-            "due": scheduled <= datetime.now(),
-        })
+        for filename in os.listdir(folder):
+            if not filename.endswith(".json"):
+                continue
+            parsed = _read_schedule(os.path.join(folder, filename))
+            if parsed is None:
+                continue
+            scheduled, data = parsed
+            id_command = data.get("command", {}).get("id_command", {})
+            out.append({
+                "filename": filename,
+                "description": id_command.get("description") or "",
+                "scheduledAt": scheduled.strftime("%Y-%m-%d %H:%M:%S"),
+                "due": status == "todo" and scheduled <= datetime.now(),
+                "status": status,
+            })
     out.sort(key=lambda p: p["scheduledAt"])
     return out
 

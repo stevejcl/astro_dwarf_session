@@ -43,7 +43,6 @@
   .tag.state-success { background: rgba(53,196,106,0.15); color: var(--ok); border-color: var(--ok); }
   .tag.state-failed, .tag.state-interrupted { background: rgba(224,92,92,0.15); color: var(--err); border-color: var(--err); }
   .task-list { display: flex; flex-wrap: wrap; gap: 4px; }
-  .real-run { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
   #refreshBtn {
     background: var(--accent); color: #fff; border: none; border-radius: 6px;
     padding: 8px 14px; font-size: 0.85rem; cursor: pointer;
@@ -179,17 +178,18 @@ function renderPrograms(entry) {
     if (p.status === "done") detail = '<span class="tag state-success">Terminé</span>';
     else if (p.status === "error") detail = '<span class="tag state-failed">Erreur</span>';
     else if (p.due) detail = '<span class="tag due">dû</span>';
-    if (p.realStart || p.realEnd) {
-      const realStart = p.realStart ? fmtLocalDate(p.realStart) : "?";
-      const realEnd = p.realEnd ? fmtLocalDate(p.realEnd) : "en cours";
-      detail += `<div class="real-run">Réel : ${realStart} → ${realEnd}</div>`;
-    }
+    // Once a program has actually run, its real start/end (scheduler_
+    // runner.py's starting_date/processed_date) is more useful than
+    // the originally scheduled date/time - falls back to the schedule
+    // for anything not run yet (ToDo/).
+    const startVal = p.realStart || p.scheduledAt;
+    const endVal = p.realEnd || p.endAt;
     rows.push({
       origin: "local",
-      sortKey: sortKeyFromLocalStr(p.scheduledAt),
+      sortKey: sortKeyFromLocalStr(startVal),
       name: p.description || p.filename,
-      start: fmtLocalDate(p.scheduledAt),
-      end: p.endAt ? fmtLocalDate(p.endAt) : "-",
+      start: fmtLocalDate(startVal),
+      end: endVal ? fmtLocalDate(endVal) : "-",
       detail,
     });
   }

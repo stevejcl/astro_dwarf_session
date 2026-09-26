@@ -917,10 +917,15 @@ def build_session_page() -> None:
                                         detail_bits.append(f"gain {tsk['gainName']}")
                                     if tsk.get("filterModeName"):
                                         detail_bits.append(tsk["filterModeName"])
-                                    if tsk.get("count") is not None:
-                                        detail_bits.append(f"{tsk['count']} imgs")
-                                    if tsk.get("stacked") is not None:
-                                        detail_bits.append(f"{tsk['stacked']} stacked")
+                                    # count/stacked deliberately NOT shown
+                                    # (user-reported Sep 2026, confirmed by
+                                    # a real screenshot: always "0 imgs /
+                                    # 0 stacked" - these come from the
+                                    # task's stored params JSON, which
+                                    # reflects what was last SYNCED, not
+                                    # live capture progress - same finding
+                                    # as the combined /Program page's own
+                                    # native task rendering).
                                     detail = " · ".join(str(b) for b in detail_bits if b)
                                     line = f"• {tsk['name']}: {_task_state_label(tsk['state_code'])}"
                                     if detail:

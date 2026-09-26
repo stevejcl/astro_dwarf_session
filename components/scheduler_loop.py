@@ -128,6 +128,34 @@ def check_all(manager) -> None:
             pass
 
 
+def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
+    """Every local ToDo/ program for this device - due or not yet - for
+    the combined "everything scheduled" view (api_routes.py's
+    /api/programs, user-requested Sep 2026). Sorted earliest first."""
+    dirs = session_dirs_for(session)
+    todo_dir = dirs["TODO_DIR"]
+    if not os.path.isdir(todo_dir):
+        return []
+
+    out = []
+    for filename in os.listdir(todo_dir):
+        if not filename.endswith(".json"):
+            continue
+        parsed = _read_schedule(os.path.join(todo_dir, filename))
+        if parsed is None:
+            continue
+        scheduled, data = parsed
+        id_command = data.get("command", {}).get("id_command", {})
+        out.append({
+            "filename": filename,
+            "description": id_command.get("description") or "",
+            "scheduledAt": scheduled.strftime("%Y-%m-%d %H:%M:%S"),
+            "due": scheduled <= datetime.now(),
+        })
+    out.sort(key=lambda p: p["scheduledAt"])
+    return out
+
+
 def start_background_loop(manager) -> None:
     """Call once at app startup (astro_dwarf_ui.py). Uses app.timer, not
     ui.timer - see the module docstring."""

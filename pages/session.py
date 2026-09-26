@@ -46,7 +46,8 @@ from dwarf_python_api.lib.my_logger import (
     unregister_thread_device_label,
 )
 
-from components import connection_health, scheduler_runner
+from components import connection_health, scheduler_runner, native_schedule
+from components.native_schedule import parse_native_schedule_info
 from components.actions_section import build_actions_section
 from components.camera_stream import build_camera_stream_section
 from components.motor_control import build_motor_pad, build_motor_position_tool
@@ -268,10 +269,14 @@ def _schedule_status_text(sc: dict) -> str:
 # untranslated key string to the user.
 _known_conn_error_keys = {"conn_error_device_occupied"}
 
-_schedules_cache: dict[str, list[dict]] = {}
 _schedules_fetch_error: dict[str, str] = {}
 _schedules_last_fetch: dict[str, float] = {}
-# How many of _schedules_cache[uid] (already sorted newest-first) to
+# Persistent cache moved to components/native_schedule.py (user-requested
+# Sep 2026: shared with components/api_routes.py's /api/programs, and
+# now JSON-file-backed so it survives an app restart too) - this module
+# no longer keeps its own in-memory copy, see native_schedule.get_cached()/
+# set_cached() used below.
+# How many of native_schedule.get_cached(uid) (already sorted newest-first) to
 # render before the "Show more" button - user-requested (Sep 2026):
 # newest first, 3 at a time, "more" to reveal the rest.
 _schedules_shown_count: dict[str, int] = {}
@@ -346,9 +351,7 @@ async def _handle_delete_schedule(
                 # Drop it from the cached list immediately rather than
                 # waiting for the next manual Refresh - the device won't
                 # offer it back on a re-fetch anyway once deleted.
-                cached = _schedules_cache.get(dwarf_uid)
-                if cached:
-                    _schedules_cache[dwarf_uid] = [s for s in cached if s.get("scheduleId") != schedule_id]
+                native_schedule.remove_from_cache(dwarf_uid, schedule_id)
             else:
                 _finish_ongoing_notification(notification, t("sched_delete_failed"), "negative")
             refresh_view()
@@ -379,50 +382,24 @@ async def _handle_refresh_schedules(session, dwarf_uid: str, refresh_view: Calla
 
     if info is None:
         _schedules_fetch_error[dwarf_uid] = t("sched_read_error")
-        _schedules_cache.pop(dwarf_uid, None)
+        # Deliberately NOT clearing the cache on a failed refresh (user-
+        # requested Sep 2026, same reasoning as api_routes.py's own
+        # fallback-to-cache behaviour): a transient read failure shouldn't
+        # blank out a perfectly good last-known list.
         _safe_notify(t("sched_read_error"), type="negative")
     else:
         _schedules_fetch_error.pop(dwarf_uid, None)
-        parsed = []
-        for sched in info.shooting_schedule:
-            tasks = []
-            for task in sched.shooting_tasks:
-                try:
-                    p = json.loads(task.params)
-                except Exception:
-                    p = {}
-                tasks.append({
-                    "name": p.get("name", "?"),
-                    "state": _task_state_label(task.state),
-                    "startTime": p.get("startTime"),
-                    "endTime": p.get("endTime"),
-                    "shutterName": p.get("shutterName"),
-                    "gainName": p.get("gainName"),
-                    "filterModeName": p.get("filterModeName"),
-                    "count": p.get("count"),
-                    "stacked": p.get("stacked"),
-                })
-            # Recency key for sorting (most recent first, see the render
-            # section) - updated_time is set on every sync/state change;
-            # fall back to created_time, then schedule_time, so a
-            # schedule with no updates yet still sorts sensibly.
-            recency = sched.updated_time or sched.created_time or sched.schedule_time or 0
-            parsed.append({
-                "scheduleId": sched.schedule_id,
-                "name": sched.schedule_name or sched.schedule_id,
-                "state": _schedule_state_label(sched.state),
-                "state_code": sched.state,
-                # The SCHEDULE's own start_time/end_time (distinct from
-                # each task's own startTime/endTime above) - used by
-                # _schedule_status_text() for the "planned <start> -
-                # <end>" text while state_code == 1 (Pending).
-                "startTime": sched.start_time or None,
-                "endTime": sched.end_time or None,
-                "tasks": tasks,
-                "recency": recency,
-            })
-        parsed.sort(key=lambda s: s["recency"], reverse=True)
-        _schedules_cache[dwarf_uid] = parsed
+        # Shared parsing (components/native_schedule.py) - state_code is
+        # the raw int from the device; this UI additionally maps it to a
+        # translated label for display, on top of the shared shape (kept
+        # separate from _handle_refresh_schedules() so api_routes.py's
+        # /api/programs can return the exact same untranslated shape).
+        parsed = parse_native_schedule_info(info)
+        for sched in parsed:
+            sched["state"] = _schedule_state_label(sched["state_code"])
+            for tsk in sched["tasks"]:
+                tsk["state"] = _task_state_label(tsk["state_code"])
+        native_schedule.set_cached(dwarf_uid, parsed)
         _schedules_shown_count[dwarf_uid] = 3  # reset paging on every fresh fetch
         # Explicit confirmation (user-reported Sep 2026: "je ne sais pas
         # si la commande a été envoyée (pas de notif)") - this function
@@ -904,7 +881,7 @@ def build_session_page() -> None:
                             t("sched_last_checked", time=datetime.fromtimestamp(last_fetch).strftime("%H:%M:%S"))
                         ).classes("text-xs text-grey-6")
                     fetch_err = _schedules_fetch_error.get(dwarf_uid)
-                    cached_scheds = _schedules_cache.get(dwarf_uid)
+                    cached_scheds = native_schedule.get_cached(dwarf_uid)
                     if fetch_err:
                         ui.label(fetch_err).classes("text-negative text-sm")
                     elif cached_scheds is None:

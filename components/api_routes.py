@@ -90,14 +90,16 @@ from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 from dwarf_python_api.lib.dwarf_utils import perform_get_last_sync_error
+from dwarf_python_api.lib.dwarf_utils import perform_get_all_shooting_schedule_full
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 from device_registry import list_device_entries
 from site_registry import list_site_entries
-from components import connection_health, scheduler_runner
+from components import connection_health, scheduler_runner, scheduler_loop, native_schedule
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
 from components.session_dirs import ensure_dirs
+from components.native_schedule import parse_native_schedule_info
 import pending_schedules
 import dwarf_python_api.lib.my_logger as log
 
@@ -301,6 +303,98 @@ def register_api_routes() -> None:
     @app.get("/api/dwarfs")
     def api_dwarfs():
         return JSONResponse({"devices": _devices_snapshot()})
+
+    @app.get("/Program")
+    @app.get("/Program/{dwarf_uid}")
+    def program_page(dwarf_uid: str | None = None):
+        """Serves the combined "local programs + native on-device
+        schedule" page (program.html) the same way /catalog serves
+        catalog.html - user-requested Sep 2026: one page, per device,
+        showing everything scheduled for it regardless of whether it
+        was created by astro_dwarf_session itself or by the official
+        Dwarf app. {dwarf_uid} is only used client-side (program.html
+        parses window.location.pathname to preselect the device in its
+        combo) - this route itself always serves the same static file."""
+        program_path = _bundled_path("program.html")
+        if not program_path.exists():
+            return JSONResponse(
+                {"error": f"program.html not found at {program_path} - place it there."},
+                status_code=404,
+            )
+        return FileResponse(program_path, media_type="text/html")
+
+    def _fill_native_from_cache(device_entry: dict, dwarf_uid: str, error_code: str) -> None:
+        """Falls back to the last successfully-read native schedule
+        (native_schedule.py's persistent cache) when we can't read it
+        live right now - device offline, busy, or the read itself
+        failed. Marks it as stale so the page can say so rather than
+        silently showing possibly-outdated data as if fresh."""
+        cached = native_schedule.get_cached(dwarf_uid)
+        if cached is not None:
+            device_entry["nativeSchedule"] = cached
+            device_entry["nativeScheduleStale"] = True
+            device_entry["nativeScheduleFetchedAt"] = native_schedule.get_cached_fetched_at(dwarf_uid)
+        else:
+            device_entry["nativeScheduleError"] = error_code
+
+    @app.get("/api/programs")
+    async def api_programs():
+        """Combined view for program_page() above: for each known
+        device, its LOCAL astro_dwarf_session programs (scheduler_loop.
+        list_upcoming_programs(), read from ToDo/ on disk) plus the
+        DEVICE's own native on-device shooting schedule (perform_get_
+        all_shooting_schedule_full(), live if reachable, otherwise the
+        last cached read - see native_schedule.py)."""
+        manager = get_manager()
+        sessions_by_uid = {s.dwarf_uid: s for s in manager.all()}
+        out = []
+        for entry in list_device_entries():
+            try:
+                cfg = DwarfConfig.from_files(entry.config_py, entry.config_ini)
+            except FileNotFoundError:
+                continue
+            dwarf_uid = cfg.dwarf_uid
+            session = sessions_by_uid.get(dwarf_uid)
+            connected = bool(session and session.is_connected)
+            running = bool(session and scheduler_runner.is_running(dwarf_uid))
+            run_state = scheduler_runner.get_run_state(dwarf_uid) if running else None
+            busy = bool(session and connection_health.is_busy(dwarf_uid))
+
+            device_entry = {
+                "name": entry.name,
+                "dwarfUid": dwarf_uid,
+                "model": _model_display_name(cfg),
+                "connected": connected,
+                "busy": busy,
+                "armed": scheduler_loop.is_armed(dwarf_uid),
+                "runningProgram": {"description": run_state.program_name} if run_state else None,
+                "localPrograms": (
+                    scheduler_loop.list_upcoming_programs(dwarf_uid, session)
+                    if session is not None else []
+                ),
+                "nativeSchedule": None,
+                "nativeScheduleError": None,
+            }
+
+            if not connected:
+                _fill_native_from_cache(device_entry, dwarf_uid, "not_connected")
+            elif busy or not connection_health.try_acquire_command_slot(dwarf_uid, caller="api_routes.programs"):
+                _fill_native_from_cache(device_entry, dwarf_uid, "device_busy")
+            else:
+                try:
+                    info = await run.io_bound(perform_get_all_shooting_schedule_full, session=session)
+                finally:
+                    connection_health.release_command_slot(dwarf_uid)
+                if info is not None:
+                    parsed = parse_native_schedule_info(info)
+                    native_schedule.set_cached(dwarf_uid, parsed)
+                    device_entry["nativeSchedule"] = parsed
+                    device_entry["nativeScheduleFetchedAt"] = native_schedule.get_cached_fetched_at(dwarf_uid)
+                else:
+                    _fill_native_from_cache(device_entry, dwarf_uid, "read_failed")
+
+            out.append(device_entry)
+        return JSONResponse({"devices": out})
 
     @app.get("/api/sites")
     def api_sites():

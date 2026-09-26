@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dwarf - Programmation</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #1a1d24; --border: #2a2e38; --text: #e6e8ec;
+    --muted: #9aa1ad; --accent: #4da3ff; --ok: #35c46a; --warn: #e0a83c; --err: #e05c5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding: 16px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  select {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 0.95rem; min-width: 240px;
+  }
+  .status-row { display: flex; align-items: center; gap: 10px; margin: 14px 0; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+    border-radius: 999px; font-size: 0.8rem; border: 1px solid var(--border);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.err { background: var(--err); } .dot.muted { background: var(--muted); }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 0.95rem; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  .empty { color: var(--muted); font-size: 0.85rem; padding: 8px 0; }
+  .tag { font-size: 0.72rem; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); display: inline-block; }
+  .tag.due { background: rgba(53,196,106,0.15); color: var(--ok); border-color: var(--ok); }
+  .tag.origin-local { background: rgba(77,163,255,0.15); color: var(--accent); border-color: var(--accent); }
+  .tag.origin-native { background: rgba(154,161,173,0.15); color: var(--text); border-color: var(--border); }
+  .tag.state-shooting { background: rgba(77,163,255,0.15); color: var(--accent); border-color: var(--accent); }
+  .tag.state-success { background: rgba(53,196,106,0.15); color: var(--ok); border-color: var(--ok); }
+  .tag.state-failed, .tag.state-interrupted { background: rgba(224,92,92,0.15); color: var(--err); border-color: var(--err); }
+  .task-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  #refreshBtn {
+    background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 8px 14px; font-size: 0.85rem; cursor: pointer;
+  }
+  #refreshBtn:disabled { opacity: 0.5; cursor: default; }
+  .error-note { color: var(--warn); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<h1>Programmation des Dwarf</h1>
+
+<div class="status-row">
+  <select id="deviceSelect"></select>
+  <button id="refreshBtn" onclick="loadPrograms()">Rafraîchir</button>
+  <span id="stateBadges"></span>
+</div>
+
+<div class="card">
+  <h2>Programmes (locaux + planning natif)</h2>
+  <table id="programsTable">
+    <thead><tr><th>Origine</th><th>Nom / Description</th><th>Début</th><th>Fin</th><th>Détail</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="empty" id="programsEmpty" style="display:none">Rien à afficher.</div>
+  <div class="error-note" id="nativeError" style="display:none"></div>
+  <div class="error-note" id="nativeStale" style="display:none"></div>
+</div>
+
+<script>
+const NATIVE_ERROR_LABELS = {
+  not_connected: "Device non connecté - planning natif indisponible.",
+  device_busy: "Device occupé (session en cours) - planning natif non lu cette fois.",
+  read_failed: "Échec de lecture du planning natif.",
+};
+const TASK_STATE_CLASS = { 1: "state-shooting", 2: "state-success", 3: "state-failed", 4: "state-interrupted" };
+
+let devices = [];
+
+function fmtTs(sec) {
+  if (!sec) return "-";
+  const d = new Date(sec * 1000);
+  return d.toLocaleString();
+}
+
+function fmtLocalDate(str) {
+  if (!str) return "-";
+  return new Date(str.replace(" ", "T")).toLocaleString();
+}
+
+function sortKeyFromEpoch(sec) {
+  return sec ? sec * 1000 : Infinity;
+}
+
+function sortKeyFromLocalStr(str) {
+  if (!str) return Infinity;
+  const t = new Date(str.replace(" ", "T")).getTime();
+  return Number.isNaN(t) ? Infinity : t;
+}
+
+function preselectedUid() {
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  // path is /Program or /Program/<dwarfUid>
+  return parts.length > 1 ? decodeURIComponent(parts[1]) : null;
+}
+
+async function loadDevices() {
+  const res = await fetch("/api/dwarfs");
+  const data = await res.json();
+  devices = (data.devices || []).filter(d => !d.virtual);
+  const sel = document.getElementById("deviceSelect");
+  sel.innerHTML = "";
+  for (const d of devices) {
+    const opt = document.createElement("option");
+    opt.value = d.dwarfUid;
+    opt.textContent = `${d.name} (${d.model})`;
+    sel.appendChild(opt);
+  }
+  const wanted = preselectedUid();
+  if (wanted && devices.some(d => d.dwarfUid === wanted)) {
+    sel.value = wanted;
+  }
+  sel.onchange = renderSelected;
+}
+
+function badge(text, dotClass) {
+  return `<span class="badge"><span class="dot ${dotClass}"></span>${text}</span>`;
+}
+
+function renderStatus(entry) {
+  const badges = [];
+  badges.push(entry.connected ? badge("Connecté", "ok") : badge("Déconnecté", "muted"));
+  if (entry.runningProgram) {
+    badges.push(badge(`En session : ${entry.runningProgram.description || "?"}`, "warn"));
+  } else if (entry.busy) {
+    badges.push(badge("Occupé", "warn"));
+  }
+  badges.push(entry.armed ? badge("Armé", "ok") : badge("Non armé", "muted"));
+  document.getElementById("stateBadges").innerHTML = badges.join(" ");
+}
+
+function renderPrograms(entry) {
+  const tbody = document.querySelector("#programsTable tbody");
+  tbody.innerHTML = "";
+
+  const rows = [];
+
+  for (const p of (entry.localPrograms || [])) {
+    rows.push({
+      origin: "local",
+      sortKey: sortKeyFromLocalStr(p.scheduledAt),
+      name: p.description || p.filename,
+      start: fmtLocalDate(p.scheduledAt),
+      end: "-",
+      detail: p.due ? '<span class="tag due">dû</span>' : "",
+    });
+  }
+
+  for (const sched of (entry.nativeSchedule || [])) {
+    const taskTags = (sched.tasks || []).map(t => {
+      const cls = TASK_STATE_CLASS[t.state_code] || "";
+      return `<span class="tag ${cls}">${t.name}</span>`;
+    }).join("");
+    rows.push({
+      origin: "native",
+      sortKey: sortKeyFromEpoch(sched.startTime),
+      name: sched.name,
+      start: fmtTs(sched.startTime),
+      end: fmtTs(sched.endTime),
+      detail: taskTags ? `<div class="task-list">${taskTags}</div>` : "-",
+    });
+  }
+
+  rows.sort((a, b) => a.sortKey - b.sortKey);
+
+  document.getElementById("programsEmpty").style.display = rows.length ? "none" : "block";
+
+  for (const r of rows) {
+    const originTag = r.origin === "local"
+      ? '<span class="tag origin-local">Local</span>'
+      : '<span class="tag origin-native">Natif</span>';
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${originTag}</td>
+      <td>${r.name}</td>
+      <td>${r.start}</td>
+      <td>${r.end}</td>
+      <td>${r.detail}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  const errNote = document.getElementById("nativeError");
+  if (entry.nativeScheduleError) {
+    errNote.textContent = NATIVE_ERROR_LABELS[entry.nativeScheduleError] || entry.nativeScheduleError;
+    errNote.style.display = "block";
+  } else {
+    errNote.style.display = "none";
+  }
+  const staleNote = document.getElementById("nativeStale");
+  if (entry.nativeScheduleStale) {
+    const t = entry.nativeScheduleFetchedAt ? new Date(entry.nativeScheduleFetchedAt * 1000).toLocaleTimeString() : "?";
+    staleNote.textContent = `Planning natif en cache (dernière lecture réussie : ${t}) - device non joignable pour un rafraîchissement.`;
+    staleNote.style.display = "block";
+  } else {
+    staleNote.style.display = "none";
+  }
+}
+
+function renderSelected() {
+  const uid = document.getElementById("deviceSelect").value;
+  const entry = window.__programsByUid ? window.__programsByUid[uid] : null;
+  if (!entry) return;
+  renderStatus(entry);
+  renderPrograms(entry);
+}
+
+async function loadPrograms() {
+  const btn = document.getElementById("refreshBtn");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/programs");
+    const data = await res.json();
+    window.__programsByUid = {};
+    for (const e of (data.devices || [])) {
+      window.__programsByUid[e.dwarfUid] = e;
+    }
+    renderSelected();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+(async function init() {
+  await loadDevices();
+  await loadPrograms();
+})();
+</script>
+
+</body>
+</html>

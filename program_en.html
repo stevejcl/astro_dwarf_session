@@ -42,8 +42,9 @@
   .tag.state-shooting { background: rgba(77,163,255,0.15); color: var(--accent); border-color: var(--accent); }
   .tag.state-success { background: rgba(53,196,106,0.15); color: var(--ok); border-color: var(--ok); }
   .tag.state-failed, .tag.state-interrupted { background: rgba(224,92,92,0.15); color: var(--err); border-color: var(--err); }
-  .task-list { display: flex; flex-wrap: wrap; gap: 4px; }
   .capture-summary { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+  .task-line { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .capture-summary-inline { font-size: 0.75rem; color: var(--muted); }
   #refreshBtn {
     background: var(--accent); color: #fff; border: none; border-radius: 6px;
     padding: 8px 14px; font-size: 0.85rem; cursor: pointer;
@@ -208,9 +209,19 @@ function renderPrograms(entry) {
   }
 
   for (const sched of (entry.nativeSchedule || [])) {
-    const taskTags = (sched.tasks || []).map(t => {
+    const taskLines = (sched.tasks || []).map(t => {
       const cls = TASK_STATE_CLASS[t.state_code] || "";
-      return `<span class="tag ${cls}">${t.name}</span>`;
+      const bits = [];
+      if (t.shutterName) bits.push(`${t.shutterName}s`);
+      if (t.gainName) bits.push(`gain ${t.gainName}`);
+      if (t.filterModeName) bits.push(t.filterModeName);
+      if (t.stacked != null || t.count != null) {
+        const stacked = t.stacked != null ? `${t.stacked} stacked` : "?";
+        const total = t.count != null ? ` / ${t.count} requested` : "";
+        bits.push(`${stacked}${total}`);
+      }
+      const summary = bits.length ? `<span class="capture-summary-inline">${bits.join(" · ")}</span>` : "";
+      return `<div class="task-line"><span class="tag ${cls}">${t.name}</span>${summary}</div>`;
     }).join("");
     rows.push({
       origin: "native",
@@ -218,7 +229,7 @@ function renderPrograms(entry) {
       name: sched.name,
       start: fmtTs(sched.startTime),
       end: fmtTs(sched.endTime),
-      detail: taskTags ? `<div class="task-list">${taskTags}</div>` : "-",
+      detail: taskLines || "-",
     });
   }
 

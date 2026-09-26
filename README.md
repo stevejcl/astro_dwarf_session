@@ -1,3 +1,4 @@
+<img width="1010" height="808" alt="AstroDwarfUI_lF3KaXuG2h" src="https://github.com/user-attachments/assets/023fbe34-f0cd-4671-ac0d-9698800d119c" />
 # Astro Dwarf Session
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -7,7 +8,17 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 
 > **Note:** this project used to ship a Tkinter desktop GUI (`astro_dwarf_session_UI.py`). That interface is retired — a full rewrite on NiceGUI now covers everything it did and more, including proper multi-device support. The old Tkinter code is preserved on the `V3-multi` branch for reference.
 
-<img width="1008" height="791" alt="Screen_Dwarf_Session_Home" src="https://github.com/user-attachments/assets/cd685d0f-505a-4468-9543-40224d2020b6" />
+<img width="1010" height="808" alt="AstroDwarfUI_lF3KaXuG2h" src="https://github.com/user-attachments/assets/8fe8117e-4016-4f17-867f-f3c9c5e78474" />
+
+<img width="1011" height="905" alt="647959956-1120c509-5a21-4ce6-b0fa-cddb6a9b012c" src="https://github.com/user-attachments/assets/90573d18-a090-401a-8ce4-51ad5a8f21a2" />
+
+<img width="869" height="1080" alt="AstroDwarfUI_5M18J8OcXI" src="https://github.com/user-attachments/assets/370d40ed-340e-440e-aa1d-e6f26b3b1cfd" />
+
+<img width="869" height="1080" alt="AstroDwarfUI_SSHY5cOkhf" src="https://github.com/user-attachments/assets/ad9dc89a-f82c-4e5e-8033-d3cab5d988e0" />
+
+<img width="872" height="1754" alt="Editor" src="https://github.com/user-attachments/assets/4081bb09-5642-484b-9db1-5e16b96d01e5" />
+
+
 
 <img width="1011" height="905" alt="Screen_Dwarf_Session_Home_Session" src="https://github.com/user-attachments/assets/1120c509-5a21-4ce6-b0fa-cddb6a9b012c" />
 

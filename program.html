@@ -49,6 +49,13 @@
   }
   #refreshBtn:disabled { opacity: 0.5; cursor: default; }
   .error-note { color: var(--warn); font-size: 0.8rem; }
+  .filter-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .filter-toggle button {
+    background: var(--card); color: var(--muted); border: none; padding: 7px 12px;
+    font-size: 0.82rem; cursor: pointer;
+  }
+  .filter-toggle button.active { background: var(--accent); color: #fff; }
+  .filter-toggle button:not(:last-child) { border-right: 1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -57,6 +64,10 @@
 
 <div class="status-row">
   <select id="deviceSelect"></select>
+  <div class="filter-toggle">
+    <button id="filterFutureBtn" class="active" onclick="setFilterMode('future')">Futur</button>
+    <button id="filterAllBtn" onclick="setFilterMode('all')">Tous</button>
+  </div>
   <button id="refreshBtn" onclick="loadPrograms()">Rafraîchir</button>
   <span id="stateBadges"></span>
 </div>
@@ -81,6 +92,18 @@ const NATIVE_ERROR_LABELS = {
 const TASK_STATE_CLASS = { 1: "state-shooting", 2: "state-success", 3: "state-failed", 4: "state-interrupted" };
 
 let devices = [];
+// "Futur" (default) hides anything already in the past - a row with no
+// known date/time at all (sortKey === Infinity, e.g. a native schedule
+// entry whose parent schedule carries no start_time) is kept visible in
+// both modes rather than hidden, since "unknown" isn't "past".
+let filterMode = "future";
+
+function setFilterMode(mode) {
+  filterMode = mode;
+  document.getElementById("filterFutureBtn").classList.toggle("active", mode === "future");
+  document.getElementById("filterAllBtn").classList.toggle("active", mode === "all");
+  renderSelected();
+}
 
 function fmtTs(sec) {
   if (!sec) return "-";
@@ -178,9 +201,12 @@ function renderPrograms(entry) {
 
   rows.sort((a, b) => a.sortKey - b.sortKey);
 
-  document.getElementById("programsEmpty").style.display = rows.length ? "none" : "block";
+  const nowMs = Date.now();
+  const visibleRows = filterMode === "future" ? rows.filter(r => r.sortKey >= nowMs) : rows;
 
-  for (const r of rows) {
+  document.getElementById("programsEmpty").style.display = visibleRows.length ? "none" : "block";
+
+  for (const r of visibleRows) {
     const originTag = r.origin === "local"
       ? '<span class="tag origin-local">Local</span>'
       : '<span class="tag origin-native">Natif</span>';

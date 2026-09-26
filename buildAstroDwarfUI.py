@@ -48,6 +48,15 @@ _ble_connect_html = Path("dwarf_ble_connect") / "connect_dwarf.html"
 # dir, matching _bundled_path()'s own sys._MEIPASS / "catalog.html".
 _catalog_html = Path("catalog.html")
 
+# program.html - the combined "local programs + native on-device
+# schedule" page (components/api_routes.py's /Program route, user-
+# requested Sep 2026). Reads through the SAME _bundled_path() as
+# catalog.html above, so it needs the exact same --add-data treatment
+# (destination "." = root of the PyInstaller extraction dir) - a loose
+# copy next to the built .exe would NOT be found, for the same reason
+# catalog.html's own note above explains.
+_program_html = Path("program.html")
+
 sep = os.pathsep  # Cross-platform separator: ; on Windows, : on Unix/macOS
 
 extra_data = []
@@ -60,6 +69,11 @@ if _catalog_html.exists():
     extra_data.append(f"{_catalog_html}{sep}.")
 else:
     print(f"Warning: {_catalog_html} not found - the target-catalog page will be unavailable in the built exe.")
+
+if _program_html.exists():
+    extra_data.append(f"{_program_html}{sep}.")
+else:
+    print(f"Warning: {_program_html} not found - the /Program page will be unavailable in the built exe.")
 
 print("Current working directory:", os.getcwd())
 

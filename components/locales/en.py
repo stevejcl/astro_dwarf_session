@@ -161,6 +161,7 @@ TRANSLATIONS: dict[str, str] = {
     "prog_telescopius_generated":   "{count} program(s) generated ({format} format) and added to the queue.",
     "prog_mosaic":                  "Mosaic",
     "mosaic_planner_link":          "Milky Way mosaic planner",
+    "program_page_link":            "Programs (local + native schedule)",
     "prog_framing_x":               "Framing X (1.0-1.8x)",
     "prog_framing_y":               "Framing Y (1.0-1.8x)",
     "prog_mosaic_count":            "Subframes per panel (1-249)",

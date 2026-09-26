@@ -102,6 +102,19 @@ def build_programs_page() -> None:
                     icon="grid_view",
                     on_click=lambda: ui.navigate.to(f"/mosaic-planner-{get_language()}", new_tab=True),
                 ).props("flat round").tooltip(t("mosaic_planner_link"))
+                # Combined "local programs + native on-device schedule"
+                # page (components/api_routes.py's /Program-{lang} route,
+                # user-requested Sep 2026: "un petit icon de lancement sur
+                # la page programme comme le planning Voie Lactée" -
+                # same jump-off pattern as the button above, but THIS one
+                # DOES carry the current dwarf_uid, since this page (unlike
+                # the mosaic planner) already has one device firmly in
+                # context - opens straight to it preselected instead of
+                # making the person pick it again on the new page.
+                ui.button(
+                    icon="event_note",
+                    on_click=lambda: ui.navigate.to(f"/Program-{get_language()}/{dwarf_uid}", new_tab=True),
+                ).props("flat round").tooltip(t("program_page_link"))
             # In native mode (ui.run(native=True)) there is no address
             # bar at all - the URL's dwarf_uid, which is the ONLY thing
             # that determines which device Scripts/Results/relaunch

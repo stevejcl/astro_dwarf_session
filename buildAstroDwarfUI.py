@@ -48,14 +48,16 @@ _ble_connect_html = Path("dwarf_ble_connect") / "connect_dwarf.html"
 # dir, matching _bundled_path()'s own sys._MEIPASS / "catalog.html".
 _catalog_html = Path("catalog.html")
 
-# program.html - the combined "local programs + native on-device
-# schedule" page (components/api_routes.py's /Program route, user-
-# requested Sep 2026). Reads through the SAME _bundled_path() as
-# catalog.html above, so it needs the exact same --add-data treatment
-# (destination "." = root of the PyInstaller extraction dir) - a loose
-# copy next to the built .exe would NOT be found, for the same reason
-# catalog.html's own note above explains.
-_program_html = Path("program.html")
+# program_fr.html / program_en.html - the combined "local programs +
+# native on-device schedule" page, one file per language (components/
+# api_routes.py's /Program-{lang} route, user-requested Sep 2026 - same
+# fr/en-copies pattern as milky_way_mosaic_planner_{lang}.html, except
+# these read through the SAME _bundled_path() as catalog.html above,
+# so each needs the exact same --add-data treatment (destination "." =
+# root of the PyInstaller extraction dir) - a loose copy next to the
+# built .exe would NOT be found, for the same reason catalog.html's
+# own note above explains.
+_program_htmls = [Path("program_fr.html"), Path("program_en.html")]
 
 sep = os.pathsep  # Cross-platform separator: ; on Windows, : on Unix/macOS
 
@@ -70,10 +72,11 @@ if _catalog_html.exists():
 else:
     print(f"Warning: {_catalog_html} not found - the target-catalog page will be unavailable in the built exe.")
 
-if _program_html.exists():
-    extra_data.append(f"{_program_html}{sep}.")
-else:
-    print(f"Warning: {_program_html} not found - the /Program page will be unavailable in the built exe.")
+for _program_html in _program_htmls:
+    if _program_html.exists():
+        extra_data.append(f"{_program_html}{sep}.")
+    else:
+        print(f"Warning: {_program_html} not found - /Program-{_program_html.stem.rsplit('_', 1)[-1]} will be unavailable in the built exe.")
 
 print("Current working directory:", os.getcwd())
 

@@ -304,21 +304,28 @@ def register_api_routes() -> None:
     def api_dwarfs():
         return JSONResponse({"devices": _devices_snapshot()})
 
-    @app.get("/Program")
-    @app.get("/Program/{dwarf_uid}")
-    def program_page(dwarf_uid: str | None = None):
+    @app.get("/Program-{lang}")
+    @app.get("/Program-{lang}/{dwarf_uid}")
+    def program_page(lang: str, dwarf_uid: str | None = None):
         """Serves the combined "local programs + native on-device
-        schedule" page (program.html) the same way /catalog serves
-        catalog.html - user-requested Sep 2026: one page, per device,
-        showing everything scheduled for it regardless of whether it
-        was created by astro_dwarf_session itself or by the official
-        Dwarf app. {dwarf_uid} is only used client-side (program.html
-        parses window.location.pathname to preselect the device in its
-        combo) - this route itself always serves the same static file."""
-        program_path = _bundled_path("program.html")
+        schedule" page (program_fr.html / program_en.html) the same way
+        /mosaic-planner-{lang} serves its own two language copies -
+        user-requested Sep 2026: one page, per device, showing
+        everything scheduled for it regardless of whether it was
+        created by astro_dwarf_session itself or by the official Dwarf
+        app; {lang} picks the language ("fr"/"en", falling back to
+        "fr" for anything else - same reasoning as mosaic_planner_page()
+        above: no real i18n system in these standalone files yet, just
+        two full copies). {dwarf_uid} is only used client-side (each
+        page parses window.location.pathname to preselect the device in
+        its combo) - this route itself always serves the same static
+        file for a given {lang}."""
+        if lang not in ("fr", "en"):
+            lang = "fr"
+        program_path = _bundled_path(f"program_{lang}.html")
         if not program_path.exists():
             return JSONResponse(
-                {"error": f"program.html not found at {program_path} - place it there."},
+                {"error": f"program_{lang}.html not found at {program_path} - place it there."},
                 status_code=404,
             )
         return FileResponse(program_path, media_type="text/html")

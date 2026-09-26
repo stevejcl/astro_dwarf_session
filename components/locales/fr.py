@@ -161,6 +161,7 @@ TRANSLATIONS: dict[str, str] = {
     "prog_telescopius_generated":   "{count} programme(s) g\u00e9n\u00e9r\u00e9(s) (format {format}) et ajout\u00e9s \u00e0 la file.",
     "prog_mosaic":                  "Mosaic",
     "mosaic_planner_link":          "Planificateur mosa\u00efque Voie Lact\u00e9e",
+    "program_page_link":            "Programmation (local + planning natif)",
     "prog_framing_x":               "Cadrage X (1.0-1.8x)",
     "prog_framing_y":               "Cadrage Y (1.0-1.8x)",
     "prog_mosaic_count":            "Sous-images par panneau (1-249)",

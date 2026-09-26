@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dwarf - Programmation</title>
+<title>Dwarf - Programs</title>
 <style>
   :root {
     --bg: #0f1115; --card: #1a1d24; --border: #2a2e38; --text: #e6e8ec;
@@ -60,42 +60,42 @@
 </head>
 <body>
 
-<h1>Programmation des Dwarf</h1>
+<h1>Dwarf Programs</h1>
 
 <div class="status-row">
   <select id="deviceSelect"></select>
   <div class="filter-toggle">
-    <button id="filterFutureBtn" class="active" onclick="setFilterMode('future')">Futur</button>
-    <button id="filterAllBtn" onclick="setFilterMode('all')">Tous</button>
+    <button id="filterFutureBtn" class="active" onclick="setFilterMode('future')">Upcoming</button>
+    <button id="filterAllBtn" onclick="setFilterMode('all')">All</button>
   </div>
-  <button id="refreshBtn" onclick="loadPrograms()">Rafraîchir</button>
+  <button id="refreshBtn" onclick="loadPrograms()">Refresh</button>
   <span id="stateBadges"></span>
 </div>
 
 <div class="card">
-  <h2>Programmes (locaux + planning natif)</h2>
+  <h2>Programs (local + native schedule)</h2>
   <table id="programsTable">
-    <thead><tr><th>Origine</th><th>Nom / Description</th><th>Début</th><th>Fin</th><th>Détail</th></tr></thead>
+    <thead><tr><th>Origin</th><th>Name / Description</th><th>Start</th><th>End</th><th>Detail</th></tr></thead>
     <tbody></tbody>
   </table>
-  <div class="empty" id="programsEmpty" style="display:none">Rien à afficher.</div>
+  <div class="empty" id="programsEmpty" style="display:none">Nothing to show.</div>
   <div class="error-note" id="nativeError" style="display:none"></div>
   <div class="error-note" id="nativeStale" style="display:none"></div>
 </div>
 
 <script>
 const NATIVE_ERROR_LABELS = {
-  not_connected: "Device non connecté - planning natif indisponible.",
-  device_busy: "Device occupé (session en cours) - planning natif non lu cette fois.",
-  read_failed: "Échec de lecture du planning natif.",
+  not_connected: "Device not connected - native schedule unavailable.",
+  device_busy: "Device busy (a session is running) - native schedule not read this time.",
+  read_failed: "Failed to read the native schedule.",
 };
 const TASK_STATE_CLASS = { 1: "state-shooting", 2: "state-success", 3: "state-failed", 4: "state-interrupted" };
 
 let devices = [];
-// "Futur" (default) hides anything already in the past - a row with no
-// known date/time at all (sortKey === Infinity, e.g. a native schedule
-// entry whose parent schedule carries no start_time) is kept visible in
-// both modes rather than hidden, since "unknown" isn't "past".
+// "Upcoming" (default) hides anything already in the past - a row with
+// no known date/time at all (sortKey === Infinity, e.g. a native
+// schedule entry whose parent schedule carries no start_time) is kept
+// visible in both modes rather than hidden, since "unknown" isn't "past".
 let filterMode = "future";
 
 function setFilterMode(mode) {
@@ -128,7 +128,7 @@ function sortKeyFromLocalStr(str) {
 
 function preselectedUid() {
   const parts = window.location.pathname.split("/").filter(Boolean);
-  // path is /Program or /Program/<dwarfUid>
+  // path is /Program-<lang> or /Program-<lang>/<dwarfUid>
   return parts.length > 1 ? decodeURIComponent(parts[1]) : null;
 }
 
@@ -157,13 +157,13 @@ function badge(text, dotClass) {
 
 function renderStatus(entry) {
   const badges = [];
-  badges.push(entry.connected ? badge("Connecté", "ok") : badge("Déconnecté", "muted"));
+  badges.push(entry.connected ? badge("Connected", "ok") : badge("Disconnected", "muted"));
   if (entry.runningProgram) {
-    badges.push(badge(`En session : ${entry.runningProgram.description || "?"}`, "warn"));
+    badges.push(badge(`Running: ${entry.runningProgram.description || "?"}`, "warn"));
   } else if (entry.busy) {
-    badges.push(badge("Occupé", "warn"));
+    badges.push(badge("Busy", "warn"));
   }
-  badges.push(entry.armed ? badge("Armé", "ok") : badge("Non armé", "muted"));
+  badges.push(entry.armed ? badge("Armed", "ok") : badge("Not armed", "muted"));
   document.getElementById("stateBadges").innerHTML = badges.join(" ");
 }
 
@@ -175,9 +175,9 @@ function renderPrograms(entry) {
 
   for (const p of (entry.localPrograms || [])) {
     let detail = "";
-    if (p.status === "done") detail = '<span class="tag state-success">Terminé</span>';
-    else if (p.status === "error") detail = '<span class="tag state-failed">Erreur</span>';
-    else if (p.due) detail = '<span class="tag due">dû</span>';
+    if (p.status === "done") detail = '<span class="tag state-success">Done</span>';
+    else if (p.status === "error") detail = '<span class="tag state-failed">Error</span>';
+    else if (p.due) detail = '<span class="tag due">due</span>';
     rows.push({
       origin: "local",
       sortKey: sortKeyFromLocalStr(p.scheduledAt),
@@ -213,7 +213,7 @@ function renderPrograms(entry) {
   for (const r of visibleRows) {
     const originTag = r.origin === "local"
       ? '<span class="tag origin-local">Local</span>'
-      : '<span class="tag origin-native">Natif</span>';
+      : '<span class="tag origin-native">Native</span>';
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${originTag}</td>
@@ -235,7 +235,7 @@ function renderPrograms(entry) {
   const staleNote = document.getElementById("nativeStale");
   if (entry.nativeScheduleStale) {
     const t = entry.nativeScheduleFetchedAt ? new Date(entry.nativeScheduleFetchedAt * 1000).toLocaleTimeString() : "?";
-    staleNote.textContent = `Planning natif en cache (dernière lecture réussie : ${t}) - device non joignable pour un rafraîchissement.`;
+    staleNote.textContent = `Cached native schedule (last successful read: ${t}) - device unreachable for a refresh.`;
     staleNote.style.display = "block";
   } else {
     staleNote.style.display = "none";

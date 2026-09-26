@@ -183,7 +183,7 @@ function renderPrograms(entry) {
       sortKey: sortKeyFromLocalStr(p.scheduledAt),
       name: p.description || p.filename,
       start: fmtLocalDate(p.scheduledAt),
-      end: "-",
+      end: p.endAt ? fmtLocalDate(p.endAt) : "-",
       detail,
     });
   }

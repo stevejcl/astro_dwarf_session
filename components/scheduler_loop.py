@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from components import scheduler_runner
 from components.session_dirs import session_dirs_for
@@ -131,6 +131,40 @@ def check_all(manager) -> None:
 _LOCAL_PROGRAM_DIRS = (("todo", "TODO_DIR"), ("done", "DONE_DIR"), ("error", "ERROR_DIR"))
 
 
+def _extract_end_time(cmd: dict, scheduled: datetime) -> str | None:
+    """Combines a program's own "end_time" field (program_editor.py's
+    optional "HH:MM", 24h, under whichever of setup_camera/setup_wide_
+    camera is do_action=True) with its scheduled START date/time, to get
+    a full end date/time for display (user-requested Sep 2026: "on n'a
+    pas l'heure de fin sur nos programmes ?" - the combined /Program
+    page was only ever showing "-" for a local program's end column).
+
+    Rolls to the NEXT day if the naive "same calendar day as start"
+    combination would fall at or before the start time - mirrors
+    dwarf_session.py's own _parse_end_time() midnight-rollover handling
+    (a session started at 22:00 with end_time="01:30" means 01:30 the
+    FOLLOWING day) - just anchored to the program's own scheduled start
+    rather than "right now", since this runs long before the program
+    ever starts (unlike _parse_end_time(), only ever called once a
+    session is already live)."""
+    for key in ("setup_camera", "setup_wide_camera"):
+        setup = cmd.get(key) or {}
+        if not setup.get("do_action"):
+            continue
+        raw = setup.get("end_time")
+        if not raw:
+            return None
+        try:
+            hour, minute = str(raw).strip().split(":")
+            candidate = scheduled.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
+        except (ValueError, AttributeError):
+            return None
+        if candidate <= scheduled:
+            candidate += timedelta(days=1)
+        return candidate.strftime("%Y-%m-%d %H:%M:%S")
+    return None
+
+
 def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
     """Every local program for this device - ToDo/ (due or not yet),
     PLUS already-finished ones from Done/ and Error/ - for the combined
@@ -155,11 +189,13 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
             if parsed is None:
                 continue
             scheduled, data = parsed
-            id_command = data.get("command", {}).get("id_command", {})
+            cmd = data.get("command", {})
+            id_command = cmd.get("id_command", {})
             out.append({
                 "filename": filename,
                 "description": id_command.get("description") or "",
                 "scheduledAt": scheduled.strftime("%Y-%m-%d %H:%M:%S"),
+                "endAt": _extract_end_time(cmd, scheduled),
                 "due": status == "todo" and scheduled <= datetime.now(),
                 "status": status,
             })

@@ -198,6 +198,17 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
                 "endAt": _extract_end_time(cmd, scheduled),
                 "due": status == "todo" and scheduled <= datetime.now(),
                 "status": status,
+                # ACTUAL run timing (user-requested Sep 2026), distinct
+                # from the scheduled date/time and the optional end_time
+                # above - set by scheduler_runner.py's own
+                # _update_process_status(): "realStart" is stamped the
+                # moment execution actually begins (process -> pending),
+                # "realEnd" the moment it finishes either way, success or
+                # failure (process -> done; the real outcome is in
+                # "status"/result, not this timestamp). Both are None for
+                # a ToDo/ program that hasn't run yet.
+                "realStart": id_command.get("starting_date"),
+                "realEnd": id_command.get("processed_date"),
             })
     out.sort(key=lambda p: p["scheduledAt"])
     return out

@@ -215,11 +215,12 @@ function renderPrograms(entry) {
       if (t.shutterName) bits.push(`${t.shutterName}s`);
       if (t.gainName) bits.push(`gain ${t.gainName}`);
       if (t.filterModeName) bits.push(t.filterModeName);
-      if (t.stacked != null || t.count != null) {
-        const stacked = t.stacked != null ? `${t.stacked} stackées` : "?";
-        const total = t.count != null ? ` / ${t.count} demandées` : "";
-        bits.push(`${stacked}${total}`);
-      }
+      // count/stacked deliberately NOT shown here (user-reported Sep
+      // 2026: unreliable on the native side, unlike the local programs'
+      // own shots_taken/shots_stacked) - see native_schedule.py's own
+      // parsing: these come straight from the task's stored params
+      // JSON, which may just reflect what was last SYNCED rather than
+      // what has actually shot so far.
       const summary = bits.length ? `<span class="capture-summary-inline">${bits.join(" · ")}</span>` : "";
       return `<div class="task-line"><span class="tag ${cls}">${t.name}</span>${summary}</div>`;
     }).join("");

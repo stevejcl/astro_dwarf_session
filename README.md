@@ -69,7 +69,7 @@ python astro_dwarf_ui.py
 ```
 This opens a native desktop window by default, backed by a local web server. To run it server-only (no desktop window, useful headless or to just use it from a browser/phone):
 ```sh
-python astro_dwarf_ui.py --no-native
+python astro_dwarf_ui.py --no_native
 ```
 Then open `http://<this-computer's-IP>:<port>` from any device on the same network — the port is chosen automatically and printed on startup, or pass `--port` to fix it.
 

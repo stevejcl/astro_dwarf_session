@@ -148,7 +148,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--port", type=int)
     parser.add_argument(
-        "--no-native",
+        "--no_native",
         action="store_true",
         help="Don't open a native desktop window (server-only mode, "
         "useful headless / on a box with no screen).",
@@ -284,16 +284,27 @@ def main() -> None:
     # plenty frequent against a 6-hour ceiling.
     app.timer(30.0, scheduler_runner.check_stuck_runs)
 
-    ui.run(
-        title="Astro Dwarf Session",
-        storage_secret="astro_dwarf_session_key_change_me",  # TODO: move to a .env
-        native=not args.no_native,
-        window_size=(1024, 800),
-        host=args.host,
-        port=PORT,
-        reconnect_timeout=20,
-        reload=False,
-    )
+    if not args.no_native:
+        ui.run(
+            title="Astro Dwarf Session",
+            storage_secret="astro_dwarf_session_key_change_me",  # TODO: move to a .env
+            native=not args.no_native,
+            window_size=(1024, 815),
+            host=args.host,
+            port=PORT,
+            reconnect_timeout=20,
+            reload=False,
+        )
+    else:
+        ui.run(
+            title="Astro Dwarf Session",
+            storage_secret="astro_dwarf_session_key_change_me",  # TODO: move to a .env
+            native=not args.no_native,
+            host=args.host,
+            port=PORT,
+            reconnect_timeout=20,
+            reload=False,
+        )
 
 
 if __name__ in {"__main__", "__mp_main__"}:
@@ -309,4 +320,15 @@ if __name__ in {"__main__", "__mp_main__"}:
     # no-op when NOT frozen (plain `python astro_dwarf_ui.py`), safe to
     # always call.
     freeze_support()
-    main()
+    try:
+
+        main()
+
+    except (KeyboardInterrupt):
+        print("Application closed by user.")
+        
+    except SystemExit:
+        print("Application closed.")
+
+    except Exception as e:
+        print(f"Application closed error detected {e}.")

@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.1.2] - 2026-09-26
+    ### Improvements
+    This commit normalizes the no-native CLI flag to --no_native
+    Updates the README example and App Screenshots
+    Adds clearer shutdown handling for KeyboardInterrupt/SystemExit.
+    It also adjusts the native window sizing
+    Updates the French program page heading to match the current naming.
+
+    ### Bug
+    Fix headless mode and UI startup
+
 ## [3.1.1] - 2026-09-26
     Adds a combined "Programs" page (/Program-fr, /Program-en) showing, per
     device and merged into a single time-sorted list, both astro_dwarf_session's

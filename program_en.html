@@ -36,7 +36,7 @@
   th { color: var(--muted); font-weight: 500; }
   .empty { color: var(--muted); font-size: 0.85rem; padding: 8px 0; }
   .tag { font-size: 0.72rem; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); display: inline-block; }
-  .tag.due { background: rgba(53,196,106,0.15); color: var(--ok); border-color: var(--ok); }
+  .tag.overdue { background: rgba(224,168,60,0.15); color: var(--warn); border-color: var(--warn); }
   .tag.origin-local { background: rgba(77,163,255,0.15); color: var(--accent); border-color: var(--accent); }
   .tag.origin-native { background: rgba(154,161,173,0.15); color: var(--text); border-color: var(--border); }
   .tag.state-shooting { background: rgba(77,163,255,0.15); color: var(--accent); border-color: var(--accent); }
@@ -177,7 +177,7 @@ function renderPrograms(entry) {
     let detail = "";
     if (p.status === "done") detail = '<span class="tag state-success">Done</span>';
     else if (p.status === "error") detail = '<span class="tag state-failed">Error</span>';
-    else if (p.due) detail = '<span class="tag due">due</span>';
+    else if (p.due) detail = '<span class="tag overdue">Overdue</span>';
     // Once a program has actually run, its real start/end (scheduler_
     // runner.py's starting_date/processed_date) is more useful than
     // the originally scheduled date/time - falls back to the schedule

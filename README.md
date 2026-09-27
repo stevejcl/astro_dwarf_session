@@ -1,4 +1,3 @@
-<img width="1010" height="808" alt="AstroDwarfUI_lF3KaXuG2h" src="https://github.com/user-attachments/assets/023fbe34-f0cd-4671-ac0d-9698800d119c" />
 # Astro Dwarf Session
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -8,31 +7,31 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 
 > **Note:** this project used to ship a Tkinter desktop GUI (`astro_dwarf_session_UI.py`). That interface is retired — a full rewrite on NiceGUI now covers everything it did and more, including proper multi-device support. The old Tkinter code is preserved on the `V3-multi` branch for reference.
 
-<img width="1010" height="808" alt="AstroDwarfUI_lF3KaXuG2h" src="https://github.com/user-attachments/assets/8fe8117e-4016-4f17-867f-f3c9c5e78474" />
+<img width="1010" height="808" alt="AstroDwarfUI_Home Screen" src="https://github.com/user-attachments/assets/7e9a2e86-b1a8-4cee-b14f-4255d819f636" />
 
-<img width="1011" height="905" alt="647959956-1120c509-5a21-4ce6-b0fa-cddb6a9b012c" src="https://github.com/user-attachments/assets/90573d18-a090-401a-8ce4-51ad5a8f21a2" />
+<img width="1010" height="808" alt="AstroDwarfUI_Home Screen_Black" src="https://github.com/user-attachments/assets/6c8fc9d0-b594-43a0-9450-b391c03bfb44" />
 
-<img width="869" height="1080" alt="AstroDwarfUI_5M18J8OcXI" src="https://github.com/user-attachments/assets/370d40ed-340e-440e-aa1d-e6f26b3b1cfd" />
+<img width="1011" height="905" alt="AstroDwarfUI_Home Screen_Live Capture" src="https://github.com/user-attachments/assets/facd3ffc-03c1-4f30-9660-607ffd01b9f8" />
 
-<img width="869" height="1080" alt="AstroDwarfUI_SSHY5cOkhf" src="https://github.com/user-attachments/assets/ad9dc89a-f82c-4e5e-8033-d3cab5d988e0" />
+<img width="1011" height="530" alt="AstroDwarfUI_Add_Device" src="https://github.com/user-attachments/assets/d4a4dd81-bc96-423f-824c-df239a7e581f" />
 
-<img width="872" height="1754" alt="Editor" src="https://github.com/user-attachments/assets/4081bb09-5642-484b-9db1-5e16b96d01e5" />
+<img width="1010" height="1080" alt="AstroDwarfUI_Device_Settings" src="https://github.com/user-attachments/assets/12f20406-96ad-4999-a52f-726cbd0acb90" />
 
+<img width="1010" height="808" alt="AstroDwarfUI_Manual_Config" src="https://github.com/user-attachments/assets/44c287e9-8188-40dd-a16f-09186ab70c70" />
 
+<img width="869" height="1080" alt="AstroDwarfUI_Device_Card" src="https://github.com/user-attachments/assets/dfb651e3-46fe-4b2a-b9ae-a344e4bdfb03" />
 
-<img width="1011" height="905" alt="Screen_Dwarf_Session_Home_Session" src="https://github.com/user-attachments/assets/1120c509-5a21-4ce6-b0fa-cddb6a9b012c" />
+<img width="868" height="1808" alt="AstroDwarfUI_Program_Editor" src="https://github.com/user-attachments/assets/b290a625-16c1-4e8f-9dda-0cb860f760ea" />
 
-<img width="1007" height="1049" alt="Screen_Dwarf_Session_Detail" src="https://github.com/user-attachments/assets/98211df4-4266-41f5-8ff0-516ef13b59c3" />
+<img width="869" height="564" alt="AstroDwarfUI_Program_Scripts" src="https://github.com/user-attachments/assets/b960476f-de27-427a-84d5-6afaefc99b05" />
 
-<img width="1004" height="1002" alt="Screen_Dwarf_Session_Program_1" src="https://github.com/user-attachments/assets/e5a28f22-86f8-455c-93a0-c3d21811cc96" />
-<img width="1004" height="595" alt="Screen_Dwarf_Session_Program_2" src="https://github.com/user-attachments/assets/f054525e-f82a-4bba-b5f5-4c536639d961" />
+<img width="1010" height="983" alt="AstroDwarfUI_Program_Results" src="https://github.com/user-attachments/assets/0f46a713-c902-432d-9904-80469cac14f7" />
 
-<img width="1003" height="771" alt="Screen_Dwarf_Session_Program_Scripts" src="https://github.com/user-attachments/assets/b5b03398-e0ff-4406-b01f-3bdf050fd501" />
-<img width="1005" height="896" alt="Screen_Dwarf_Session_Program_Result" src="https://github.com/user-attachments/assets/74aecb3d-e8bf-4611-ba34-425c645efde2" />
+<img width="1010" height="983" alt="AstroDwarfUI_Program_Native_Schedule" src="https://github.com/user-attachments/assets/26e520ba-9fc1-411c-98d2-1119f2abaeb2" />
 
+<img width="970" height="837" alt="AstroDwarfUI_Watch_Screen" src="https://github.com/user-attachments/assets/cb7f3050-0f52-410d-9cb3-8b1cca5880a3" />
 
-<img width="1010" height="794" alt="Screen_Dwarf_Session_Explorer" src="https://github.com/user-attachments/assets/13fa5367-5671-43e5-ae4b-88154625fcf3" />
-<img width="1009" height="793" alt="Screen_Dwarf_Session_Explorer_full" src="https://github.com/user-attachments/assets/78209d87-05c4-4ef6-81f2-ee9a8cb356cd" />
+<img width="1554" height="2357" alt="AstroDwarfUI_Milky_Way_Planner" src="https://github.com/user-attachments/assets/b978e0f9-eddf-4db5-80da-8fa7a4bb151b" />
 
 ## What it does
 

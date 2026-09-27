@@ -8,6 +8,7 @@
     It also adjusts the native window sizing
     Updates the French program page heading to match the current naming.
 
+    Add Dwarfium Lite branding to dashboard
     ### Bug
     Fix headless mode and UI startup
 

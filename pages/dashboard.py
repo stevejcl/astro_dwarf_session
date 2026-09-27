@@ -12,7 +12,7 @@ enough to detect a connection that died mid-session (e.g. a Wi-Fi
 glitch causing a command timeout, rather than a clean disconnect)."""
 from __future__ import annotations
 
-from nicegui import ui,run
+from nicegui import ui,run,app
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 
@@ -224,7 +224,10 @@ def build_dashboard_page() -> None:
             # the bottom of the page, away from the denser icon row at
             # the top - this is a one-off "share" action, not something
             # reached for on every visit.
-            with ui.row().classes("w-full justify-center mt-2"):
+            is_dark = app.storage.user.get("ui_mode") == "dark"
+            logo_color = "#f5f5f5" if is_dark else "#1a1a1a"
+
+            with ui.row().classes("w-full items-center justify-center mt-2 relative"):
                 def _open_watch_qr() -> None:
                     with ui.dialog() as dialog, ui.card().classes("items-center"):
                         ui.label(t("watch_qr_title")).classes("text-base")
@@ -234,5 +237,11 @@ def build_dashboard_page() -> None:
                     dialog.open()
 
                 ui.button(icon="qr_code_2", on_click=_open_watch_qr).props("flat round")
+
+                ui.html(
+                    'Dwarf<span style="color:#00c896">ium</span> Lite'
+                ).classes(
+                    "text-lg sm:text-2xl font-bold absolute right-0"
+                ).style(f"color:{logo_color}; font-variant-ligatures: none;")
 
             ui.timer(2.0, poll)

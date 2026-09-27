@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.1.2] - 2026-09-26
+## [3.1.2] - 2026-09-27
     ### Improvements
     This commit normalizes the no-native CLI flag to --no_native
     Updates the README example and App Screenshots

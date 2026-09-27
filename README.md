@@ -31,6 +31,10 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 
 <img width="1010" height="983" alt="AstroDwarfUI_Program_Native_Schedule" src="https://github.com/user-attachments/assets/26e520ba-9fc1-411c-98d2-1119f2abaeb2" />
 
+<img width="1010" height="794" alt="Screen_Dwarf_Session_Explorer" src="https://github.com/user-attachments/assets/13fa5367-5671-43e5-ae4b-88154625fcf3" />
+
+<img width="1009" height="793" alt="Screen_Dwarf_Session_Explorer_full" src="https://github.com/user-attachments/assets/78209d87-05c4-4ef6-81f2-ee9a8cb356cd" />
+
 <img width="970" height="837" alt="AstroDwarfUI_Watch_Screen" src="https://github.com/user-attachments/assets/cb7f3050-0f52-410d-9cb3-8b1cca5880a3" />
 
 <img width="1554" height="2357" alt="AstroDwarfUI_Milky_Way_Planner" src="https://github.com/user-attachments/assets/b978e0f9-eddf-4db5-80da-8fa7a4bb151b" />

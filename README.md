@@ -23,7 +23,7 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 
 <img width="869" height="1080" alt="AstroDwarfUI_Device_Card" src="https://github.com/user-attachments/assets/dfb651e3-46fe-4b2a-b9ae-a344e4bdfb03" />
 
-<img width="868" height="1808" alt="AstroDwarfUI_Program_Editor" src="https://github.com/user-attachments/assets/b290a625-16c1-4e8f-9dda-0cb860f760ea" />
+<img width="868" height="1690" alt="AstroDwarfUI_Program_Editor" src="https://github.com/user-attachments/assets/92c88521-93c8-4871-ad7e-67c7e7867754" />
 
 <img width="869" height="564" alt="AstroDwarfUI_Program_Scripts" src="https://github.com/user-attachments/assets/b960476f-de27-427a-84d5-6afaefc99b05" />
 

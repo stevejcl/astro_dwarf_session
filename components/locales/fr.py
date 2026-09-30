@@ -93,6 +93,9 @@ TRANSLATIONS: dict[str, str] = {
     "stop_capture":                 "Stop capture",
     "stop_goto":                    "Stop goto",
     "camera_settings":              "R\u00e9glages cam\u00e9ra",
+    "watch_capture_astro":          "Astro capture en cours",
+    "watch_capture_mosaic":         "Mosa\u00efque capture en cours",
+    "watch_capture_wide":           "Astro capture grand-angle en cours",
 
     # -- Program (scheduler) section ----------------------------------------
     "program_section":              "Programme",

@@ -37,16 +37,9 @@ DIST_LOCALES_DIR = DIST_DIR / "components" / "locales"
 # import-tracing doesn't pick up, unlike the .py modules around it.
 _ble_connect_html = Path("dwarf_ble_connect") / "connect_dwarf.html"
 
-# catalog.html - the external DSO target-catalog page (components/
-# api_routes.py's /catalog route). MUST be bundled via --add-data, not
-# just copied loose into dist/ (user-reported Sep 2026: copying it next
-# to the built .exe did NOT work) - in a --onefile build, __file__ for
-# a bundled module resolves inside the PyInstaller extraction temp dir
-# (sys._MEIPASS), never the folder the .exe itself lives in, so a loose
-# file next to the .exe was never where the lookup was actually
-# checking. Destination "." bundles it at the ROOT of that extraction
-# dir, matching _bundled_path()'s own sys._MEIPASS / "catalog.html".
-_catalog_html = Path("catalog.html")
+# catalog.html - external DSO catalog page (external project): NOT bundled, copied
+# as a loose file into dist/assets/ (step 3) and read via _external_path().
+_catalog_html = Path("assets") / "catalog.html"
 
 # program_fr.html / program_en.html - the combined "local programs +
 # native on-device schedule" page, one file per language (components/
@@ -57,8 +50,6 @@ _catalog_html = Path("catalog.html")
 # root of the PyInstaller extraction dir) - a loose copy next to the
 # built .exe would NOT be found, for the same reason catalog.html's
 # own note above explains.
-_program_htmls = [Path("program_fr.html"), Path("program_en.html")]
-
 sep = os.pathsep  # Cross-platform separator: ; on Windows, : on Unix/macOS
 
 extra_data = []
@@ -67,16 +58,25 @@ if _ble_connect_html.exists():
 else:
     print(f"Warning: {_ble_connect_html} not found - BLE pairing may break in the built exe.")
 
-if _catalog_html.exists():
-    extra_data.append(f"{_catalog_html}{sep}.")
-else:
-    print(f"Warning: {_catalog_html} not found - the target-catalog page will be unavailable in the built exe.")
+# Project HTML pages: bundled in the exe (rebuild needed to change them).
+_project_htmls = [
+    Path(f"{page}_{lang}.html")
+    for page in ("program", "milky_way_mosaic_planner")
+    for lang in ("fr", "en")
+]
 
-for _program_html in _program_htmls:
-    if _program_html.exists():
-        extra_data.append(f"{_program_html}{sep}.")
+for _html in _project_htmls:
+    if _html.exists():
+        extra_data.append(f"{_html}{sep}.")
     else:
-        print(f"Warning: {_program_html} not found - /Program-{_program_html.stem.rsplit('_', 1)[-1]} will be unavailable in the built exe.")
+        print(f"Warning: {_html} not found - its page will be unavailable in the built exe.")
+
+# js/ is mounted by app.mount("/js") from _bundled_path("") / "js"
+# (app.js, dwarf-scheduler.js, renderMosaic_dwarf.js, ...)
+if Path("js").is_dir():
+    extra_data.append(f"js{sep}js")
+else:
+    print("Warning: js/ not found - the /js static mount will be skipped in the built exe.")
 
 print("Current working directory:", os.getcwd())
 
@@ -155,14 +155,18 @@ for locale_file in Path("components/locales").glob("*.py"):
 # faire deux version pour l'instant _fr _en" - no real i18n system in
 # this standalone file yet). /mosaic-planner-{lang} (components/
 # api_routes.py) looks for both by this exact naming.
-for _lang in ("fr", "en"):
-    _lang_html = Path(f"milky_way_mosaic_planner_{_lang}.html")
-    if _lang_html.exists():
-        dest = DIST_DIR / _lang_html.name
-        print(f"Copying {_lang_html} to {dest}")
-        shutil.copy2(_lang_html, dest)
-    else:
-        print(f"Warning: {_lang_html} not found - /mosaic-planner-{_lang} will be unavailable until one is placed next to the built exe.")
+# Project HTML pages: bundled in the exe (rebuild needed to change them).
+
+# catalog.html comes from an external project: loose file in assets/ next to the exe,
+# replaceable without a rebuild (read through _external_path()).
+DIST_ASSETS_DIR = DIST_DIR / "assets"
+DIST_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+if _catalog_html.exists():
+    print(f"Copying {_catalog_html} to {DIST_ASSETS_DIR / _catalog_html.name}")
+    shutil.copy2(_catalog_html, DIST_ASSETS_DIR / _catalog_html.name)
+else:
+    print("Warning: catalog.html not found - /catalog will be unavailable until placed in assets/ next to the built exe.")
+
 
 # Step 4 - Zip everything in dist
 suffix = os.environ.get("RUNNER_OS", "unknown")  # Windows, Linux, macOS

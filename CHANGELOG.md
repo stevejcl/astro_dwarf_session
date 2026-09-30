@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.1.3] - 2026-09-30
+    ### Improvements
+    This change adds native Tele mosaic handling across the app: parsing of setup_camera framing/mosaic_count values in the API, updated scheduler and watch views to surface mosaic state, and new JS modules that build and send Dwarf schedule payloads.
+    It also exposes mosaic metadata in the program list, adds static JS serving for the browser code, and updates locale strings used by the capture status banners.
+
 ## [3.1.2] - 2026-09-27
     ### Improvements
     This commit normalizes the no-native CLI flag to --no_native

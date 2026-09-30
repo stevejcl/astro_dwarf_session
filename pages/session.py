@@ -310,6 +310,26 @@ def _get_schedule_section_box(dwarf_uid: str) -> _BoolBox:
     return box
 
 
+def fmt_scale(v) -> str | None:
+    """180 -> "1.8", 140 -> "1.4", 1.8 -> "1.8" ; None si valeur invalide."""
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return None
+    if n <= 0:
+        return None
+    if n > 10:      # valeur en % (100-180) -> échelle (1.0-1.8)
+        n /= 100
+    return f"{n:.1f}"
+
+def mosaic_text(h, v, word: str = "Mosaic") -> str:
+    """mosaic_text(1.8, 1.4) -> "Mosaic 1.8 × 1.4 (4 panels)"; mosaic_text(140, 100) -> "Mosaic 1.4 × 1.0 (2 panels)"."""
+    a, b = fmt_scale(h), fmt_scale(v)
+    if not a or not b:
+        return ""
+    panels = (2 if float(a) > 1 else 1) * (2 if float(b) > 1 else 1)
+    return f"{word if panels > 1 else ""} {a} × {b}" + (f" ({panels} panels)" if panels > 1 else "")
+
 async def _handle_delete_schedule(
     session, dwarf_uid: str, schedule_id: str, schedule_name: str, refresh_view: Callable[[], None]
 ) -> None:
@@ -917,6 +937,8 @@ def build_session_page() -> None:
                                         detail_bits.append(f"gain {tsk['gainName']}")
                                     if tsk.get("filterModeName"):
                                         detail_bits.append(tsk["filterModeName"])
+                                    if tsk.get("isMosaic"):
+                                        detail_bits.append(f"Mosaic {fmt_scale(tsk['horizontalScale'])} x {fmt_scale(tsk['verticalScale'])}")
                                     # count/stacked deliberately NOT shown
                                     # (user-reported Sep 2026, confirmed by
                                     # a real screenshot: always "0 imgs /

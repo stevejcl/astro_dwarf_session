@@ -52,6 +52,9 @@ def parse_native_schedule_info(info) -> list[dict]:
                 "filterModeName": p.get("filterModeName"),
                 "count": p.get("count"),
                 "stacked": p.get("stacked"),
+                "isMosaic": p.get("isMosaicMode"),
+                "horizontalScale": p.get("horizontalScale"),
+                "verticalScale": p.get("verticalScale"),
             })
         recency = sched.updated_time or sched.created_time or sched.schedule_time or 0
         parsed.append({

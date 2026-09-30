@@ -184,6 +184,28 @@
   </fieldset>
 
   <fieldset>
+    <legend>Mosaïque</legend>
+    <div class="checks" style="margin-top:0">
+      <label><input type="checkbox" id="doMosaic"> Mosaic</label>
+    </div>
+    <div class="row">
+      <div>
+        <label for="framingX">Cadrage X (1.0–1.8) → framingX</label>
+        <input type="number" id="framingX" min="1" max="1.8" step="0.1" value="1.4">
+      </div>
+      <div>
+        <label for="framingY">Cadrage Y (1.0–1.8) → framingY</label>
+        <input type="number" id="framingY" min="1" max="1.8" step="0.1" value="1.0">
+      </div>
+      <div>
+        <label for="mosaicCount">Nb d'images par panel</label>
+        <input type="number" id="mosaicCount" min="1" max="249" value="20">
+      </div>
+    </div>
+    <div class="server-line" id="mosInfo" style="margin:0.7rem 0 0"></div>
+  </fieldset>
+
+  <fieldset>
     <legend>Planification</legend>
     <div class="row">
       <div>
@@ -257,6 +279,33 @@ async function loadDwarfs() {
 }
 loadDwarfs();
 
+// Cadrage en % d'un cadre Tele par axe : 100 = un seul cadre sur l'axe,
+// 180 = max (2 panneaux, 10 % de recouvrement). Panneaux = 1, 2 ou 4.
+function mosaicState() {
+  // saisie = valeur de l'application officielle (1.4) ; le JSON attend le x100 (140)
+  const clamp = v => Math.min(180, Math.max(100, Math.round((parseFloat(v) || 1) * 100)));
+  const fx = clamp(document.getElementById('framingX').value);
+  const fy = clamp(document.getElementById('framingY').value);
+  const perPanel = Math.max(1, parseInt(document.getElementById('mosaicCount').value, 10) || 1);
+  const panels = (fx > 100 ? 2 : 1) * (fy > 100 ? 2 : 1);
+  return {
+    doMosaic: document.getElementById('doMosaic').checked,
+    fx, fy, perPanel, panels, total: perPanel * panels,
+  };
+}
+function updateMosInfo() {
+  const m = mosaicState();
+  const cam = document.getElementById('camera').value;
+  document.getElementById('mosInfo').textContent =
+    `${m.panels} panel(s) · ${m.perPanel} image(s)/panel → count envoyé = ${m.total}` +
+    (m.doMosaic ? '' : ' (doMosaic décoché : count normal)') +
+    (m.doMosaic && cam !== 'tele' ? ' · ⚠ caméra ≠ Tele' : '') +
+    (m.doMosaic && m.panels === 1 ? ' · ⚠ 100/100 = pas de mosaïque' : '');
+}
+['doMosaic', 'framingX', 'framingY', 'mosaicCount', 'camera'].forEach(id =>
+  document.getElementById(id).addEventListener('input', updateMosInfo));
+updateMosInfo();
+
 document.getElementById('submitBtn').addEventListener('click', async () => {
   const btn = document.getElementById('submitBtn');
   const resultBox = document.getElementById('result');
@@ -281,6 +330,19 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   };
   const endTime = document.getElementById('endTime').value;
   if (endTime) payload.endTime = endTime;
+
+  // Mosaïque native : count = total d'images = mosaic_count x nombre de panneaux
+  const mos = mosaicState();
+  if (mos.doMosaic) {
+    const fields = {
+      doMosaic: true,
+      framingX: mos.fx,
+      framingY: mos.fy,
+      mosaic_count: mos.perPanel,
+    };
+    payload.count = mos.total;
+    payload.setup_camera = fields;   // ces champs vivent uniquement dans setup_camera
+  }
 
   if (!payload.dwarfUid) {
     resultBox.className = 'show';
@@ -318,7 +380,9 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       statusLine.className = 'status-line status-ok';
       statusLine.textContent = modeLabels[data.mode] || `OK (${data.mode})`;
     }
-    responseBody.textContent = JSON.stringify(data, null, 2);
+    responseBody.textContent =
+      '// payload envoyé\n' + JSON.stringify(payload, null, 2) +
+      '\n\n// réponse\n' + JSON.stringify(data, null, 2);
   } catch (e) {
     statusLine.className = 'status-line status-err';
     statusLine.textContent = `Erreur réseau — ${e.message}`;

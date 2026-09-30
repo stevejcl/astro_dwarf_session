@@ -107,6 +107,22 @@ function setFilterMode(mode) {
   renderSelected();
 }
 
+// Mosaïque : valeur affichée dans l'application officielle, par axe (X × Y) :
+// 1.0 = un seul cadre, 1.8 = maximum (2 panneaux sur cet axe). Accepte 1.4 ou 140.
+function fmtScale(v) {
+  let n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n > 10) n /= 100;
+  return n.toFixed(1);
+}
+
+function mosaicText(h, v) {
+  const a = fmtScale(h), b = fmtScale(v);
+  if (!a || !b) return "Mosaïque";
+  const panels = (parseFloat(a) > 1 ? 2 : 1) * (parseFloat(b) > 1 ? 2 : 1);
+  return `Mosaïque ${a} × ${b}` + (panels > 1 ? ` (${panels} panels)` : "");
+}
+
 function fmtTs(sec) {
   if (!sec) return "-";
   const d = new Date(sec * 1000);
@@ -190,6 +206,10 @@ function renderPrograms(entry) {
     if (p.cameraType) bits.push(p.cameraType);
     if (p.exposure) bits.push(`${p.exposure}s`);
     if (p.gain) bits.push(`gain ${p.gain}`);
+    // Mosaïque native Dwarf (Tele) : champs de setup_camera exposés par /api/programs
+    if (p.doMosaic) {
+      bits.push(mosaicText(p.framingX, p.framingY) + (p.mosaicCount ? ` · ${p.mosaicCount} images/panel` : ""));
+    }
     if (p.filterName) bits.push(p.filterName);
     if (p.shotsTaken != null || p.requestedCount) {
       const stacked = p.shotsStacked != null ? `${p.shotsStacked} stackées / ` : "";
@@ -215,6 +235,8 @@ function renderPrograms(entry) {
       if (t.shutterName) bits.push(`${t.shutterName}s`);
       if (t.gainName) bits.push(`gain ${t.gainName}`);
       if (t.filterModeName) bits.push(t.filterModeName);
+      // Mosaïque native : échelles horizontalScale/verticalScale de la tâche (native_schedule.py)
+      if (t.isMosaic) bits.push(mosaicText(t.horizontalScale, t.verticalScale));
       // count/stacked deliberately NOT shown here (user-reported Sep
       // 2026: unreliable on the native side, unlike the local programs'
       // own shots_taken/shots_stacked) - see native_schedule.py's own

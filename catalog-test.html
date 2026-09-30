@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catalogue Astro & Planificateur Dwarf</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #080d1a;
+      color: #c8d8f0;
+      padding: 20px;
+    }
+    .catalog-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 20px 0;
+    }
+    .catalog-item {
+      background: #0d1526;
+      border: 1px solid #1c2c48;
+      padding: 12px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    button {
+      background: #1e3a5f;
+      color: #ffffff;
+      border: 1px solid #3b82f6;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Mon Catalogue Astronomique</h1>
+
+  <!-- Bouton principal pour envoyer les éléments sélectionnés -->
+  <button id="btn-program-selected">
+    Programmer la sélection sur le Dwarf
+  </button>
+
+  <!-- Exemples d'éléments du catalogue avec cases à cocher -->
+  <div class="catalog-list">
+    <label class="catalog-item">
+      <input type="checkbox" class="target-checkbox" data-id="M31" data-name="M31 - Galaxie d'Andromède" data-ra="0.712" data-dec="41.269">
+      <span>M31 - Galaxie d'Andromède (RA: 00h42m / Dec: +41°)</span>
+    </label>
+
+    <label class="catalog-item">
+      <input type="checkbox" class="target-checkbox" data-id="M42" data-name="M42 - Nébuleuse d'Orion" data-ra="5.588" data-dec="-5.391">
+      <span>M42 - Nébuleuse d'Orion (RA: 05h35m / Dec: -05°)</span>
+    </label>
+
+    <label class="catalog-item">
+      <input type="checkbox" class="target-checkbox" data-id="M13" data-name="M13 - Grand Amas d'Hercule" data-ra="16.694" data-dec="36.460">
+      <span>M13 - Grand Amas d'Hercule (RA: 16h41m / Dec: +36%)</span>
+    </label>
+  </div>
+
+  <!-- Importation de l'application JS principale en module -->
+  <script type="module" src="js/app.js"></script>
+
+</body>
+</html>

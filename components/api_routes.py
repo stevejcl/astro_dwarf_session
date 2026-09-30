@@ -84,6 +84,7 @@ from pathlib import Path
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from nicegui import app, run
 
 from dwarf_python_api.lib.dwarf_config import DwarfConfig
@@ -124,22 +125,21 @@ def _bundled_path(relative: str) -> Path:
 
 def _external_path(relative: str) -> Path:
     """Resolves a data file meant to be REPLACEABLE without rebuilding
-    the .exe (user-requested Sep 2026, for the Milky Way mosaic planner
-    specifically - still under active iteration, unlike catalog.html's
-    stable third-party content, so requiring a full rebuild for every
-    tweak would be painful). Unlike _bundled_path() above, this reads
-    next to the ACTUAL RUNNING .exe (sys.executable's own folder) in a
-    packaged build - not sys._MEIPASS, which is a fresh temp extraction
-    dir every launch and can never be edited persistently. Matches how
-    images/ and components/locales/ are already handled: copied as
-    LOOSE files into dist/ by buildAstroDwarfUI.py, not baked in via
-    --add-data, so replacing the file next to the .exe takes effect on
-    the next launch with no rebuild at all."""
+    the .exe: today only catalog.html, third-party content from an
+    external project that can be updated independently of this app
+    (user-requested Sep 2026). Unlike _bundled_path() above, this reads
+    from assets/ next to the ACTUAL RUNNING .exe (sys.executable's own
+    folder) in a packaged build - not sys._MEIPASS, which is a fresh
+    temp extraction dir every launch and can never be edited
+    persistently. Copied there as a LOOSE file by buildAstroDwarfUI.py
+    (dist/assets/), not baked in via --add-data, so replacing the file
+    takes effect on the next launch with no rebuild at all. Pass only
+    the file name (e.g. "catalog.html"): "assets/" is added here."""
     if getattr(sys, "frozen", False):
         base_dir = Path(sys.executable).resolve().parent
     else:
         base_dir = Path(__file__).resolve().parent.parent
-    return base_dir / relative
+    return base_dir / "assets" / relative
 
 
 def _model_display_name(cfg: DwarfConfig) -> str:
@@ -242,6 +242,11 @@ def register_api_routes() -> None:
         allow_headers=["*"],
     )
 
+    # Montage des fichiers statiques (JS, CSS...) du projet
+    root_dir = _bundled_path("")
+    js_dir = root_dir / "js"
+    if js_dir.exists():
+        app.mount("/js", StaticFiles(directory=str(js_dir)), name="js")
     @app.get("/catalog")
     def catalog_page():
         """Serves the DSO catalog page over THIS server's own http://,
@@ -257,12 +262,12 @@ def register_api_routes() -> None:
 
         Looks for catalog.html next to astro_dwarf_ui.py in a source
         checkout, or bundled into the .exe in a packaged build (see
-        _bundled_path() above) - drop the downloaded catalog file at
+        _external_path() above) - drop the downloaded catalog file at
         the project root under that exact name for this route to find
         it in dev mode; a packaged build needs it present at build time
         instead (buildAstroDwarfUI.py bundles it via --add-data).
         """
-        catalog_path = _bundled_path("catalog.html")
+        catalog_path = _external_path("catalog.html")
         if not catalog_path.exists():
             return JSONResponse(
                 {"error": f"catalog.html not found at {catalog_path} - place the DSO catalog HTML file there."},
@@ -274,13 +279,7 @@ def register_api_routes() -> None:
     def mosaic_planner_page(lang: str):
         """Serves the Milky Way mosaic planner the same way /catalog
         serves catalog.html above - same-origin with /api/*, secure-
-        context geolocation on mobile, etc. Uses _external_path()
-        rather than _bundled_path() (see that function's own docstring)
-        specifically because this file is still under active iteration
-        - drop an updated milky_way_mosaic_planner_<lang>.html next to
-        the project root (dev) or the built .exe (packaged) and it
-        takes effect on the very next request, no rebuild needed
-        either way.
+        context geolocation on mobile, etc. Uses _bundled_path().
 
         {lang} is "fr" or "en" (user-requested Sep 2026: no real i18n
         system in this standalone file yet - just two full copies, one
@@ -292,7 +291,7 @@ def register_api_routes() -> None:
         """
         if lang not in ("fr", "en"):
             lang = "fr"
-        planner_path = _external_path(f"milky_way_mosaic_planner_{lang}.html")
+        planner_path = _bundled_path(f"milky_way_mosaic_planner_{lang}.html")
         if not planner_path.exists():
             return JSONResponse(
                 {"error": f"milky_way_mosaic_planner_{lang}.html not found at {planner_path} - place the mosaic planner HTML file there."},
@@ -494,6 +493,53 @@ def register_api_routes() -> None:
         pending_schedules.set_pending(dwarf_uid, schedule)
         return JSONResponse({"ok": True, "mode": "pending"})
 
+    def _native_mosaic_fields(body: dict):
+        """Parse the native-mosaic request fields.
+
+        The fields live ONLY in body["setup_camera"] (same layout as the saved
+        program file); anything at the root of the body is ignored.
+
+        framingX / framingY = size of the final capture in % of ONE tele frame
+        per axis: 100 = single frame on that axis (no mosaic along it),
+        180 = max (2 panels, 10% overlap). Panels = (X>100 ? 2 : 1) * (Y>100 ? 2 : 1).
+        mosaic_count = images PER panel, so total images = mosaic_count * panels.
+
+        Returns (fields, error). fields is None when no mosaic was requested.
+        """
+        src = body.get("setup_camera")
+        if not isinstance(src, dict):
+            return None, None
+
+        if not src.get("doMosaic"):
+            return None, None
+
+        try:
+            fx = int(src.get("framingX", 100))
+            fy = int(src.get("framingY", 100))
+        except (TypeError, ValueError):
+            return None, "framingX / framingY must be integers (100-180)"
+        if not (100 <= fx <= 180 and 100 <= fy <= 180):
+            return None, "framingX / framingY must be between 100 and 180"
+
+        try:
+            per_panel = int(src["mosaic_count"])
+        except KeyError:
+            return None, "mosaic_count is required when doMosaic is true"
+        except (TypeError, ValueError):
+            return None, "mosaic_count must be an integer"
+        if not (1 <= per_panel <= 249):
+            return None, "mosaic_count must be >= 1 and <= 249"
+
+        panels = (2 if fx > 100 else 1) * (2 if fy > 100 else 1)
+        return {
+            # both axes at 100 -> nothing to mosaic -> plain single-frame program
+            "doMosaic": panels > 1,
+            "framingX": fx,
+            "framingY": fy,
+            "mosaic_count": per_panel,
+            "panels": panels,
+        }, None
+
     @app.post("/api/program")
     async def api_program(request: Request):
         try:
@@ -571,9 +617,26 @@ def register_api_routes() -> None:
         active["gain"] = str(body.get("gain", active["gain"]))
         active["count"] = str(body.get("count", active["count"]))
         active["end_time"] = body.get("endTime", "")
+        mosaic, mosaic_err = _native_mosaic_fields(body)
+        if mosaic_err:
+            return JSONResponse({"error": mosaic_err}, status_code=400)
+        if mosaic and camera != "tele":
+            return JSONResponse({"error": "native mosaic requires camera 'tele'"}, status_code=400)
+
         if camera == "tele":
             active["binning"] = str(body.get("binning", active.get("binning", "0")))
             active["ircut"] = str(body.get("ircut", active.get("ircut", "1")))
+            # Always write the four keys so a reused/blank program can never
+            # keep a stale doMosaic=True from a previous template.
+            active["doMosaic"] = bool(mosaic and mosaic["doMosaic"])
+            active["framingX"] = mosaic["framingX"] if mosaic else 100
+            active["framingY"] = mosaic["framingY"] if mosaic else 100
+            if mosaic:
+                active["mosaic_count"] = mosaic["mosaic_count"]
+                # Server is the authority on the total: count = per-panel x panels
+                # (client-sent count is ignored when doMosaic is true).
+                if mosaic["doMosaic"]:
+                    active["count"] = str(mosaic["mosaic_count"] * mosaic["panels"])
         cmd[inactive_key]["do_action"] = False
 
         # Always saved as a ToDo file first, START-NOW-or-not - see this

@@ -149,11 +149,21 @@ def _extract_capture_summary(cmd: dict, id_command: dict) -> dict:
     deliberately doesn't do, matching the request's own "si présent"."""
     camera_type = None
     requested_count = None
+    # Dwarf mosaic (Tele only): read from setup_camera. doMosaic is
+    # already the EFFECTIVE flag (false when both framings are 100).
+    mosaic = {"doMosaic": False, "framingX": None, "framingY": None, "mosaicCount": None}
     for cam_key, label in (("setup_camera", "Tele"), ("setup_wide_camera", "Wide")):
         setup = cmd.get(cam_key) or {}
         if setup.get("do_action"):
             camera_type = label
             requested_count = setup.get("count")
+            if cam_key == "setup_camera" and setup.get("doMosaic"):
+                mosaic = {
+                    "doMosaic": True,
+                    "framingX": setup.get("framingX"),
+                    "framingY": setup.get("framingY"),
+                    "mosaicCount": setup.get("mosaic_count"),
+                }
             break
     return {
         "cameraType": camera_type,
@@ -163,6 +173,7 @@ def _extract_capture_summary(cmd: dict, id_command: dict) -> dict:
         "filterName": id_command.get("ir_actual"),
         "shotsTaken": id_command.get("shots_taken"),
         "shotsStacked": id_command.get("shots_stacked"),
+        **mosaic,
     }
 
 

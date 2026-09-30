@@ -180,7 +180,7 @@ TRANSLATIONS: dict[str, str] = {
     "sched_name":                   "Schedule name",
     "sched_add_target":             "Add a target",
     "sched_start_time":             "Start time (HH:MM)",
-    "sched_now_plus_5":             "Now + 5min",
+    "sched_now_plus_10":            "Now + 10min",
     "sched_duration_min":           "Duration (min)",
     "sched_ra_dec":                 "RA/Dec",
     "sched_invalid_coords":         "RA/Dec must be numbers",

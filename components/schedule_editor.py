@@ -88,7 +88,7 @@ def _new_task_defaults(dwarf_type: str) -> dict:
         "horizontalScale": 1.0,
         "verticalScale": 1.0,
         "date": datetime.now().strftime("%Y-%m-%d"),
-        "startTime": (datetime.now() + timedelta(minutes=5)).strftime("%H:%M"),
+        "startTime": (datetime.now() + timedelta(minutes=10)).strftime("%H:%M"),
         "durationMin": 60,
     }
 
@@ -168,17 +168,17 @@ def build_schedule_editor(session) -> None:
         # now), it only ever reflects them.
         duration_input = ui.number(t("sched_duration_min"), value=draft["durationMin"], min=1).classes("w-32").props("readonly")
 
-    def _set_start_now_plus_5() -> None:
-        """User-requested Sep 2026: quick \"Now + 5min\" button - the
+    def _set_start_now_plus_10() -> None:
+        """User-requested Sep 2026: quick \"Now + 10min\" button - the
         date/time fields above don't reset themselves between targets
         (deliberately: a second target usually starts later THE SAME
         night, not \"now\" again), so re-basing them to the current time
         is otherwise a fully manual re-type of both fields."""
-        now_plus_5 = datetime.now() + timedelta(minutes=5)
-        date_input.value = now_plus_5.strftime("%Y-%m-%d")
-        start_time_input.value = now_plus_5.strftime("%H:%M")
+        now_plus_10 = datetime.now() + timedelta(minutes=10)
+        date_input.value = now_plus_10.strftime("%Y-%m-%d")
+        start_time_input.value = now_plus_10.strftime("%H:%M")
 
-    ui.button(t("sched_now_plus_5"), icon="schedule", on_click=_set_start_now_plus_5).props("flat dense")
+    ui.button(t("sched_now_plus_10"), icon="schedule", on_click=_set_start_now_plus_10).props("flat dense")
 
     def _recompute_duration() -> None:
         exposure_s = _exposure_seconds(exposure_input.value or "")

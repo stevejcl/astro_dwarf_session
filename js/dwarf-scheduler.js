@@ -152,7 +152,7 @@ function _dwarfTaskFromPlan(p) {
     // can resolve an index from it.
     filterModeName: _DWARF_FILTER_DEVICE_NAME[fr.filterId || p.filterId] || fr.filterId || p.filterId || null,
     schedule_task_id: _dwarfUuid(),
-    createFrom: 0,
+    createFrom: 2,
   };
 }
 

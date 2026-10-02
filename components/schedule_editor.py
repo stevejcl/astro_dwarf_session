@@ -334,7 +334,7 @@ def build_schedule_editor(session) -> None:
                 if is_mosaic
                 else 100,
                "schedule_task_id": generate_dwarf_uuid(init_schedule_uuid, suffix="") if init_schedule_uuid else generate_dwarf_uuid(init_uuid="", suffix=""),
-               "createFrom": 0,
+               "createFrom": 2,
             })
             init_schedule_uuid = ""
         return wire_tasks

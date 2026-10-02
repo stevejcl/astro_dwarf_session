@@ -300,7 +300,9 @@ def build_schedule_editor(session) -> None:
 
             # 3. Timestamp Unix POSIX (10 digits)
             start_s = int(utc_dt.timestamp())
-            end_s = start_s + int(tk["durationMin"] * 60)+5
+            # Whole minutes only: the device rejects any other duration
+            # with CODE_SHOOTING_SCHEDULE_INVALID_SHOOTING_DURATION (-16301).
+            end_s = start_s + int(tk["durationMin"]) * 60
             print(f"start_s: {start_s}")
             print(
                 f"Saisie locale ({user_tz}): {local_dt.strftime('%Y-%m-%d %H:%M %Z')} "
@@ -332,7 +334,7 @@ def build_schedule_editor(session) -> None:
                 if is_mosaic
                 else 100,
                "schedule_task_id": generate_dwarf_uuid(init_schedule_uuid, suffix="") if init_schedule_uuid else generate_dwarf_uuid(init_uuid="", suffix=""),
-               "createFrom": 2,
+               "createFrom": 0,
             })
             init_schedule_uuid = ""
         return wire_tasks

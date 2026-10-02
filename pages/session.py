@@ -506,7 +506,9 @@ async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], No
         _label_thread_for_device(session)
 
         pending = pending_schedules.get_pending(dwarf_uid)
-        if pending is not None:
+        # Too early (>12 h before start): the device would refuse it - the
+        # banner shows when it'll be synced instead of offering it now.
+        if pending is not None and not pending_schedules.is_too_early(pending):
             await _offer_pending_schedule_sync(session, dwarf_uid, pending)
     refresh_view()
 
@@ -718,7 +720,9 @@ def build_session_page() -> None:
                         # now always shows when something is pending;
                         # only "Sync now" itself still needs the device
                         # connected and idle.
-                        can_sync_now = connected and not program_running and not capturing
+                        too_early = pending_schedules.is_too_early(pending_sched)
+                        expired = pending_schedules.is_expired(pending_sched)
+                        can_sync_now = connected and not program_running and not capturing and not too_early and not expired
                         with ui.row().classes("items-center gap-2 w-full"):
                             ui.icon("schedule").classes("text-amber-6")
                             ui.label(
@@ -728,6 +732,14 @@ def build_session_page() -> None:
                                     count=len(pending_sched.get("shooting_tasks", [])),
                                 )
                             ).classes("text-sm flex-1")
+                            if expired:
+                                ui.label(t("sched_expired")).classes("text-xs text-negative")
+                            elif too_early:
+                                opens_at = datetime.fromtimestamp(
+                                    pending_schedules.sync_opens_at(pending_sched),
+                                    native_schedule.schedule_tz(session.config),
+                                )
+                                ui.label(t("sched_auto_sync_at", time=f"{opens_at:%Y-%m-%d %H:%M}")).classes("text-xs text-grey-6")
                             if can_sync_now:
                                 ui.button(
                                     t("sched_sync_now"),

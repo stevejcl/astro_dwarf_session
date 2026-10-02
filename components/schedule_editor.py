@@ -47,6 +47,7 @@ from datetime import datetime, timedelta, timezone
 
 from nicegui import run, ui
 
+import pending_schedules
 from components import connection_health
 from components.camera_settings import _exposure_names, _gain_range, _GAIN_STEP, _ir_filter_names
 from components.datetime_picker import date_picker_input, time_picker_input
@@ -353,25 +354,19 @@ def build_schedule_editor(session) -> None:
         ends = [tk["endTime"] for tk in wire_tasks]
         print(f"_handle_sync: starts {starts}")
         print(f"_handle_sync: ends {ends}")
-        # STALENESS CHECK (user-reported Sep 2026: got -16308 CODE_
-        # SHOOTING_SCHEDULE_START_TIME_TOO_FAR on a manual entry test) -
-        # mirrors the same check already added to the DSO catalog page
-        # for the exact same field-confirmed device limit: a task whose
-        # window is more than 12h from "now" (in either direction) gets
-        # rejected outright. Checked here BEFORE sending, with a clear
-        # message, instead of surfacing the device's bare error code -
-        # a manually-typed date/time is an easy way to hit this by
-        # mistake (unlike the catalog page's auto-computed "tonight").
-        # Comparaison basée sur des SECONDES
+        # TIME WINDOW (device-confirmed Oct 2026): the Dwarf only accepts
+        # a schedule synced less than 12 h before its start (-16308 CODE_
+        # SHOOTING_SCHEDULE_START_TIME_TOO_FAR otherwise). A window that
+        # has already ended is refused here; one starting further out is
+        # NOT an error anymore - it's stored as pending and synced
+        # automatically once in range (scheduler_loop.check_pending_
+        # schedules()).
         now_s = int(datetime.now(timezone.utc).timestamp())
-        twelve_h_s = 12 * 3600
-
-        if min(starts) - twelve_h_s > now_s or max(ends) + twelve_h_s < now_s:
+        if max(ends) <= now_s or min(starts) + 12 * 3600 < now_s:
             sync_status_label.set_text(t("sched_stale"))
             sync_status_label.classes(replace="text-sm text-red-700")
             return
-           
-   
+
         schedule = {
             "scheduleId": schedule_uuid_Android,
             "scheduleName": schedule_name_input.value.strip() or "Schedule",
@@ -391,6 +386,19 @@ def build_schedule_editor(session) -> None:
             "shooting_tasks": wire_tasks,
         }
         print(schedule)
+        if pending_schedules.is_too_early(schedule):
+            schedule["autoSync"] = True
+            replaced = pending_schedules.get_pending(dwarf_uid) is not None
+            pending_schedules.set_pending(dwarf_uid, schedule)
+            opens_at = datetime.fromtimestamp(pending_schedules.sync_opens_at(schedule), user_tz)
+            msg = t("sched_deferred", time=f"{opens_at:%Y-%m-%d %H:%M}")
+            if replaced:
+                msg += " " + t("sched_deferred_replaced")
+            sync_status_label.set_text(msg)
+            sync_status_label.classes(replace="text-sm text-amber-8")
+            tasks.clear()
+            _render_task_list()
+            return
         if not connection_health.try_acquire_command_slot(dwarf_uid, caller="schedule_editor.sync"):
             sync_status_label.set_text(t("device_busy"))
             sync_status_label.classes(replace="text-sm text-red-700")

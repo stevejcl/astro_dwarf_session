@@ -233,8 +233,11 @@ function _dwarfStalenessWarning(sched) {
   if (sched.endTime && sched.endTime < now) {
     return "⚠ This plan's whole window has already ended — the page was likely left open since an earlier day. Reload the page (not just \"roll again\": that only reshuffles targets, it doesn't recompute tonight's date) before sending.";
   }
-  if (sched.startTime && Math.abs(sched.startTime - now) > TWELVE_H) {
-    return "⚠ This plan's start time is more than 12h from right now — the Dwarf will likely refuse it (CODE_SHOOTING_SCHEDULE_START_TIME_TOO_FAR). Reload the page to recompute tonight's window before sending.";
+  // Starting MORE than 12h from now is fine: the bridge keeps it pending
+  // and syncs it automatically once within 12h (device-confirmed limit,
+  // Oct 2026). Only a start long PAST means yesterday's stale plan.
+  if (sched.startTime && now - sched.startTime > TWELVE_H) {
+    return "⚠ This plan's start time is more than 12h in the past — reload the page to recompute tonight's window before sending.";
   }
   return null;
 }
@@ -435,7 +438,10 @@ export function openDwarfProgramPanel(plans, meta) {
       })
       .then(data => {
         const label = dwarfUid && select.selectedOptions[0] ? select.selectedOptions[0].textContent : url;
-        if (data && data.mode === 'pending') {
+        if (data && data.mode === 'deferred') {
+          const at = data.syncAt ? new Date(data.syncAt).toLocaleString() : '?';
+          _dwarfToast('Saved for ' + label + ' — the Dwarf only accepts a schedule within 12h of its start, so it will be synced automatically from ' + at + ' (app running, Dwarf connected).');
+        } else if (data && data.mode === 'pending') {
           _dwarfToast(label + ' is offline — schedule queued, will be offered on next connect.');
         } else if (data && data.mode === 'busy_pending') {
           _dwarfToast(label + ' is busy (manual/scheduled session running) — schedule queued, offered once it frees up.');

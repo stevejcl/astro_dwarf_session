@@ -156,6 +156,9 @@ function _dwarfTaskFromPlan(p) {
   };
 }
 
+const _DWARF_TASK_GAP_MS = 5 * 60 * 1000;
+const _DWARF_START_LEAD_MS = 5 * 60 * 1000;
+
 function _dwarfSequenceTasks(tasks) {
   // Give each task a NON-OVERLAPPING consecutive slot instead of its raw
   // visibility window (see _dwarfTaskFromPlan's comment - overlapping
@@ -176,14 +179,27 @@ function _dwarfSequenceTasks(tasks) {
   // schedule outright.
   const withWindow = tasks.filter(t => t._usableStart != null && t._usableEnd != null);
   if (!withWindow.length) return [];
+  //
+  // Slots never start in the past (planning late in the night used to
+  // waste the first slot), and are separated by _DWARF_TASK_GAP_MS:
+  // the official app never schedules back-to-back tasks (8-32 min gaps
+  // in a real device dump, Oct 2026) - the device needs that time to
+  // slew/calibrate before the next target. dwarf_python_api then snaps
+  // every start/end to whole minutes (the device rejects any other
+  // duration with -16301).
   const sorted = withWindow.slice().sort((a, b) => a._usableEnd - b._usableEnd);
-  const totalStart = Math.min.apply(null, sorted.map(t => t._usableStart));
+  const totalStart = Math.max(
+    Math.min.apply(null, sorted.map(t => t._usableStart)),
+    Date.now() + _DWARF_START_LEAD_MS
+  );
   const totalEnd   = Math.max.apply(null, sorted.map(t => t._usableEnd));
-  const perSlot = (totalEnd - totalStart) / sorted.length;
+  const gaps = _DWARF_TASK_GAP_MS * (sorted.length - 1);
+  const perSlot = (totalEnd - totalStart - gaps) / sorted.length;
+  if (perSlot < 60 * 1000) return [];
 
   return sorted.map((t, i) => {
-    const startTime = Math.round(totalStart + i * perSlot);
-    const endTime   = Math.round(totalStart + (i + 1) * perSlot);
+    const startTime = Math.round(totalStart + i * (perSlot + _DWARF_TASK_GAP_MS));
+    const endTime   = Math.round(startTime + perSlot);
     const { _usableStart, _usableEnd, ...clean } = t;
     return { ...clean, startTime, endTime };
   });

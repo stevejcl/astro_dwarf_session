@@ -183,6 +183,7 @@ TRANSLATIONS: dict[str, str] = {
     "sched_now_plus_10":            "Maintenant +10min",
     "sched_duration_min":           "Dur\u00e9e (min)",
     "sched_ra_dec":                 "AD/D\u00e9c",
+    "sched_task_overlap":           "Trop proche de \u00ab\u00a0{name}\u00a0\u00bb\u00a0: les cibles ne doivent pas se chevaucher et doivent \u00eatre espac\u00e9es d'au moins {gap} min.",
     "sched_invalid_coords":         "AD/D\u00e9c doivent \u00eatre des nombres",
     "sched_count_duration_mismatch": "{count} x {exposure}s demande ~{needed_min} min, mais la fen\u00eatre ne fait que {duration_min} min - augmentez la dur\u00e9e ou r\u00e9duisez le nombre.",
     "sched_add_to_schedule":        "Ajouter au planning",

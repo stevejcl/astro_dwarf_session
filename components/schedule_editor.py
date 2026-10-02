@@ -75,6 +75,31 @@ def _exposure_seconds(name: str) -> float | None:
         return None
 
 
+# Device-tested (Oct 2026): tasks must not overlap - two targets starting
+# the same minute were merged by the Dwarf into one uncontrollable run.
+# A few minutes apart is accepted; 5 min also leaves time to slew and
+# calibrate (same gap as js/dwarf-scheduler.js's _DWARF_TASK_GAP_MS).
+TASK_GAP_MIN = 5
+
+
+def _task_window(tk: dict) -> tuple[datetime, datetime]:
+    """Naive local start/end of an editor task (all tasks share one tz)."""
+    start = datetime.strptime(f"{tk['date']} {tk['startTime']}", "%Y-%m-%d %H:%M")
+    return start, start + timedelta(minutes=int(tk["durationMin"]))
+
+
+def _find_conflict(new_tk: dict, existing: list[dict]) -> dict | None:
+    """First existing task closer than TASK_GAP_MIN to `new_tk` (overlap
+    included), or None."""
+    gap = timedelta(minutes=TASK_GAP_MIN)
+    new_start, new_end = _task_window(new_tk)
+    for tk in existing:
+        start, end = _task_window(tk)
+        if new_start < end + gap and start < new_end + gap:
+            return tk
+    return None
+
+
 def _new_task_defaults(dwarf_type: str, tz) -> dict:
     exposures = _exposure_names("tele", dwarf_type)
     filters = _ir_filter_names(dwarf_type)
@@ -243,7 +268,7 @@ def build_schedule_editor(session) -> None:
             add_status_label.set_text(t("sched_invalid_coords"))
             return
 
-        tasks.append({
+        new_task = {
             "name": target_name_input.value.strip(),
             "ra": ra_val,
             "dec": dec_val,
@@ -257,7 +282,22 @@ def build_schedule_editor(session) -> None:
             "date": date_input.value.strip(),
             "startTime": start_time_input.value.strip(),
             "durationMin": int(duration_input.value or 30),
-        })
+        }
+        try:
+            conflict = _find_conflict(new_task, tasks)
+        except ValueError:
+            add_status_label.set_text(t("prog_missing_fields", fields=t("sched_start_time")))
+            return
+        if conflict is not None:
+            add_status_label.set_text(t("sched_task_overlap", name=conflict["name"], gap=TASK_GAP_MIN))
+            return
+        tasks.append(new_task)
+        tasks.sort(key=lambda tk: _task_window(tk)[0])
+        # Pre-fill the next free slot: the next target usually follows
+        # this one the same night.
+        next_start = _task_window(new_task)[1] + timedelta(minutes=TASK_GAP_MIN)
+        date_input.value = next_start.strftime("%Y-%m-%d")
+        start_time_input.value = next_start.strftime("%H:%M")
         add_status_label.set_text("")
         target_name_input.value = ""
         ra_input.value = ""

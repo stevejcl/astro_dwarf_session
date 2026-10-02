@@ -183,6 +183,7 @@ TRANSLATIONS: dict[str, str] = {
     "sched_now_plus_10":            "Now + 10min",
     "sched_duration_min":           "Duration (min)",
     "sched_ra_dec":                 "RA/Dec",
+    "sched_task_overlap":           "Too close to \u201c{name}\u201d: targets must not overlap and need at least {gap} min between them.",
     "sched_invalid_coords":         "RA/Dec must be numbers",
     "sched_count_duration_mismatch": "{count} x {exposure}s needs ~{needed_min} min, but the window is only {duration_min} min - increase Duration or lower Count.",
     "sched_add_to_schedule":        "Add to schedule",

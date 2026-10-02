@@ -242,7 +242,7 @@ def _task_state_label(state: int) -> str:
     return t(key) if key else str(state)
 
 
-def _schedule_status_text(sc: dict) -> str:
+def _schedule_status_text(sc: dict, tz=None) -> str:
     """User-requested (Sep 2026): \"un texte dépendant de l'état : prévu
     date debut - fin, en cours, terminé et échec\". The device's own
     ShootingScheduleMsg carries this schedule's own start_time/end_time
@@ -253,8 +253,8 @@ def _schedule_status_text(sc: dict) -> str:
     completed/expired the plain state label already says what happened,
     the dates would be redundant with the per-task lines shown below."""
     if sc.get("state_code") == 1 and sc.get("startTime") and sc.get("endTime"):
-        start_dt = datetime.fromtimestamp(sc["startTime"])
-        end_dt = datetime.fromtimestamp(sc["endTime"])
+        start_dt = datetime.fromtimestamp(sc["startTime"], tz)
+        end_dt = datetime.fromtimestamp(sc["endTime"], tz)
         end_fmt = f"{end_dt:%H:%M}" if start_dt.date() == end_dt.date() else f"{end_dt:%Y-%m-%d %H:%M}"
         return t("sched_planned_range", start=f"{start_dt:%Y-%m-%d %H:%M}", end=end_fmt)
     return _schedule_state_label(sc["state_code"])
@@ -898,6 +898,10 @@ def build_session_page() -> None:
                 with ui.card().classes("w-full p-0"), ui.expansion(
                     t("sched_section_title"), icon="event_note",
                 ).classes("w-full").bind_value(_get_schedule_section_box(dwarf_uid), "value"):
+                    # Same timezone the schedule editor used to type these
+                    # times in, so a synced task reads back at the hour it
+                    # was entered (None = this PC's local time).
+                    sched_tz = native_schedule.schedule_tz(actions_session.config) if actions_session is not None else None
                     last_fetch = _schedules_last_fetch.get(dwarf_uid)
                     if last_fetch:
                         ui.label(
@@ -916,7 +920,7 @@ def build_session_page() -> None:
                         for sc in cached_scheds[:shown]:
                             with ui.card().classes("w-full q-pa-sm q-mb-xs"):
                                 with ui.row().classes("w-full items-center gap-2"):
-                                    ui.label(f"{sc['name']} — {_schedule_status_text(sc)}").classes("font-medium text-sm flex-1")
+                                    ui.label(f"{sc['name']} — {_schedule_status_text(sc, sched_tz)}").classes("font-medium text-sm flex-1")
                                     ui.button(
                                         icon="delete",
                                         on_click=lambda _, sid=sc["scheduleId"], sname=sc["name"]: _handle_delete_schedule(
@@ -926,10 +930,10 @@ def build_session_page() -> None:
                                 for tsk in sc["tasks"]:
                                     detail_bits = []
                                     if tsk.get("startTime"):
-                                        dt = datetime.fromtimestamp(tsk["startTime"])
+                                        dt = datetime.fromtimestamp(tsk["startTime"], sched_tz)
                                         detail_bits.append(f"[{dt:%Y-%m-%d %H:%M}")
                                     if tsk.get("endTime"):
-                                        dt = datetime.fromtimestamp(tsk["endTime"])
+                                        dt = datetime.fromtimestamp(tsk["endTime"], sched_tz)
                                         detail_bits.append(f" - {dt:%H:%M}]")
                                     if tsk.get("shutterName"):
                                         detail_bits.append(f"{tsk['shutterName']}s")

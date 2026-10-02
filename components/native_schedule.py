@@ -15,9 +15,30 @@ from __future__ import annotations
 
 import json
 import time
+import zoneinfo
+from datetime import datetime, tzinfo
 from pathlib import Path
 
+import dwarf_python_api.lib.my_logger as log
+
 CACHE_FILE = Path("native_schedule_cache.json")
+
+def schedule_tz(config) -> tzinfo:
+    """Timezone used to type AND display native-schedule times for one
+    device: its configured `timezone` (the same one perform_timezone()
+    pushes to the Dwarf), so a time entered in the schedule editor is the
+    time the device actually shoots at. Falls back to this PC's local
+    timezone when the setting is empty or unknown - ZoneInfo("") raises
+    ValueError (not ZoneInfoNotFoundError), which used to escape the Sync
+    click handler and silently abort the sync."""
+    name = (getattr(config, "timezone", "") or "").strip()
+    if name:
+        try:
+            return zoneinfo.ZoneInfo(name)
+        except (zoneinfo.ZoneInfoNotFoundError, ValueError) as e:
+            log.warning(f"Unknown timezone {name!r} ({e}) - using this PC's local timezone for the schedule.")
+    return datetime.now().astimezone().tzinfo
+
 
 SCHEDULE_STATE_LABELS = {
     0: "initialized", 1: "pending", 2: "shooting", 3: "completed", 4: "expired",

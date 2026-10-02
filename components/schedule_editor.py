@@ -313,25 +313,21 @@ def build_schedule_editor(session) -> None:
 
     sync_status_label = ui.label("").classes("text-sm")
 
-    def generate_uuid():
-        # Genère un UUID propre
+    def _dwarf_ids(n_tasks: int) -> tuple[str, list[str]]:
+        """Schedule id + one id per task, in the official app's format
+        (device dump, Oct 2026): every id is the SAME UUID followed by a
+        millisecond timestamp - "<uuid><ms>.Android" for the schedule,
+        "<uuid><ms>" (no suffix) for each task, with a distinct timestamp
+        for each one so no id ever repeats."""
         raw_uuid = str(uuid.uuid4())
-        return f"{raw_uuid}"
-
-    def generate_dwarf_uuid(init_uuid="", suffix="Android"):
-        # Genère un UUID propre + timestamp ms + suffixe requis par le firmware DWARF 3
-        #raw_uuid = str(uuid.uuid4()).replace("-", "")[:32]
-        raw_uuid = init_uuid if init_uuid else str(uuid.uuid4())
         ts_ms = int(time.time() * 1000)
-        if suffix:
-            return f"{raw_uuid}{ts_ms}.{suffix}"
-        else:
-            return f"{raw_uuid}{ts_ms}"
-    
-    def _build_wire_tasks(schedule_uuid="") -> list[dict]:
+        schedule_id = f"{raw_uuid}{ts_ms}.Android"
+        task_ids = [f"{raw_uuid}{ts_ms + 1 + i}" for i in range(n_tasks)]
+        return schedule_id, task_ids
+
+    def _build_wire_tasks(task_ids: list[str]) -> list[dict]:
         wire_tasks = []
-        init_schedule_uuid = schedule_uuid
-        for tk in tasks:
+        for tk, task_id in zip(tasks, task_ids):
             # 1. Parsing locale hour from timezone
             local_dt = datetime.strptime(
                 f"{tk['date']} {tk['startTime']}", "%Y-%m-%d %H:%M"
@@ -374,10 +370,9 @@ def build_schedule_editor(session) -> None:
                 "verticalScale": int(round(tk["verticalScale"] * 100))
                 if is_mosaic
                 else 100,
-               "schedule_task_id": generate_dwarf_uuid(init_schedule_uuid, suffix="") if init_schedule_uuid else generate_dwarf_uuid(init_uuid="", suffix=""),
+               "schedule_task_id": task_id,
                "createFrom": 2,
             })
-            init_schedule_uuid = ""
         return wire_tasks
 
     async def _handle_sync() -> None:
@@ -386,10 +381,8 @@ def build_schedule_editor(session) -> None:
             sync_status_label.classes(replace="text-sm text-red-700")
             return
 
-        schedule_uuid = generate_uuid()
-        schedule_uuid_Android =  generate_dwarf_uuid(init_uuid=schedule_uuid, suffix="Android")
-
-        wire_tasks = _build_wire_tasks(schedule_uuid)
+        schedule_id, task_ids = _dwarf_ids(len(tasks))
+        wire_tasks = _build_wire_tasks(task_ids)
         starts = [tk["startTime"] for tk in wire_tasks]
         ends = [tk["endTime"] for tk in wire_tasks]
         log.debug(f"_handle_sync: starts {starts} ends {ends}")
@@ -407,7 +400,7 @@ def build_schedule_editor(session) -> None:
             return
 
         schedule = {
-            "scheduleId": schedule_uuid_Android,
+            "scheduleId": schedule_id,
             "scheduleName": schedule_name_input.value.strip() or "Schedule",
             "startTime": min(starts),
             "endTime": max(ends),

@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.1.4] - 2026-10-02
+    ### Improvements
+    ### Native shooting schedule
+    Times entered in the schedule editor use the device's configured timezone (falls back to the PC's
+    timezone when empty or unknown) for defaults, "Now + 10 min", the UTC conversion and the read-back display.
+    Schedules starting more than 12 h ahead are no longer refused: they are stored as pending and synced
+    automatically once within 12 h of their start (app running, Dwarf connected and idle).
+    The pending banner shows the auto-sync time.
+    Targets must not overlap: 5 min minimum gap, enforced in the editor (with the next free slot
+    pre-filled) and in the catalog page's slot planning (which also never starts a slot in the past).
+    Schedule/task ids follow the official app's format; createFrom = 2 (manual entry).
+    ### Misc
+    Schedule debug output now goes to log.debug.
+    Requires dwarf_python_api 3.1.2 (protobuf >= 7.35.1).
+  ### BugFix
+    ### Native shooting schedule (device-tested)
+    Fixes CODE_SHOOTING_SCHEDULE_INVALID_SHOOTING_DURATION (-16301): task windows are sent in
+    whole minutes, aligned on :00 (the extra 5 s on the end time is removed), matching the official app.
+
 ## [3.1.3] - 2026-09-30
     ### Improvements
     This change adds native Tele mosaic handling across the app: parsing of setup_camera framing/mosaic_count values in the API, updated scheduler and watch views to surface mosaic state, and new JS modules that build and send Dwarf schedule payloads.

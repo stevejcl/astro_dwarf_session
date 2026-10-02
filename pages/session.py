@@ -966,6 +966,8 @@ def build_session_page() -> None:
                                     # native task rendering).
                                     detail = " · ".join(str(b) for b in detail_bits if b)
                                     line = f"• {tsk['name']}: {_task_state_label(tsk['state_code'])}"
+                                    if tsk.get("error_code"):
+                                        line += f" [{tsk['error_code']} {tsk.get('error_name') or ''}]".replace(" ]", "]")
                                     if detail:
                                         line += f" ({detail})"
                                     ui.label(line).classes("text-xs text-grey-7")

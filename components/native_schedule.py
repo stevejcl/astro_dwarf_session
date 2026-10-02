@@ -20,6 +20,7 @@ from datetime import datetime, tzinfo
 from pathlib import Path
 
 import dwarf_python_api.lib.my_logger as log
+import dwarf_python_api.proto.protocol_pb2 as protocol
 
 CACHE_FILE = Path("native_schedule_cache.json")
 
@@ -38,6 +39,18 @@ def schedule_tz(config) -> tzinfo:
         except (zoneinfo.ZoneInfoNotFoundError, ValueError) as e:
             log.warning(f"Unknown timezone {name!r} ({e}) - using this PC's local timezone for the schedule.")
     return datetime.now().astimezone().tzinfo
+
+
+def error_code_name(code) -> str | None:
+    """Short name of a device error code, e.g. -16310 -> "SHOOTING_SCHEDULE_
+    INTERRUPTED" (DwarfErrorCode, "CODE_" prefix dropped); None for 0/None,
+    the bare number if unknown."""
+    if not code:
+        return None
+    try:
+        return protocol.DwarfErrorCode.Name(code).removeprefix("CODE_")
+    except ValueError:
+        return str(code)
 
 
 SCHEDULE_STATE_LABELS = {
@@ -66,6 +79,11 @@ def parse_native_schedule_info(info) -> list[dict]:
             tasks.append({
                 "name": p.get("name", "?"),
                 "state_code": task.state,
+                # Why a task failed / was interrupted, as recorded by the
+                # device (e.g. -16310 INTERRUPTED when the Dwarf was off or
+                # unavailable at start time, -11504 calibration failed).
+                "error_code": task.code or None,
+                "error_name": error_code_name(task.code),
                 "startTime": p.get("startTime"),
                 "endTime": p.get("endTime"),
                 "shutterName": p.get("shutterName"),
@@ -82,6 +100,9 @@ def parse_native_schedule_info(info) -> list[dict]:
             "scheduleId": sched.schedule_id,
             "name": sched.schedule_name or sched.schedule_id,
             "state_code": sched.state,
+            # ShootingScheduleResult: 0 pending, 1 all completed,
+            # 2 partially completed, 3 all failed.
+            "result_code": sched.result,
             "startTime": sched.start_time or None,
             "endTime": sched.end_time or None,
             "tasks": tasks,

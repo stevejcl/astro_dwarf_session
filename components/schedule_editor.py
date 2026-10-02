@@ -44,7 +44,6 @@ import math
 import uuid
 import time
 from datetime import datetime, timedelta, timezone
-import zoneinfo
 
 from nicegui import run, ui
 
@@ -52,6 +51,7 @@ from components import connection_health
 from components.camera_settings import _exposure_names, _gain_range, _GAIN_STEP, _ir_filter_names
 from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
+from components.native_schedule import schedule_tz
 from components.stellarium import get_target_from_stellarium
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
@@ -74,7 +74,7 @@ def _exposure_seconds(name: str) -> float | None:
         return None
 
 
-def _new_task_defaults(dwarf_type: str) -> dict:
+def _new_task_defaults(dwarf_type: str, tz) -> dict:
     exposures = _exposure_names("tele", dwarf_type)
     filters = _ir_filter_names(dwarf_type)
     gain_min, _gain_max = _gain_range("tele")
@@ -89,8 +89,8 @@ def _new_task_defaults(dwarf_type: str) -> dict:
         "mosaic": False,
         "horizontalScale": 1.0,
         "verticalScale": 1.0,
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "startTime": (datetime.now() + timedelta(minutes=10)).strftime("%H:%M"),
+        "date": (datetime.now(tz) + timedelta(minutes=10)).strftime("%Y-%m-%d"),
+        "startTime": (datetime.now(tz) + timedelta(minutes=10)).strftime("%H:%M"),
         "durationMin": 60,
     }
 
@@ -110,7 +110,12 @@ def build_schedule_editor(session) -> None:
 
     ui.label(t("sched_add_target")).classes("text-sm text-grey-6 mt-2")
 
-    draft = _new_task_defaults(dwarf_type)
+    # Every date/time typed here is wall-clock time in the DEVICE's
+    # configured timezone - defaults, "Now + 10min" and the UTC conversion
+    # in _build_wire_tasks() all use this same tz, so they can't disagree
+    # when this PC runs in another timezone than the device's site.
+    user_tz = schedule_tz(session.config)
+    draft = _new_task_defaults(dwarf_type, user_tz)
 
     with ui.row().classes("w-full gap-2"):
         target_name_input = ui.input(t("prog_target_name"), value=draft["name"]).classes("flex-1")
@@ -176,7 +181,7 @@ def build_schedule_editor(session) -> None:
         (deliberately: a second target usually starts later THE SAME
         night, not \"now\" again), so re-basing them to the current time
         is otherwise a fully manual re-type of both fields."""
-        now_plus_10 = datetime.now() + timedelta(minutes=10)
+        now_plus_10 = datetime.now(user_tz) + timedelta(minutes=10)
         date_input.value = now_plus_10.strftime("%Y-%m-%d")
         start_time_input.value = now_plus_10.strftime("%H:%M")
 
@@ -285,15 +290,6 @@ def build_schedule_editor(session) -> None:
         wire_tasks = []
         init_schedule_uuid = schedule_uuid
         for tk in tasks:
-            # Load timezone from session
-            try:
-                user_tz = zoneinfo.ZoneInfo(session.config.timezone)
-            except zoneinfo.ZoneInfoNotFoundError:
-                print(
-                    f"[WARN] Base tzdata missing for '{session.config.timezone}'"
-                )
-                raise
-
             # 1. Parsing locale hour from timezone
             local_dt = datetime.strptime(
                 f"{tk['date']} {tk['startTime']}", "%Y-%m-%d %H:%M"

@@ -44,6 +44,7 @@
   .tag.state-failed, .tag.state-interrupted { background: rgba(224,92,92,0.15); color: var(--err); border-color: var(--err); }
   .capture-summary { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
   .task-line { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .task-error { color: var(--err); }
   .capture-summary-inline { font-size: 0.75rem; color: var(--muted); }
   #refreshBtn {
     background: var(--accent); color: #fff; border: none; border-radius: 6px;
@@ -244,7 +245,11 @@ function renderPrograms(entry) {
       // JSON, which may just reflect what was last SYNCED rather than
       // what has actually shot so far.
       const summary = bits.length ? `<span class="capture-summary-inline">${bits.join(" · ")}</span>` : "";
-      return `<div class="task-line"><span class="tag ${cls}">${t.name}</span>${summary}</div>`;
+      // Device-recorded reason of a failed / interrupted task (native_schedule.py)
+      const err = t.error_code
+        ? `<span class="capture-summary-inline task-error">${t.error_code} ${t.error_name || ""}</span>`
+        : "";
+      return `<div class="task-line"><span class="tag ${cls}">${t.name}</span>${err}${summary}</div>`;
     }).join("");
     rows.push({
       origin: "native",

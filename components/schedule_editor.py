@@ -54,6 +54,7 @@ from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.native_schedule import schedule_tz
 from components.stellarium import get_target_from_stellarium
+import dwarf_python_api.lib.my_logger as log
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 
@@ -344,8 +345,7 @@ def build_schedule_editor(session) -> None:
             # Whole minutes only: the device rejects any other duration
             # with CODE_SHOOTING_SCHEDULE_INVALID_SHOOTING_DURATION (-16301).
             end_s = start_s + int(tk["durationMin"]) * 60
-            print(f"start_s: {start_s}")
-            print(
+            log.debug(
                 f"Saisie locale ({user_tz}): {local_dt.strftime('%Y-%m-%d %H:%M %Z')} "
                 f"-> UTC: {utc_dt.strftime('%Y-%m-%d %H:%M %Z')} (start_s: {start_s})"
             )
@@ -392,8 +392,7 @@ def build_schedule_editor(session) -> None:
         wire_tasks = _build_wire_tasks(schedule_uuid)
         starts = [tk["startTime"] for tk in wire_tasks]
         ends = [tk["endTime"] for tk in wire_tasks]
-        print(f"_handle_sync: starts {starts}")
-        print(f"_handle_sync: ends {ends}")
+        log.debug(f"_handle_sync: starts {starts} ends {ends}")
         # TIME WINDOW (device-confirmed Oct 2026): the Dwarf only accepts
         # a schedule synced less than 12 h before its start (-16308 CODE_
         # SHOOTING_SCHEDULE_START_TIME_TOO_FAR otherwise). A window that
@@ -425,7 +424,7 @@ def build_schedule_editor(session) -> None:
             },
             "shooting_tasks": wire_tasks,
         }
-        print(schedule)
+        log.debug(f"Native schedule: {schedule}")
         if pending_schedules.is_too_early(schedule):
             schedule["autoSync"] = True
             replaced = pending_schedules.get_pending(dwarf_uid) is not None

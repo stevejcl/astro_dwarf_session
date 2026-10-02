@@ -392,6 +392,7 @@ def register_api_routes() -> None:
                 finally:
                     connection_health.release_command_slot(dwarf_uid)
                 if info is not None:
+                    log.info(f"schedule_info: {info}")
                     parsed = parse_native_schedule_info(info)
                     native_schedule.set_cached(dwarf_uid, parsed)
                     device_entry["nativeSchedule"] = parsed

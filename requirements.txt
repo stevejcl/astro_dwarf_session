@@ -17,3 +17,5 @@ nicegui
 qrcode
 
 pywebview
+
+tzdata  

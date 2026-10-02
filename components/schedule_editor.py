@@ -42,7 +42,9 @@ from __future__ import annotations
 
 import math
 import uuid
+import time
 from datetime import datetime, timedelta, timezone
+import zoneinfo
 
 from nicegui import run, ui
 
@@ -264,27 +266,50 @@ def build_schedule_editor(session) -> None:
 
     sync_status_label = ui.label("").classes("text-sm")
 
-    import time
+    def generate_uuid():
+        # Genère un UUID propre
+        raw_uuid = str(uuid.uuid4())
+        return f"{raw_uuid}"
 
-    def generate_dwarf_uuid(suffix="Android"):
+    def generate_dwarf_uuid(init_uuid="", suffix="Android"):
         # Genère un UUID propre + timestamp ms + suffixe requis par le firmware DWARF 3
-        raw_uuid = str(uuid.uuid4()).replace("-", "")[:32]
+        #raw_uuid = str(uuid.uuid4()).replace("-", "")[:32]
+        raw_uuid = init_uuid if init_uuid else str(uuid.uuid4())
         ts_ms = int(time.time() * 1000)
-        return f"{raw_uuid}{ts_ms}.{suffix}"
+        if suffix:
+            return f"{raw_uuid}{ts_ms}.{suffix}"
+        else:
+            return f"{raw_uuid}{ts_ms}"
     
-    def _build_wire_tasks() -> list[dict]:
+    def _build_wire_tasks(schedule_uuid="") -> list[dict]:
         wire_tasks = []
+        init_schedule_uuid = schedule_uuid
         for tk in tasks:
-            # 1. Parsing UTC strict
-            print(f"{tk['date']} {tk['startTime']}")
-            start_dt = datetime.strptime(
+            # Load timezone from session
+            try:
+                user_tz = zoneinfo.ZoneInfo(session.config.timezone)
+            except zoneinfo.ZoneInfoNotFoundError:
+                print(
+                    f"[WARN] Base tzdata missing for '{session.config.timezone}'"
+                )
+                raise
+
+            # 1. Parsing locale hour from timezone
+            local_dt = datetime.strptime(
                 f"{tk['date']} {tk['startTime']}", "%Y-%m-%d %H:%M"
-            ).replace(tzinfo=timezone.utc)
-            print(f"start_dt: {start_dt}")
-            # 2. Timestamps POSIX en SECONDES (10 chiffres)
-            start_s = int(start_dt.timestamp())
-            end_s = start_s + int(tk["durationMin"] * 60)
+            ).replace(tzinfo=user_tz)
+
+            # 2. Convert to UTC 
+            utc_dt = local_dt.astimezone(timezone.utc)
+
+            # 3. Timestamp Unix POSIX (10 digits)
+            start_s = int(utc_dt.timestamp())
+            end_s = start_s + int(tk["durationMin"] * 60)+5
             print(f"start_s: {start_s}")
+            print(
+                f"Saisie locale ({user_tz}): {local_dt.strftime('%Y-%m-%d %H:%M %Z')} "
+                f"-> UTC: {utc_dt.strftime('%Y-%m-%d %H:%M %Z')} (start_s: {start_s})"
+            )
 
             is_mosaic = tk["mosaic"] and not (
                 tk["horizontalScale"] == 1.0 and tk["verticalScale"] == 1.0
@@ -310,9 +335,10 @@ def build_schedule_editor(session) -> None:
                 "verticalScale": int(round(tk["verticalScale"] * 100))
                 if is_mosaic
                 else 100,
-                "schedule_task_id": generate_dwarf_uuid("Android"),
-                "createFrom": 2,
+               "schedule_task_id": generate_dwarf_uuid(init_schedule_uuid, suffix="") if init_schedule_uuid else generate_dwarf_uuid(init_uuid="", suffix=""),
+               "createFrom": 2,
             })
+            init_schedule_uuid = ""
         return wire_tasks
 
     async def _handle_sync() -> None:
@@ -321,7 +347,10 @@ def build_schedule_editor(session) -> None:
             sync_status_label.classes(replace="text-sm text-red-700")
             return
 
-        wire_tasks = _build_wire_tasks()
+        schedule_uuid = generate_uuid()
+        schedule_uuid_Android =  generate_dwarf_uuid(init_uuid=schedule_uuid, suffix="Android")
+
+        wire_tasks = _build_wire_tasks(schedule_uuid)
         starts = [tk["startTime"] for tk in wire_tasks]
         ends = [tk["endTime"] for tk in wire_tasks]
         print(f"_handle_sync: starts {starts}")
@@ -343,9 +372,10 @@ def build_schedule_editor(session) -> None:
             sync_status_label.set_text(t("sched_stale"))
             sync_status_label.classes(replace="text-sm text-red-700")
             return
-    
+           
+   
         schedule = {
-            "scheduleId": generate_dwarf_uuid(), #str(uuid.uuid4()),
+            "scheduleId": schedule_uuid_Android,
             "scheduleName": schedule_name_input.value.strip() or "Schedule",
             "startTime": min(starts),
             "endTime": max(ends),
@@ -357,12 +387,12 @@ def build_schedule_editor(session) -> None:
                 "latitude": session.config.latitude,
                 # No city-name field existed at all on DwarfConfig until
                 # user-requested (Sep 2026) - now set in Settings, read
-                "cityName": "", #session.config.city_name or "",
+                "cityName": session.config.city_name or "",
                 "focusMode": 0,
             },
             "shooting_tasks": wire_tasks,
         }
-
+        print(schedule)
         if not connection_health.try_acquire_command_slot(dwarf_uid, caller="schedule_editor.sync"):
             sync_status_label.set_text(t("device_busy"))
             sync_status_label.classes(replace="text-sm text-red-700")

@@ -454,6 +454,16 @@ def register_api_routes() -> None:
         except KeyError:
             return JSONResponse({"error": f"unknown dwarfUid {dwarf_uid!r}"}, status_code=404)
 
+        # Device-confirmed (Oct 2026): a sync is only accepted less than
+        # 12 h before the schedule's start. Further out, keep it pending
+        # and let scheduler_loop.check_pending_schedules() send it in time.
+        if pending_schedules.is_too_early(schedule):
+            schedule["autoSync"] = True
+            pending_schedules.set_pending(dwarf_uid, schedule)
+            sync_at = pending_schedules.sync_opens_at(schedule)
+            log.info(f"[{dwarf_uid}] Schedule starts in more than 12 h — deferred, auto-sync from {sync_at}.")
+            return JSONResponse({"ok": True, "mode": "deferred", "syncAt": sync_at * 1000})
+
         if session.is_connected:
             # CONCURRENCY: don't fire CMD_SYNC_SHOOTING_SCHEDULE while
             # another command is in flight for this session - a manual

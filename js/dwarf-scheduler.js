@@ -156,6 +156,9 @@ function _dwarfTaskFromPlan(p) {
   };
 }
 
+const _DWARF_TASK_GAP_MS = 5 * 60 * 1000;
+const _DWARF_START_LEAD_MS = 5 * 60 * 1000;
+
 function _dwarfSequenceTasks(tasks) {
   // Give each task a NON-OVERLAPPING consecutive slot instead of its raw
   // visibility window (see _dwarfTaskFromPlan's comment - overlapping
@@ -176,14 +179,27 @@ function _dwarfSequenceTasks(tasks) {
   // schedule outright.
   const withWindow = tasks.filter(t => t._usableStart != null && t._usableEnd != null);
   if (!withWindow.length) return [];
+  //
+  // Slots never start in the past (planning late in the night used to
+  // waste the first slot), and are separated by _DWARF_TASK_GAP_MS:
+  // the official app never schedules back-to-back tasks (8-32 min gaps
+  // in a real device dump, Oct 2026) - the device needs that time to
+  // slew/calibrate before the next target. dwarf_python_api then snaps
+  // every start/end to whole minutes (the device rejects any other
+  // duration with -16301).
   const sorted = withWindow.slice().sort((a, b) => a._usableEnd - b._usableEnd);
-  const totalStart = Math.min.apply(null, sorted.map(t => t._usableStart));
+  const totalStart = Math.max(
+    Math.min.apply(null, sorted.map(t => t._usableStart)),
+    Date.now() + _DWARF_START_LEAD_MS
+  );
   const totalEnd   = Math.max.apply(null, sorted.map(t => t._usableEnd));
-  const perSlot = (totalEnd - totalStart) / sorted.length;
+  const gaps = _DWARF_TASK_GAP_MS * (sorted.length - 1);
+  const perSlot = (totalEnd - totalStart - gaps) / sorted.length;
+  if (perSlot < 60 * 1000) return [];
 
   return sorted.map((t, i) => {
-    const startTime = Math.round(totalStart + i * perSlot);
-    const endTime   = Math.round(totalStart + (i + 1) * perSlot);
+    const startTime = Math.round(totalStart + i * (perSlot + _DWARF_TASK_GAP_MS));
+    const endTime   = Math.round(startTime + perSlot);
     const { _usableStart, _usableEnd, ...clean } = t;
     return { ...clean, startTime, endTime };
   });
@@ -233,8 +249,11 @@ function _dwarfStalenessWarning(sched) {
   if (sched.endTime && sched.endTime < now) {
     return "⚠ This plan's whole window has already ended — the page was likely left open since an earlier day. Reload the page (not just \"roll again\": that only reshuffles targets, it doesn't recompute tonight's date) before sending.";
   }
-  if (sched.startTime && Math.abs(sched.startTime - now) > TWELVE_H) {
-    return "⚠ This plan's start time is more than 12h from right now — the Dwarf will likely refuse it (CODE_SHOOTING_SCHEDULE_START_TIME_TOO_FAR). Reload the page to recompute tonight's window before sending.";
+  // Starting MORE than 12h from now is fine: the bridge keeps it pending
+  // and syncs it automatically once within 12h (device-confirmed limit,
+  // Oct 2026). Only a start long PAST means yesterday's stale plan.
+  if (sched.startTime && now - sched.startTime > TWELVE_H) {
+    return "⚠ This plan's start time is more than 12h in the past — reload the page to recompute tonight's window before sending.";
   }
   return null;
 }
@@ -435,7 +454,10 @@ export function openDwarfProgramPanel(plans, meta) {
       })
       .then(data => {
         const label = dwarfUid && select.selectedOptions[0] ? select.selectedOptions[0].textContent : url;
-        if (data && data.mode === 'pending') {
+        if (data && data.mode === 'deferred') {
+          const at = data.syncAt ? new Date(data.syncAt).toLocaleString() : '?';
+          _dwarfToast('Saved for ' + label + ' — the Dwarf only accepts a schedule within 12h of its start, so it will be synced automatically from ' + at + ' (app running, Dwarf connected).');
+        } else if (data && data.mode === 'pending') {
           _dwarfToast(label + ' is offline — schedule queued, will be offered on next connect.');
         } else if (data && data.mode === 'busy_pending') {
           _dwarfToast(label + ' is busy (manual/scheduled session running) — schedule queued, offered once it frees up.');

@@ -27,9 +27,14 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timedelta
 
-from components import scheduler_runner
+import dwarf_python_api.lib.my_logger as log
+from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
+
+import pending_schedules
+from components import connection_health, scheduler_runner
 from components.session_dirs import session_dirs_for
 
 _CHECK_INTERVAL_S = 15.0
@@ -262,9 +267,57 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
     return out
 
 
+_PENDING_CHECK_INTERVAL_S = 60.0
+_PENDING_RETRY_S = 5 * 60
+_last_pending_attempt: dict[str, float] = {}
+
+
+async def check_pending_schedules(manager) -> None:
+    """Deferred native-schedule sync (user-confirmed Oct 2026: a schedule
+    can be planned ahead, but the Dwarf only accepts the sync less than
+    12 h before its start - see pending_schedules.py). Sends every pending
+    schedule flagged "autoSync" as soon as it enters that window, if its
+    device is connected and idle. Independent of the per-device "armed"
+    toggle above: that one gates programs run live from this PC, while
+    this only hands a schedule to the device, as the user already asked.
+    A failed attempt is retried every _PENDING_RETRY_S while the schedule
+    stays syncable."""
+    from nicegui import run
+
+    now = time.time()
+    for session in manager.all():
+        uid = session.dwarf_uid
+        pending = pending_schedules.get_pending(uid)
+        if not pending or not pending.get("autoSync"):
+            continue
+        if pending_schedules.is_too_early(pending, now) or pending_schedules.is_expired(pending, now):
+            continue
+        if not session.is_connected or scheduler_runner.is_running(uid) or connection_health.is_busy(uid):
+            continue
+        if now - _last_pending_attempt.get(uid, 0) < _PENDING_RETRY_S:
+            continue
+        if not connection_health.try_acquire_command_slot(uid, caller="scheduler_loop.pending_sync"):
+            continue
+        _last_pending_attempt[uid] = now
+        log.info(f"[{uid}] Deferred schedule {pending.get('scheduleName')!r} is now within 12 h of its start - syncing.")
+        try:
+            ok = await run.io_bound(perform_sync_shooting_schedule, pending, session=session)
+        finally:
+            connection_health.release_command_slot(uid)
+        if ok:
+            # Only clear if it wasn't replaced by a newer one meanwhile.
+            if pending_schedules.get_pending(uid) == pending:
+                pending_schedules.clear_pending(uid)
+            _last_pending_attempt.pop(uid, None)
+            log.success(f"[{uid}] Deferred schedule {pending.get('scheduleName')!r} synced.")
+        else:
+            log.error(f"[{uid}] Deferred schedule sync failed - retrying in {_PENDING_RETRY_S // 60} min.")
+
+
 def start_background_loop(manager) -> None:
     """Call once at app startup (astro_dwarf_ui.py). Uses app.timer, not
     ui.timer - see the module docstring."""
     from nicegui import app
 
     app.timer(_CHECK_INTERVAL_S, lambda: check_all(manager))
+    app.timer(_PENDING_CHECK_INTERVAL_S, lambda: check_pending_schedules(manager))

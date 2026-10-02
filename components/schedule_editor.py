@@ -47,12 +47,14 @@ from datetime import datetime, timedelta, timezone
 
 from nicegui import run, ui
 
+import pending_schedules
 from components import connection_health
 from components.camera_settings import _exposure_names, _gain_range, _GAIN_STEP, _ir_filter_names
 from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.native_schedule import schedule_tz
 from components.stellarium import get_target_from_stellarium
+import dwarf_python_api.lib.my_logger as log
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 
@@ -72,6 +74,31 @@ def _exposure_seconds(name: str) -> float | None:
         return float(name)
     except (ValueError, ZeroDivisionError):
         return None
+
+
+# Device-tested (Oct 2026): tasks must not overlap - two targets starting
+# the same minute were merged by the Dwarf into one uncontrollable run.
+# A few minutes apart is accepted; 5 min also leaves time to slew and
+# calibrate (same gap as js/dwarf-scheduler.js's _DWARF_TASK_GAP_MS).
+TASK_GAP_MIN = 5
+
+
+def _task_window(tk: dict) -> tuple[datetime, datetime]:
+    """Naive local start/end of an editor task (all tasks share one tz)."""
+    start = datetime.strptime(f"{tk['date']} {tk['startTime']}", "%Y-%m-%d %H:%M")
+    return start, start + timedelta(minutes=int(tk["durationMin"]))
+
+
+def _find_conflict(new_tk: dict, existing: list[dict]) -> dict | None:
+    """First existing task closer than TASK_GAP_MIN to `new_tk` (overlap
+    included), or None."""
+    gap = timedelta(minutes=TASK_GAP_MIN)
+    new_start, new_end = _task_window(new_tk)
+    for tk in existing:
+        start, end = _task_window(tk)
+        if new_start < end + gap and start < new_end + gap:
+            return tk
+    return None
 
 
 def _new_task_defaults(dwarf_type: str, tz) -> dict:
@@ -242,7 +269,7 @@ def build_schedule_editor(session) -> None:
             add_status_label.set_text(t("sched_invalid_coords"))
             return
 
-        tasks.append({
+        new_task = {
             "name": target_name_input.value.strip(),
             "ra": ra_val,
             "dec": dec_val,
@@ -256,7 +283,22 @@ def build_schedule_editor(session) -> None:
             "date": date_input.value.strip(),
             "startTime": start_time_input.value.strip(),
             "durationMin": int(duration_input.value or 30),
-        })
+        }
+        try:
+            conflict = _find_conflict(new_task, tasks)
+        except ValueError:
+            add_status_label.set_text(t("prog_missing_fields", fields=t("sched_start_time")))
+            return
+        if conflict is not None:
+            add_status_label.set_text(t("sched_task_overlap", name=conflict["name"], gap=TASK_GAP_MIN))
+            return
+        tasks.append(new_task)
+        tasks.sort(key=lambda tk: _task_window(tk)[0])
+        # Pre-fill the next free slot: the next target usually follows
+        # this one the same night.
+        next_start = _task_window(new_task)[1] + timedelta(minutes=TASK_GAP_MIN)
+        date_input.value = next_start.strftime("%Y-%m-%d")
+        start_time_input.value = next_start.strftime("%H:%M")
         add_status_label.set_text("")
         target_name_input.value = ""
         ra_input.value = ""
@@ -303,8 +345,7 @@ def build_schedule_editor(session) -> None:
             # Whole minutes only: the device rejects any other duration
             # with CODE_SHOOTING_SCHEDULE_INVALID_SHOOTING_DURATION (-16301).
             end_s = start_s + int(tk["durationMin"]) * 60
-            print(f"start_s: {start_s}")
-            print(
+            log.debug(
                 f"Saisie locale ({user_tz}): {local_dt.strftime('%Y-%m-%d %H:%M %Z')} "
                 f"-> UTC: {utc_dt.strftime('%Y-%m-%d %H:%M %Z')} (start_s: {start_s})"
             )
@@ -351,27 +392,20 @@ def build_schedule_editor(session) -> None:
         wire_tasks = _build_wire_tasks(schedule_uuid)
         starts = [tk["startTime"] for tk in wire_tasks]
         ends = [tk["endTime"] for tk in wire_tasks]
-        print(f"_handle_sync: starts {starts}")
-        print(f"_handle_sync: ends {ends}")
-        # STALENESS CHECK (user-reported Sep 2026: got -16308 CODE_
-        # SHOOTING_SCHEDULE_START_TIME_TOO_FAR on a manual entry test) -
-        # mirrors the same check already added to the DSO catalog page
-        # for the exact same field-confirmed device limit: a task whose
-        # window is more than 12h from "now" (in either direction) gets
-        # rejected outright. Checked here BEFORE sending, with a clear
-        # message, instead of surfacing the device's bare error code -
-        # a manually-typed date/time is an easy way to hit this by
-        # mistake (unlike the catalog page's auto-computed "tonight").
-        # Comparaison basée sur des SECONDES
+        log.debug(f"_handle_sync: starts {starts} ends {ends}")
+        # TIME WINDOW (device-confirmed Oct 2026): the Dwarf only accepts
+        # a schedule synced less than 12 h before its start (-16308 CODE_
+        # SHOOTING_SCHEDULE_START_TIME_TOO_FAR otherwise). A window that
+        # has already ended is refused here; one starting further out is
+        # NOT an error anymore - it's stored as pending and synced
+        # automatically once in range (scheduler_loop.check_pending_
+        # schedules()).
         now_s = int(datetime.now(timezone.utc).timestamp())
-        twelve_h_s = 12 * 3600
-
-        if min(starts) - twelve_h_s > now_s or max(ends) + twelve_h_s < now_s:
+        if max(ends) <= now_s or min(starts) + 12 * 3600 < now_s:
             sync_status_label.set_text(t("sched_stale"))
             sync_status_label.classes(replace="text-sm text-red-700")
             return
-           
-   
+
         schedule = {
             "scheduleId": schedule_uuid_Android,
             "scheduleName": schedule_name_input.value.strip() or "Schedule",
@@ -390,7 +424,20 @@ def build_schedule_editor(session) -> None:
             },
             "shooting_tasks": wire_tasks,
         }
-        print(schedule)
+        log.debug(f"Native schedule: {schedule}")
+        if pending_schedules.is_too_early(schedule):
+            schedule["autoSync"] = True
+            replaced = pending_schedules.get_pending(dwarf_uid) is not None
+            pending_schedules.set_pending(dwarf_uid, schedule)
+            opens_at = datetime.fromtimestamp(pending_schedules.sync_opens_at(schedule), user_tz)
+            msg = t("sched_deferred", time=f"{opens_at:%Y-%m-%d %H:%M}")
+            if replaced:
+                msg += " " + t("sched_deferred_replaced")
+            sync_status_label.set_text(msg)
+            sync_status_label.classes(replace="text-sm text-amber-8")
+            tasks.clear()
+            _render_task_list()
+            return
         if not connection_health.try_acquire_command_slot(dwarf_uid, caller="schedule_editor.sync"):
             sync_status_label.set_text(t("device_busy"))
             sync_status_label.classes(replace="text-sm text-red-700")

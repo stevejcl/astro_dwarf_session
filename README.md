@@ -74,10 +74,11 @@ myenv\Scripts\activate
 
 Install the dependency
 python -m pip install -r requirements.txt
-python -m pip install -r requirements-local.txt --target .
+python -m pip install -r requirements-local.txt --target . --no-deps
 ```
 
 Note: The dwarf_python_api library must be installed locally in the root path of this project using the --target . parameter.
+Keep `--no-deps`: its dependencies (protobuf, websockets, bleak, paramiko...) are already installed by `requirements.txt` above. Without it, pip copies every dependency again into the project folder (`--target` ignores what is already installed). To update dwarf_python_api later, add `--upgrade` to the same command.
 
 
 ### Running

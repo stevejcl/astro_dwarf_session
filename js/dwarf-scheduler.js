@@ -153,6 +153,25 @@ function _dwarfTaskFromPlan(p) {
     filterModeName: _DWARF_FILTER_DEVICE_NAME[fr.filterId || p.filterId] || fr.filterId || p.filterId || null,
     schedule_task_id: _dwarfUuid(),
     createFrom: 2,
+    // What the atlas knows about the target, for astro_dwarf_session's
+    // personal catalog (components/user_catalog.py) - removed there
+    // before the schedule is stored or sent to the device.
+    catalogMeta: _dwarfCatalogMeta(p, tuple),
+  };
+}
+
+function _dwarfCatalogMeta(p, tuple) {
+  // Atlas tuple: id, type, raHours, decDeg, mag, sizeArcmin, constellation,
+  // commonName, messierXref (see _parseAtlasCompact in catalog.html).
+  if (!tuple) return null;
+  return {
+    id: tuple[0],
+    type: tuple[1] || p.type || null,
+    mag: tuple[4],
+    size: tuple[5],
+    con: tuple[6] || null,
+    commonName: tuple[7] || null,
+    messier: tuple[8] || null,
   };
 }
 

@@ -28,6 +28,10 @@ POST /api/schedule
     - Otherwise: store it via `pending_schedules.set_pending()`; it will
       be offered for synchronization the next time THAT device connects
       (see the hook in `pages/session.py::_handle_connect`).
+    - A task may carry a "catalogMeta" block (id, type, mag, size, con,
+      commonName, messier - see js/dwarf-scheduler.js): the object is
+      added to user_catalog.json (components/user_catalog.py) if not
+      already known, and the block is removed before storing/sending.
 
     -> {"ok": true, "mode": "sent"|"pending", ...}
 
@@ -96,7 +100,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 from device_registry import list_device_entries
 from site_registry import list_site_entries
-from components import connection_health, scheduler_runner, scheduler_loop, native_schedule
+from components import connection_health, scheduler_runner, scheduler_loop, native_schedule, user_catalog
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
 from components.session_dirs import ensure_dirs
@@ -454,6 +458,19 @@ def register_api_routes() -> None:
             session = get_manager().get(dwarf_uid)
         except KeyError:
             return JSONResponse({"error": f"unknown dwarfUid {dwarf_uid!r}"}, status_code=404)
+
+        # The /catalog page's targets go into the user's own catalog
+        # (components/user_catalog.py) - also strips their "catalogMeta"
+        # before the schedule is stored or synced. Never blocks the send.
+        try:
+            added = await run.io_bound(user_catalog.add_from_schedule, schedule)
+            if added:
+                log.info(f"[{dwarf_uid}] Added to the personal catalog: {', '.join(added)}")
+        except Exception as e:
+            log.error(f"[{dwarf_uid}] Personal catalog update failed: {e}")
+            for task in schedule.get("shooting_tasks") or []:
+                if isinstance(task, dict):
+                    task.pop("catalogMeta", None)
 
         # Device-confirmed (Oct 2026): a sync is only accepted less than
         # 12 h before the schedule's start. Further out, keep it pending

@@ -118,7 +118,10 @@ from dwarf_python_api.lib.dwarf_utils import (
     perform_disconnect,
     perform_enter_astro_mode,
     perform_get_device_state_info,
-    perform_read_astro_stacking_status_v3
+    perform_read_astro_stacking_status_v3,
+    perform_set_location,
+    perform_time,
+    perform_timezone,
 )
 
 # How often to actively probe a session that LOOKS connected (seconds).
@@ -302,7 +305,31 @@ async def connect_and_enter_astro_mode(session) -> bool:
     call first would just send that same command twice on every fresh
     connect."""
     result = await run.io_bound(perform_enter_astro_mode, session=session)
-    return result is not False
+    if result is False:
+        return False
+    await sync_device_clock(session)
+    return True
+
+
+async def sync_device_clock(session) -> None:
+    """Pushes this PC's time, the configured timezone and the site location
+    to the Dwarf, as the official app does on every connection (SET_TIME /
+    SET_TIME_ZONE / SET_LOCATION, 13000/13001/13010 in every capture).
+
+    The native shooting schedule runs on the DEVICE clock: until now only
+    dwarf_session.py set it, so a Dwarf connected through this UI alone
+    could keep a wrong clock and reject valid windows (Oct 2026: two -16301
+    INVALID_SHOOTING_DURATION fitting a clock ~2 h ahead). Best effort: a
+    failure is logged, the connection itself is not failed."""
+    for label, func in (("time", perform_time), ("timezone", perform_timezone),
+                        ("location", perform_set_location)):
+        try:
+            ok = await run.io_bound(func, session=session)
+        except Exception as e:  # never break a connect over this
+            ok = False
+            log.warning(f"[{session.dwarf_uid}] Device {label} sync failed: {e}")
+        if ok is False:
+            log.warning(f"[{session.dwarf_uid}] Device {label} not synced.")
 
 
 async def _auto_reconnect(session: DwarfSession) -> None:

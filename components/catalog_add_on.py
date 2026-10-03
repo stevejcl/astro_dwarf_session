@@ -1,28 +1,31 @@
-"""Personal DSO catalog - objects added by the user on top of the shared
-Dwarfium catalog (user-requested Oct 2026: "il manque peut-etre la
-possibilite d'ajouter ses propres objets, par exemple ceux obtenus dans
-Astro Dwarf Session par /catalog").
+"""DSO catalog add-on - objects added on top of the shared Dwarfium
+catalog (user-requested Oct 2026: "il manque peut-etre la possibilite
+d'ajouter ses propres objets, par exemple ceux obtenus dans Astro Dwarf
+Session par /catalog" - then "on pourrait creer un second fichier
+catalog_add_on, qu'on importe apres").
 
-A SEPARATE file, user_catalog.json next to the entry point (same place
-as sites.json / pending_schedules.json), never written into
-dso_catalog.json: that file stays exactly as the Dwarfium notebook
-(notebooks/5_create_catalogues.ipynb) produces it, so it can still be
-dropped in as-is and Dwarfium Scope Archive's existing JSON -> database
-import keeps working unchanged.
+A SECOND file, catalog_add_on.json, in the SAME folder as the
+dso_catalog.json in use (see dso_catalog.add_on_path()): Dwarfium Scope
+Archive's db/ when it is installed next to this app, else assets/.
+dso_catalog.json itself is never written: it stays exactly as the
+Dwarfium notebook (notebooks/5_create_catalogues.ipynb) produces it,
+and Dwarfium Scope Archive can import catalog_add_on.json AFTER it with
+the same importer.
 
 Entries use the SAME schema as dso_catalog.json (designation,
 displayName, alternateNames, ra "5h 35m 17s", dec "+05° 23' 28\"",
 type, typeCategory, catalogue, objectNumber, constellation, magnitude,
 size, notes, favorite) plus two extra keys: "source" (where the object
 came from, e.g. "catalog.html") and "addedAt" (ISO timestamp).
-dso_catalog.load_catalog() merges them after the shared catalog.
+dso_catalog.load_catalog() merges them after the shared catalog,
+skipping any the shared catalog already has.
 
 Today's only source: the /catalog page (JD's Deep Sky Catalog) - every
 target it sends to /api/schedule carries a "catalogMeta" block (atlas
 id, type code, magnitude, size, constellation, common name, Messier
 cross-reference - see js/dwarf-scheduler.js), converted here. An object
-already in the shared catalog or in this file (same designation /
-alternate name, or within DUPLICATE_RADIUS_ARCMIN) is not added again."""
+already in the shared catalog or in this file (same designation, or
+within DUPLICATE_RADIUS_ARCMIN) is not added again."""
 from __future__ import annotations
 
 import json
@@ -32,7 +35,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-USER_CATALOG_FILE = Path("user_catalog.json")
+ADD_ON_FILE_NAME = "catalog_add_on.json"
 
 DUPLICATE_RADIUS_ARCMIN = 2.0
 
@@ -93,20 +96,21 @@ _CONSTELLATIONS = {
 
 # -- file ------------------------------------------------------------------
 
-def read_entries() -> list[dict]:
-    if not USER_CATALOG_FILE.exists():
+def read_entries(path: Path) -> list[dict]:
+    if not path.is_file():
         return []
     try:
-        raw = json.loads(USER_CATALOG_FILE.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return []
     return raw if isinstance(raw, list) else []
 
 
-def _write_entries(entries: list[dict]) -> None:
-    tmp = USER_CATALOG_FILE.with_suffix(".json.tmp")
+def _write_entries(path: Path, entries: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(USER_CATALOG_FILE)
+    tmp.replace(path)
 
 
 # -- formatting (same strings as dso_catalog.json) ------------------------
@@ -273,7 +277,8 @@ def add_entries(items: list[tuple[dict, object, object]]) -> list[str]:
     added: list[str] = []
     with _lock:
         known = list(dso_catalog.load_catalog(force_reload=True))
-        stored = read_entries()
+        path = dso_catalog.add_on_path()
+        stored = read_entries(path)
         for meta, ra, dec in items:
             entry = entry_from_catalog_page(meta, ra, dec)
             if entry is None:
@@ -285,6 +290,6 @@ def add_entries(items: list[tuple[dict, object, object]]) -> list[str]:
             known.append({**entry, "ra_hours": ra_h, "dec_deg": dec_d})
             added.append(entry["designation"])
         if added:
-            _write_entries(stored)
+            _write_entries(path, stored)
             dso_catalog.load_catalog(force_reload=True)
     return added

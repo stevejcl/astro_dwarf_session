@@ -13,8 +13,7 @@ from typing import Callable, Optional
 
 from nicegui import ui
 
-from components import user_catalog
-from components.dso_catalog import catalog_source, load_catalog, max_dark_altitudes, user_entry_count
+from components.dso_catalog import add_on_path, catalog_source, load_catalog, max_dark_altitudes, user_entry_count
 from components.i18n import t
 import json
 
@@ -111,7 +110,7 @@ def open_catalog_dialog(
         if source:
             ui.label(t("catalog_source", path=str(source), count=len(entries) - user_count)).classes("text-xs text-grey-6")
         if user_count:
-            ui.label(t("catalog_user_source", path=str(user_catalog.USER_CATALOG_FILE.resolve()), count=user_count)).classes("text-xs text-grey-6")
+            ui.label(t("catalog_add_on_source", path=str(add_on_path()), count=user_count)).classes("text-xs text-grey-6")
         if location:
             ui.label(t("catalog_alt_hint", date=night.strftime("%Y-%m-%d"))).classes("text-xs text-grey-6")
         else:

@@ -154,7 +154,7 @@ function _dwarfTaskFromPlan(p) {
     schedule_task_id: _dwarfUuid(),
     createFrom: 2,
     // What the atlas knows about the target, for astro_dwarf_session's
-    // personal catalog (components/user_catalog.py) - removed there
+    // catalog_add_on.json (components/catalog_add_on.py) - removed there
     // before the schedule is stored or sent to the device.
     catalogMeta: _dwarfCatalogMeta(p, tuple),
   };

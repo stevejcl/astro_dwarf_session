@@ -390,7 +390,7 @@ TRANSLATIONS: dict[str, str] = {
     "prog_pick_from_catalog":       "Pick from catalog",
     "catalog_title":                "DSO catalog (shared with Dwarfium Scope Archive)",
     "catalog_source":               "Source: {path} ({count} objects)",
-    "catalog_user_source":          "Personal objects: {path} ({count} objects)",
+    "catalog_add_on_source":          "Add-on: {path} ({count} objects)",
     "catalog_not_found":            "DSO catalog not found - place dso_catalog.json in assets/, or install Dwarfium Scope Archive next to this app.",
     "catalog_alt_hint":             "Max alt. = highest altitude while the sky is dark on the night of {date}.",
     "catalog_search":               "Search (M 42, Orion, NGC 7000...)",

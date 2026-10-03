@@ -11,13 +11,13 @@
     "Altitude in the sky / best slot": the target's altitude over the night with the Sun and Moon,
     darkness level (astronomical/nautical/civil) and minimum altitude settings, the best slot highlighted;
     "Use best slot" fills the start date/time and the end time, a click on the curve sets the start time.
-    ### Personal catalog: targets sent from /catalog
-    Targets sent to a Dwarf from the /catalog page (JD's Deep Sky Catalog) are added to a personal catalog,
-    user_catalog.json next to the app, when they are not already in the shared catalog (same designation,
+    ### Catalog add-on: targets sent from /catalog
+    Targets sent to a Dwarf from the /catalog page (JD's Deep Sky Catalog) are added to a second file,
+    catalog_add_on.json, next to the dso_catalog.json in use (Dwarfium Scope Archive's db/ when installed
+    next to this app, else assets/), when they are not already in the shared catalog (same designation,
     or within 2'). They then show up in "Pick from catalog" like the others (Sharpless, LDN, LBN, vdB,
-    Hickson...). Same schema as dso_catalog.json (plus "source" and "addedAt"), and a separate file:
-    dso_catalog.json is never modified, so it can still be replaced as-is and Dwarfium Scope Archive's
-    import of it is unchanged.
+    Hickson...). Same schema as dso_catalog.json (plus "source" and "addedAt"); dso_catalog.json is never
+    modified, and Dwarfium Scope Archive can import catalog_add_on.json after it with the same importer.
     ### Native shooting schedule: same catalog + altitude planner
     "Pick from catalog" and the altitude chart are also in the native schedule editor, in the device's
     timezone like the rest of that form. Targets already added are drawn on the chart (red) so the next one

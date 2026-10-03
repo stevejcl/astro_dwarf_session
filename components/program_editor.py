@@ -31,19 +31,23 @@ from components.camera_settings import (
 from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.session_dirs import ensure_dirs
+from components.site_time import site_now, site_tz
+from components.dso_catalog import describe as describe_catalog_entry, parse_dec_degrees, parse_ra_hours
 from components.stellarium import get_target_from_stellarium
+from components.target_planner import build_altitude_panel, night_of, open_catalog_dialog
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 _SOLAR_TARGETS = ["", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Sun"]
 
 
-def _blank_program() -> dict:
+def _blank_program(config=None) -> dict:
     """Mirrors save_to_json()'s own "data" dict shape exactly, with
     generic wait_before/wait_after (0) and empty/default values -
     astro_dwarf_session's own form reuses ONE wait_before/wait_after
     pair across eq_solving/auto_focus/infinite_focus/calibration, so
-    this editor does too."""
-    now = datetime.now()
+    this editor does too. config: the Dwarf's config - defaults are in
+    its SITE time (components/site_time.py), the scheduler's clock."""
+    now = site_now(config)
     return {
         "command": {
             "id_command": {
@@ -111,7 +115,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
     """initial_program: load an existing script's dict for editing (None
     = blank template). on_saved(filepath): called after a successful
     save, e.g. to refresh a scripts list."""
-    program = json.loads(json.dumps(initial_program)) if initial_program else _blank_program()
+    program = json.loads(json.dumps(initial_program)) if initial_program else _blank_program(session.config)
     cmd = program["command"]
 
     # Wrapped in a card (user-reported Sep 2026, native-window
@@ -201,10 +205,86 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 _update_goto_visibility()
                 stellarium_status.set_text(t("prog_stellarium_fetched", name=target.target_name))
                 stellarium_status.classes(replace="text-xs text-green-700")
+                _refresh_altitude(open_panel=True)
 
-            ui.button(
-                t("prog_get_from_stellarium"), icon="explore", on_click=_fetch_from_stellarium
-            ).props("flat dense")
+            # Second target source next to Stellarium (user-requested Oct
+            # 2026): the DSO catalog shared with Dwarfium Scope Archive -
+            # see components/dso_catalog.py for where it's read from.
+            def _apply_catalog_entry(entry: dict) -> None:
+                name = entry.get("displayName") or entry.get("designation") or ""
+                manual_target.value = name
+                ra_input.value = f"{entry['ra_hours']:.6f}"
+                dec_input.value = f"{entry['dec_deg']:.6f}"
+                description.value = describe_catalog_entry(entry)
+                goto_mode.value = "manual"
+                _update_goto_visibility()
+                stellarium_status.set_text(t("prog_stellarium_fetched", name=name))
+                stellarium_status.classes(replace="text-xs text-green-700")
+                _refresh_altitude(open_panel=True)
+
+            with ui.row().classes("gap-2"):
+                ui.button(
+                    t("prog_get_from_stellarium"), icon="explore", on_click=_fetch_from_stellarium
+                ).props("flat dense")
+                ui.button(
+                    t("prog_pick_from_catalog"),
+                    icon="menu_book",
+                    on_click=lambda: open_catalog_dialog(
+                        session, _apply_catalog_entry, _current_night, tz=site_tz(session.config)
+                    ),
+                ).props("flat dense")
+
+            # Altitude over the night + best slot (user-requested Oct
+            # 2026: "voir sa hauteur dans le ciel pour choisir le
+            # meilleur creneau"). end_time_input is created further down
+            # - fine, _apply_slot() only runs on a later click.
+            def _current_target() -> tuple[float, float] | None:
+                ra_text = str(ra_input.value or "").strip()
+                dec_text = str(dec_input.value or "").strip()
+                if not ra_text or not dec_text:
+                    return None
+                try:
+                    ra = float(ra_text)
+                except ValueError:
+                    ra = parse_ra_hours(ra_text)
+                try:
+                    dec = float(dec_text)
+                except ValueError:
+                    dec = parse_dec_degrees(dec_text)
+                if ra is None or dec is None or not -90 <= dec <= 90:
+                    return None
+                return ra % 24, dec
+
+            def _current_night() -> datetime:
+                return night_of(date_input.value, time_input.value)
+
+            def _apply_slot(start: datetime, end: datetime | None) -> None:
+                date_input.value = start.strftime("%Y-%m-%d")
+                time_input.value = start.strftime("%H:%M:%S")
+                if end is not None:
+                    end_time_input.value = end.strftime("%H:%M")
+                    ui.notify(t("planner_slot_applied", start=f"{start:%H:%M}", end=f"{end:%H:%M}"))
+                else:
+                    ui.notify(t("planner_start_applied", start=f"{start:%Y-%m-%d %H:%M}"))
+
+            altitude_panel, _refresh_altitude_chart = build_altitude_panel(
+                session,
+                get_target=_current_target,
+                get_night=_current_night,
+                apply_slot=_apply_slot,
+                tz=site_tz(session.config),
+            )
+
+            def _refresh_altitude(open_panel: bool = False) -> None:
+                _refresh_altitude_chart()
+                if open_panel and _current_target() is not None:
+                    altitude_panel.open()
+
+            ra_input.on_value_change(lambda _: _refresh_altitude())
+            dec_input.on_value_change(lambda _: _refresh_altitude())
+            date_input.on_value_change(lambda _: _refresh_altitude())
+            time_input.on_value_change(lambda _: _refresh_altitude())
+            _refresh_altitude()
 
         wait_after_target_input = ui.number(
             t("prog_wait_after_target"), value=cmd["goto_solar"]["wait_after"], min=0

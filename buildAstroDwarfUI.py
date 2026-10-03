@@ -167,6 +167,16 @@ if _catalog_html.exists():
 else:
     print("Warning: catalog.html not found - /catalog will be unavailable until placed in assets/ next to the built exe.")
 
+# dso_catalog.json: Dwarfium Scope Archive's DSO catalog (program editor's
+# "Pick from catalog") - same loose-file treatment, so a newer copy from
+# that project can be dropped in without a rebuild (components/dso_catalog.py).
+_dso_catalog = Path("assets") / "dso_catalog.json"
+if _dso_catalog.exists():
+    print(f"Copying {_dso_catalog} to {DIST_ASSETS_DIR / _dso_catalog.name}")
+    shutil.copy2(_dso_catalog, DIST_ASSETS_DIR / _dso_catalog.name)
+else:
+    print("Warning: dso_catalog.json not found - 'Pick from catalog' will be unavailable unless Dwarfium Scope Archive is installed next to the exe.")
+
 
 # Step 4 - Zip everything in dist
 suffix = os.environ.get("RUNNER_OS", "unknown")  # Windows, Linux, macOS

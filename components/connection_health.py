@@ -315,6 +315,9 @@ async def sync_device_clock(session) -> None:
     """Pushes this PC's time, the configured timezone and the site location
     to the Dwarf, as the official app does on every connection (SET_TIME /
     SET_TIME_ZONE / SET_LOCATION, 13000/13001/13010 in every capture).
+    Called by connect_and_enter_astro_mode() (manual connect) and by
+    _auto_reconnect() (startup auto-connection and reconnects); the caller
+    holds the command slot.
 
     The native shooting schedule runs on the DEVICE clock: until now only
     dwarf_session.py set it, so a Dwarf connected through this UI alone
@@ -354,6 +357,12 @@ async def _auto_reconnect(session: DwarfSession) -> None:
                 result = await run.io_bound(perform_get_device_state_info, session=session)
                 success = result is not False
                 if success:
+                    # Also covers the automatic connection at app startup
+                    # (every known device goes through here): the clock is
+                    # set like on a manual connect. Unlike a mode switch it
+                    # doesn't disturb anything running on the device - the
+                    # official app sends it on every connection too.
+                    await sync_device_clock(session)
                     # Reconciliation runs here, still holding the slot -
                     # see reconcile_after_reconnect()'s own docstring
                     # (user-reported Sep 2026: a force-stopped run's

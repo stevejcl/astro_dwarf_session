@@ -15,7 +15,9 @@ from nicegui import ui
 
 from components.dso_catalog import catalog_source, load_catalog, max_dark_altitudes
 from components.i18n import t
-from components.sky_altitude import compute_night_plan
+import json
+
+from components.sky_altitude import compass_index, compute_night_plan
 
 _TYPE_CATEGORIES = ("galaxies", "nebulae", "clusters", "stars")
 
@@ -155,6 +157,13 @@ def open_catalog_dialog(
     dialog.open()
 
 
+def _compass_names() -> list[str]:
+    """Localized 8-point compass (N, NE, E, SE, S, SW/SO, W/O, NW/NO), in
+    sky_altitude.COMPASS_POINTS order."""
+    names = [n.strip() for n in t("planner_compass").split(",")]
+    return names if len(names) == 8 else ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+
+
 def _fmt(dt: Optional[datetime]) -> str:
     return dt.strftime("%H:%M") if dt else "-"
 
@@ -263,18 +272,56 @@ def build_altitude_panel(
                     {"name": name, "xAxis": labels[start_i], "itemStyle": {"color": "rgba(224,64,64,0.22)"}},
                     {"xAxis": labels[end_i]},
                 ])
+        # Compass direction of the target (user-requested Oct 2026: "les
+        # indicateurs cardinaux N E S O sur la courbe"): labelled on the
+        # curve wherever it changes while above the horizon, and in the
+        # tooltip for every point - to see at a glance when the target is
+        # behind the trees to the East, or over the house to the South.
+        compass = _compass_names()
+        directions = [compass[compass_index(az)] for az in plan.target_az]
+        target_points: list = []
+        previous = None
+        for alt, direction in zip(plan.target_alt, directions):
+            value = round(alt, 1)
+            if alt > 0 and direction != previous:
+                target_points.append({
+                    "value": value,
+                    "symbolSize": 8,
+                    "label": {"show": True, "formatter": direction, "position": "top",
+                              "fontWeight": "bold", "fontSize": 11},
+                })
+            else:
+                target_points.append(value)
+            previous = direction if alt > 0 else None
+        target_name = t("planner_target")
+        tooltip_dirs = json.dumps([f"{d} ({round(az)}\u00b0)" for d, az in zip(directions, plan.target_az)])
+        chart.options["tooltip"] = {
+            "trigger": "axis",
+            ":formatter": (
+                "params => { const dirs = " + tooltip_dirs + "; "
+                "let html = params.length ? params[0].axisValueLabel : ''; "
+                "for (const p of params) { "
+                "html += '<br/>' + p.marker + p.seriesName + ' : <b>' + p.value + '\u00b0</b>'; "
+                "if (p.seriesName === " + json.dumps(target_name) + ") html += ' \u00b7 ' + dirs[p.dataIndex]; } "
+                "return html; }"
+            ),
+        }
+
         floor = float(min_alt_input.value or 0)
         chart.options["xAxis"]["data"] = labels
         chart.options["series"] = [
             {
-                "name": t("planner_target"),
+                "name": target_name,
                 "type": "line",
                 # Small but real symbols: ECharts only fires a point click
                 # on a symbol, and the curve is the "click to set the
                 # start time" target.
                 "symbol": "circle",
                 "symbolSize": 5,
-                "data": [round(a, 1) for a in plan.target_alt],
+                # Every point drawn: with "auto" ECharts skips symbols when
+                # they're dense - and the compass labels with them.
+                "showAllSymbol": True,
+                "data": target_points,
                 "lineStyle": {"width": 3},
                 "markArea": {"silent": True, "data": mark_areas, "label": {"show": False}},
                 "markLine": {
@@ -303,7 +350,13 @@ def build_altitude_panel(
         ]
         chart.update()
 
-        bits = [t("planner_culmination", time=_fmt(plan.transit_time), alt=round(plan.max_altitude or 0))]
+        transit_i = plan.times.index(plan.transit_time)
+        bits = [t(
+            "planner_culmination",
+            time=_fmt(plan.transit_time),
+            alt=round(plan.max_altitude or 0),
+            direction=directions[transit_i],
+        )]
         if plan.dark_start:
             bits.append(t("planner_dark_window", start=_fmt(plan.dark_start), end=_fmt(plan.dark_end)))
         else:

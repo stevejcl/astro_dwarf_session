@@ -116,11 +116,20 @@ def catalog_source() -> Path | None:
     return _cache_source
 
 
+def short_name(entry: dict) -> str:
+    """Target name as Dwarfium Scope Archive shows it (its Astro Object
+    description): displayName up to the first comma, e.g. "M 42 - Great
+    Nebula in Orion, Great Orion Nebula,Orion Nebula" -> "M 42 - Great
+    Nebula in Orion"."""
+    name = (entry.get("displayName") or "").split(",")[0].strip()
+    return name or entry.get("designation") or ""
+
+
 def describe(entry: dict) -> str:
     """Same "Observation of X (Type) in Constellation (Mag: Y)" shape
     stellarium.py builds, so a program description reads the same
     whichever way its target was picked."""
-    parts = [f"Observation of {entry.get('displayName') or entry.get('designation')}"]
+    parts = [f"Observation of {short_name(entry)}"]
     if entry.get("type"):
         parts.append(f"({entry['type']})")
     if entry.get("constellation"):

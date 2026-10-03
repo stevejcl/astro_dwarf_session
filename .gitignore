@@ -15,4 +15,5 @@ config.lock
 /old_test
 /doc
 /.vscode
-/__pycache__/user_catalog.json
+/__pycache__
+/user_catalog.json

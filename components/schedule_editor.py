@@ -146,10 +146,14 @@ def build_schedule_editor(session) -> None:
     user_tz = schedule_tz(session.config)
     draft = _new_task_defaults(dwarf_type, user_tz)
 
-    with ui.row().classes("w-full gap-2"):
-        target_name_input = ui.input(t("prog_target_name"), value=draft["name"]).classes("flex-1")
-        ra_input = ui.input(t("prog_ra"), value=draft["ra"]).classes("w-32")
-        dec_input = ui.input(t("prog_dec"), value=draft["dec"]).classes("w-32")
+    # min-w on the name: on a phone it wraps onto its own full-width line
+    # instead of being squeezed to a few characters; RA/Dec (~9 chars each)
+    # stay together on the next line.
+    with ui.row().classes("w-full gap-2 flex-wrap"):
+        target_name_input = ui.input(t("prog_target_name"), value=draft["name"]).classes("flex-1 min-w-[240px]")
+        with ui.row().classes("gap-2 no-wrap"):  # RA/Dec wrap together
+            ra_input = ui.input(t("prog_ra"), value=draft["ra"]).classes("w-24")
+            dec_input = ui.input(t("prog_dec"), value=draft["dec"]).classes("w-24")
 
     stellarium_status = ui.label("").classes("text-xs")
 

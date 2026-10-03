@@ -177,10 +177,14 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             solar_target = ui.select(_SOLAR_TARGETS, value=cmd["goto_solar"]["target"], label=t("prog_solar_target")).classes("w-full")
 
         with ui.column().classes("w-full gap-2") as manual_section:
-            with ui.row().classes("w-full justify-between gap-2"):
-                manual_target = ui.input(t("prog_target_name"), value=cmd["goto_manual"]["target"]).classes("flex-1")
-                ra_input = ui.input(t("prog_ra"), value=str(cmd["goto_manual"]["ra_coord"] or "")).classes("w-32")
-                dec_input = ui.input(t("prog_dec"), value=str(cmd["goto_manual"]["dec_coord"] or "")).classes("w-32")
+            # min-w on the name: on a phone it wraps onto its own full-width line
+            # instead of being squeezed to a few characters; RA/Dec (~9 chars each)
+            # stay together on the next line.
+            with ui.row().classes("w-full gap-2 flex-wrap"):
+                manual_target = ui.input(t("prog_target_name"), value=cmd["goto_manual"]["target"]).classes("flex-1 min-w-[240px]")
+                with ui.row().classes("gap-2 no-wrap"):  # RA/Dec wrap together
+                    ra_input = ui.input(t("prog_ra"), value=str(cmd["goto_manual"]["ra_coord"] or "")).classes("w-24")
+                    dec_input = ui.input(t("prog_dec"), value=str(cmd["goto_manual"]["dec_coord"] or "")).classes("w-24")
 
             stellarium_status = ui.label("").classes("text-xs")
 

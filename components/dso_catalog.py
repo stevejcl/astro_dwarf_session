@@ -18,7 +18,11 @@ Lookup order (first file found wins):
      two apps automatically share the same, most up to date, catalog.
   3. assets/dso_catalog.json - the copy shipped with this app (a loose,
      replaceable file next to the .exe, same as catalog.html - see
-     api_routes.py's _external_path())."""
+     api_routes.py's _external_path()).
+
+Then catalog_add_on.json from the SAME folder (see components/
+catalog_add_on.py) is appended after it - a second file, so
+dso_catalog.json is never modified."""
 from __future__ import annotations
 
 import json
@@ -42,6 +46,7 @@ _ARCHIVE_DIR_NAMES = ("dwarfium-scope-archive", "DwarfiumScopeArchive", "Dwarfiu
 
 _cache: list[dict] | None = None
 _cache_source: Path | None = None
+_user_count = 0
 
 
 def _app_dir() -> Path:
@@ -85,11 +90,16 @@ def parse_dec_degrees(value: str) -> float | None:
 
 def load_catalog(force_reload: bool = False) -> list[dict]:
     """Catalog entries, each with ra_hours/dec_deg added (entries whose
-    coordinates don't parse are skipped). Cached after the first call."""
-    global _cache, _cache_source
+    coordinates don't parse are skipped), followed by the user's own
+    objects (catalog_add_on.json) not already in the shared catalog.
+    Cached after the first call."""
+    global _cache, _cache_source, _user_count
     if _cache is not None and not force_reload:
         return _cache
 
+    from components import catalog_add_on
+
+    entries, source = [], None
     for path in _candidate_paths():
         if not path.is_file():
             continue
@@ -97,18 +107,48 @@ def load_catalog(force_reload: bool = False) -> list[dict]:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        entries = []
-        for item in raw:
-            ra_hours = parse_ra_hours(item.get("ra"))
-            dec_deg = parse_dec_degrees(item.get("dec"))
-            if ra_hours is None or dec_deg is None:
-                continue
-            entries.append({**item, "ra_hours": ra_hours, "dec_deg": dec_deg})
-        _cache, _cache_source = entries, path
-        return _cache
+        entries, source = _with_coordinates(raw), path
+        break
 
-    _cache, _cache_source = [], None
+    # A user object later added to the shared catalog itself is skipped
+    # here rather than shown twice.
+    shared_count = len(entries)
+    for item in _with_coordinates(catalog_add_on.read_entries(_add_on_path_for(source))):
+        if not catalog_add_on.find_duplicate(item, item["ra_hours"], item["dec_deg"], entries[:shared_count]):
+            entries.append({**item, "_addOn": True})
+
+    _cache, _cache_source, _user_count = entries, source, len(entries) - shared_count
     return _cache
+
+
+def _with_coordinates(raw: list) -> list[dict]:
+    entries = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        ra_hours = parse_ra_hours(item.get("ra"))
+        dec_deg = parse_dec_degrees(item.get("dec"))
+        if ra_hours is None or dec_deg is None:
+            continue
+        entries.append({**item, "ra_hours": ra_hours, "dec_deg": dec_deg})
+    return entries
+
+
+def _add_on_path_for(source: Path | None) -> Path:
+    folder = source.parent if source else _app_dir() / "assets"
+    return folder / "catalog_add_on.json"
+
+
+def add_on_path() -> Path:
+    """catalog_add_on.json next to the dso_catalog.json in use (assets/
+    when none was found) - where new objects are written and read."""
+    return _add_on_path_for(catalog_source())
+
+
+def user_entry_count() -> int:
+    """How many of load_catalog()'s entries come from catalog_add_on.json."""
+    load_catalog()
+    return _user_count
 
 
 def catalog_source() -> Path | None:

@@ -28,6 +28,10 @@ POST /api/schedule
     - Otherwise: store it via `pending_schedules.set_pending()`; it will
       be offered for synchronization the next time THAT device connects
       (see the hook in `pages/session.py::_handle_connect`).
+    - A task may carry a "catalogMeta" block (id, type, mag, size, con,
+      commonName, messier - see js/dwarf-scheduler.js): the object is
+      added to catalog_add_on.json (components/catalog_add_on.py) if
+      not already known, and the block is removed before storing/sending.
 
     -> {"ok": true, "mode": "sent"|"pending", ...}
 
@@ -96,7 +100,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 from device_registry import list_device_entries
 from site_registry import list_site_entries
-from components import connection_health, scheduler_runner, scheduler_loop, native_schedule
+from components import connection_health, scheduler_runner, scheduler_loop, native_schedule, catalog_add_on
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
 from components.session_dirs import ensure_dirs
@@ -455,6 +459,23 @@ def register_api_routes() -> None:
         except KeyError:
             return JSONResponse({"error": f"unknown dwarfUid {dwarf_uid!r}"}, status_code=404)
 
+        # The /catalog page's targets go into catalog_add_on.json
+        # (components/catalog_add_on.py) when the user ticked
+        # "saveToCatalog" - their "catalogMeta" is stripped either way
+        # before the schedule is stored or synced. Never blocks the send.
+        added: list[str] = []
+        try:
+            added = await run.io_bound(
+                catalog_add_on.add_from_schedule, schedule, bool(body.get("saveToCatalog"))
+            )
+            if added:
+                log.info(f"[{dwarf_uid}] Added to catalog_add_on.json: {', '.join(added)}")
+        except Exception as e:
+            log.error(f"[{dwarf_uid}] catalog_add_on.json update failed: {e}")
+            for task in schedule.get("shooting_tasks") or []:
+                if isinstance(task, dict):
+                    task.pop("catalogMeta", None)
+
         # Device-confirmed (Oct 2026): a sync is only accepted less than
         # 12 h before the schedule's start. Further out, keep it pending
         # and let scheduler_loop.check_pending_schedules() send it in time.
@@ -463,7 +484,7 @@ def register_api_routes() -> None:
             pending_schedules.set_pending(dwarf_uid, schedule)
             sync_at = pending_schedules.sync_opens_at(schedule)
             log.info(f"[{dwarf_uid}] Schedule starts in more than 12 h — deferred, auto-sync from {sync_at}.")
-            return JSONResponse({"ok": True, "mode": "deferred", "syncAt": sync_at * 1000})
+            return JSONResponse({"ok": True, "mode": "deferred", "syncAt": sync_at * 1000, "catalogAdded": added})
 
         if session.is_connected:
             # CONCURRENCY: don't fire CMD_SYNC_SHOOTING_SCHEDULE while
@@ -478,7 +499,7 @@ def register_api_routes() -> None:
             if not connection_health.try_acquire_command_slot(dwarf_uid, caller="api_routes.sync"):
                 log.info(f"[{dwarf_uid}] Busy (manual session or other command in flight) — queuing as pending instead of racing it.")
                 pending_schedules.set_pending(dwarf_uid, schedule)
-                return JSONResponse({"ok": True, "mode": "busy_pending"})
+                return JSONResponse({"ok": True, "mode": "busy_pending", "catalogAdded": added})
 
             log.info(f"[{dwarf_uid}] Sending shooting schedule now (device connected).")
             try:
@@ -487,7 +508,7 @@ def register_api_routes() -> None:
                 connection_health.release_command_slot(dwarf_uid)
             if ok:
                 pending_schedules.clear_pending(dwarf_uid)  # un envoi réussi rend l'attente obsolète
-                return JSONResponse({"ok": True, "mode": "sent"})
+                return JSONResponse({"ok": True, "mode": "sent", "catalogAdded": added})
             # User-requested (Sep 2026): "ce message m'intéresse plus
             # que... check the log" - the real DwarfErrorCode name
             # (e.g. "CODE_SHOOTING_SCHEDULE_TIME_CONFLICT") is now
@@ -503,7 +524,7 @@ def register_api_routes() -> None:
 
         log.info(f"[{dwarf_uid}] Device offline — storing schedule as pending.")
         pending_schedules.set_pending(dwarf_uid, schedule)
-        return JSONResponse({"ok": True, "mode": "pending"})
+        return JSONResponse({"ok": True, "mode": "pending", "catalogAdded": added})
 
     def _native_mosaic_fields(body: dict):
         """Parse the native-mosaic request fields.

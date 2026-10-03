@@ -431,4 +431,6 @@ TRANSLATIONS: dict[str, str] = {
     "planner_click_hint":           "or click the curve to set the start time.",
     "planner_slot_applied":         "Start {start}, end time {end} applied.",
     "planner_start_applied":        "Start set to {start}.",
+    "planner_night_of_tz":          "Night of {date} (device timezone: {tz})",
+    "planner_sched_exceeds":        "Start set to {start} - but count \xd7 exposure runs {over} min past the end of the slot ({end}): reduce the count to fit.",
 }

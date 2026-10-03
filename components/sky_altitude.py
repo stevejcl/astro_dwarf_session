@@ -7,16 +7,18 @@ precision" Sun and Moon) - good to well under a degree, which is all a
 "when is it high enough, and is it dark yet" planning curve needs, and
 keeps the frozen .exe free of a heavy astronomy dependency.
 
-All datetimes here are NAIVE LOCAL times of this PC - the same clock
-scheduler_loop.py compares a program's date/time against
-(datetime.now()), so a slot picked on the chart is exactly what the
-scheduler will act on. They're converted to UTC internally via
-.astimezone(), which uses the OS's own timezone rules (DST included)."""
+All datetimes here are NAIVE wall-clock times. By default (tz=None)
+they're this PC's local time - the same clock scheduler_loop.py compares
+a program's date/time against (datetime.now()), so a slot picked on the
+chart is exactly what the scheduler will act on. The native schedule
+editor passes the DEVICE's timezone instead (native_schedule.schedule_
+tz()), since that's the clock its start times are typed in. Either way
+they're converted to UTC internally, DST included."""
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 
 _DEG = math.pi / 180.0
 
@@ -105,7 +107,10 @@ class NightPlan:
         return self.slots[0] if self.slots else None
 
 
-def _to_utc(local_naive: datetime) -> datetime:
+def to_utc(local_naive: datetime, tz: tzinfo | None = None) -> datetime:
+    """Naive wall-clock time in `tz` (None = this PC's local time) -> UTC."""
+    if tz is not None:
+        local_naive = local_naive.replace(tzinfo=tz)
     return local_naive.astimezone(timezone.utc)
 
 
@@ -119,10 +124,12 @@ def compute_night_plan(
     min_altitude: float = 30.0,
     darkness: str = "astronomical",
     step_minutes: int = 5,
+    tz: tzinfo | None = None,
 ) -> NightPlan:
     """night_of: any naive local datetime on the evening's DATE - the
     curve runs from 12:00 that day to 12:00 the next, so a night that
-    crosses midnight stays on one chart."""
+    crosses midnight stays on one chart. tz: the timezone night_of and
+    every returned time are wall-clock times in (None = this PC's)."""
     sun_limit = DARKNESS_LEVELS.get(darkness, DARKNESS_LEVELS["astronomical"])
     ra_deg = (float(ra_hours) * 15.0) % 360.0
     dec_deg = float(dec_deg)
@@ -132,7 +139,7 @@ def compute_night_plan(
     n_steps = (24 * 60) // step_minutes
     for i in range(n_steps + 1):
         local = start + timedelta(minutes=i * step_minutes)
-        jd = _julian_date(_to_utc(local))
+        jd = _julian_date(to_utc(local, tz))
         lst = _local_sidereal_deg(jd, longitude)
         sra, sdec, _ = sun_radec(jd)
         mra, mdec, _ = moon_radec(jd)
@@ -172,7 +179,7 @@ def compute_night_plan(
     plan.slots = sorted(slots, key=lambda s: s[1] - s[0], reverse=True)
 
     # Moon phase / distance to the target at local midnight.
-    jd_mid = _julian_date(_to_utc(start + timedelta(hours=12)))
+    jd_mid = _julian_date(to_utc(start + timedelta(hours=12), tz))
     _, _, sun_lon = sun_radec(jd_mid)
     mra, mdec, moon_lon = moon_radec(jd_mid)
     elongation = (moon_lon - sun_lon) * _DEG

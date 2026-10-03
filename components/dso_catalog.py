@@ -26,7 +26,7 @@ import math
 import os
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from components.sky_altitude import (
@@ -35,6 +35,7 @@ from components.sky_altitude import (
     _julian_date,
     _local_sidereal_deg,
     sun_radec,
+    to_utc,
 )
 
 _ARCHIVE_DIR_NAMES = ("dwarfium-scope-archive", "DwarfiumScopeArchive", "Dwarfium Scope Archive")
@@ -139,16 +140,18 @@ def max_dark_altitudes(
     night_of: datetime,
     darkness: str = "astronomical",
     step_minutes: int = 15,
+    tz=None,
 ) -> list[float | None]:
     """Highest altitude each entry reaches while the sky is dark on the
     night of `night_of` (naive local date) - a cheap per-row "is it worth
     it tonight" column for the catalog picker. None when there's no dark
-    period at all that night (e.g. summer at high latitude)."""
+    period at all that night (e.g. summer at high latitude). tz: as in
+    sky_altitude.compute_night_plan()."""
     sun_limit = DARKNESS_LEVELS.get(darkness, DARKNESS_LEVELS["astronomical"])
     start = night_of.replace(hour=12, minute=0, second=0, microsecond=0)
     dark_lsts: list[float] = []
     for i in range((24 * 60) // step_minutes + 1):
-        jd = _julian_date((start + timedelta(minutes=i * step_minutes)).astimezone(timezone.utc))
+        jd = _julian_date(to_utc(start + timedelta(minutes=i * step_minutes), tz))
         lst = _local_sidereal_deg(jd, longitude)
         sra, sdec, _ = sun_radec(jd)
         if _altitude_deg(sra, sdec, lst, latitude) <= sun_limit:

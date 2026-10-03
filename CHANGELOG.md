@@ -11,6 +11,11 @@
     "Altitude in the sky / best slot": the target's altitude over the night with the Sun and Moon,
     darkness level (astronomical/nautical/civil) and minimum altitude settings, the best slot highlighted;
     "Use best slot" fills the start date/time and the end time, a click on the curve sets the start time.
+    ### Native shooting schedule: same catalog + altitude planner
+    "Pick from catalog" and the altitude chart are also in the native schedule editor, in the device's
+    timezone like the rest of that form. Targets already added are drawn on the chart (red) so the next one
+    can be fitted around them. "Use best slot" sets the start; duration stays count x exposure, with a
+    warning when it runs past the end of the slot.
 
 ## [3.1.4] - 2026-10-02
     ### Improvements

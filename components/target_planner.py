@@ -8,7 +8,7 @@ Oct 2026):
     one click to use it as the program's start/end time."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, tzinfo
 from typing import Callable, Optional
 
 from nicegui import ui
@@ -55,9 +55,16 @@ def night_of(date_str: str, time_str: str) -> datetime:
     return day - timedelta(days=1) if hour < 12 else day
 
 
-def open_catalog_dialog(session, on_pick: Callable[[dict], None], get_night: Callable[[], datetime]) -> None:
+def open_catalog_dialog(
+    session,
+    on_pick: Callable[[dict], None],
+    get_night: Callable[[], datetime],
+    *,
+    tz: tzinfo | None = None,
+) -> None:
     """on_pick(entry): called with the chosen catalog entry (its
-    ra_hours/dec_deg already parsed - see dso_catalog.load_catalog())."""
+    ra_hours/dec_deg already parsed - see dso_catalog.load_catalog()).
+    tz: timezone of get_night()'s date (None = this PC's)."""
     entries = load_catalog()
     if not entries:
         ui.notify(t("catalog_not_found"), type="warning")
@@ -66,7 +73,7 @@ def open_catalog_dialog(session, on_pick: Callable[[dict], None], get_night: Cal
     location = site_location(session)
     night = get_night()
     altitudes = (
-        max_dark_altitudes(entries, location[0], location[1], night) if location else [None] * len(entries)
+        max_dark_altitudes(entries, location[0], location[1], night, tz=tz) if location else [None] * len(entries)
     )
 
     rows = []
@@ -158,12 +165,17 @@ def build_altitude_panel(
     get_target: Callable[[], tuple[float, float] | None],
     get_night: Callable[[], datetime],
     apply_slot: Callable[[datetime, Optional[datetime]], None],
+    tz: tzinfo | None = None,
+    get_busy: Callable[[], list[tuple[datetime, datetime, str]]] | None = None,
 ):
     """Altitude chart for the target returned by get_target() ((ra_hours,
     dec_deg) or None). apply_slot(start, end) is called when the user
     picks a slot (end=None for a single click on the curve). Returns
     (panel, refresh) - refresh() is what the editor calls whenever the
-    target or date changes."""
+    target or date changes. tz: timezone every time on the chart is in
+    (None = this PC's). get_busy(): (start, end, name) windows already
+    planned that night (the native schedule's other targets) - drawn on
+    the chart so the next target can be fitted around them."""
     state: dict = {"plan": None}
 
     with ui.expansion(t("planner_title"), icon="show_chart").classes("w-full") as panel:
@@ -218,9 +230,13 @@ def build_altitude_panel(
             night,
             min_altitude=float(min_alt_input.value or 0),
             darkness=darkness.value,
+            tz=tz,
         )
         state["plan"] = plan
-        message.set_text(t("planner_night_of", date=night.strftime("%Y-%m-%d")))
+        if tz is None:
+            message.set_text(t("planner_night_of", date=night.strftime("%Y-%m-%d")))
+        else:
+            message.set_text(t("planner_night_of_tz", date=night.strftime("%Y-%m-%d"), tz=str(tz)))
         chart.set_visibility(True)
 
         labels = [ts.strftime("%H:%M") for ts in plan.times]
@@ -235,6 +251,18 @@ def build_altitude_panel(
                 {"name": t("planner_best"), "xAxis": _fmt(plan.best_slot[0]), "itemStyle": {"color": "rgba(56,200,112,0.22)"}},
                 {"xAxis": _fmt(plan.best_slot[1])},
             ])
+        if get_busy is not None:
+            first, last = plan.times[0], plan.times[-1]
+            for start, end, name in get_busy():
+                if end < first or start > last:
+                    continue
+                # Snap to the chart's own 5-min category labels.
+                start_i = min(range(len(plan.times)), key=lambda i: abs(plan.times[i] - max(start, first)))
+                end_i = min(range(len(plan.times)), key=lambda i: abs(plan.times[i] - min(end, last)))
+                mark_areas.append([
+                    {"name": name, "xAxis": labels[start_i], "itemStyle": {"color": "rgba(224,64,64,0.22)"}},
+                    {"xAxis": labels[end_i]},
+                ])
         floor = float(min_alt_input.value or 0)
         chart.options["xAxis"]["data"] = labels
         chart.options["series"] = [

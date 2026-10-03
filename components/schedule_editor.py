@@ -5,8 +5,9 @@ live by scheduler_runner.py from this PC, one command at a time). This
 one lives ON the device once synced - it keeps running even if this app,
 or the PC, disconnects or shuts down.
 
-Reuses program_editor.py's target-input approach (Stellarium fetch +
-manual RA/Dec) and camera_settings.py's exposure/gain/IR-filter tables -
+Reuses program_editor.py's target-input approach (Stellarium fetch,
+DSO catalog shared with Dwarfium Scope Archive, manual RA/Dec, altitude
+chart / best slot - components/target_planner.py) and camera_settings.py's exposure/gain/IR-filter tables -
 not reinvented.
 
 CONFIRMED PROTOCOL LIMITS (dwarf_python_api/proto/shooting_schedule.proto
@@ -54,6 +55,7 @@ from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.native_schedule import schedule_tz
 from components.stellarium import get_target_from_stellarium
+from components.target_planner import build_altitude_panel, night_of, open_catalog_dialog
 import dwarf_python_api.lib.my_logger as log
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
@@ -169,8 +171,24 @@ def build_schedule_editor(session) -> None:
         dec_input.value = str(target.dec_degrees)
         stellarium_status.set_text(t("prog_stellarium_fetched", name=target.target_name))
         stellarium_status.classes(replace="text-xs text-green-700")
+        _refresh_altitude(open_panel=True)
 
-    ui.button(t("prog_get_from_stellarium"), icon="explore", on_click=_fetch_from_stellarium).props("flat dense")
+    def _apply_catalog_entry(entry: dict) -> None:
+        name = entry.get("displayName") or entry.get("designation") or ""
+        target_name_input.value = name
+        ra_input.value = f"{entry['ra_hours']:.6f}"
+        dec_input.value = f"{entry['dec_deg']:.6f}"
+        stellarium_status.set_text(t("prog_stellarium_fetched", name=name))
+        stellarium_status.classes(replace="text-xs text-green-700")
+        _refresh_altitude(open_panel=True)
+
+    with ui.row().classes("gap-2"):
+        ui.button(t("prog_get_from_stellarium"), icon="explore", on_click=_fetch_from_stellarium).props("flat dense")
+        ui.button(
+            t("prog_pick_from_catalog"),
+            icon="menu_book",
+            on_click=lambda: open_catalog_dialog(session, _apply_catalog_entry, _current_night, tz=user_tz),
+        ).props("flat dense")
 
     with ui.row().classes("w-full gap-2"):
         exposure_input = ui.select(_exposure_names("tele", dwarf_type), value=draft["shutterName"], label=t("prog_exposure")).classes("flex-1")
@@ -214,6 +232,58 @@ def build_schedule_editor(session) -> None:
 
     ui.button(t("sched_now_plus_10"), icon="schedule", on_click=_set_start_now_plus_10).props("flat dense")
 
+    # Altitude over the night + best slot, in the DEVICE's timezone like
+    # every other time on this form. Targets already in the list are
+    # drawn on the chart so the next one can be fitted around them.
+    def _current_target() -> tuple[float, float] | None:
+        try:
+            ra, dec = float(ra_input.value), float(dec_input.value)
+        except (TypeError, ValueError):
+            return None
+        return (ra % 24, dec) if -90 <= dec <= 90 else None
+
+    def _current_night() -> datetime:
+        return night_of(date_input.value, start_time_input.value)
+
+    def _apply_slot(start: datetime, end: datetime | None) -> None:
+        date_input.value = start.strftime("%Y-%m-%d")
+        start_time_input.value = start.strftime("%H:%M")
+        # Duration stays count x exposure (see duration_input above) - only
+        # warn when that runs past the end of the chosen slot.
+        planned_end = start + timedelta(minutes=int(duration_input.value or 0))
+        if end is not None and planned_end > end:
+            over = int((planned_end - end).total_seconds() // 60)
+            ui.notify(t("planner_sched_exceeds", start=f"{start:%H:%M}", end=f"{end:%H:%M}", over=over), type="warning")
+        else:
+            ui.notify(t("planner_start_applied", start=f"{start:%Y-%m-%d %H:%M}"))
+
+    def _busy_windows() -> list[tuple[datetime, datetime, str]]:
+        windows = []
+        for tk in tasks:
+            try:
+                start, end = _task_window(tk)
+            except (KeyError, ValueError):
+                continue
+            windows.append((start, end, tk["name"]))
+        return windows
+
+    altitude_panel, _refresh_altitude_chart = build_altitude_panel(
+        session,
+        get_target=_current_target,
+        get_night=_current_night,
+        apply_slot=_apply_slot,
+        tz=user_tz,
+        get_busy=_busy_windows,
+    )
+
+    def _refresh_altitude(open_panel: bool = False) -> None:
+        _refresh_altitude_chart()
+        if open_panel and _current_target() is not None:
+            altitude_panel.open()
+
+    for field in (ra_input, dec_input, date_input, start_time_input):
+        field.on_value_change(lambda _e: _refresh_altitude())
+
     def _recompute_duration() -> None:
         exposure_s = _exposure_seconds(exposure_input.value or "")
         count = int(count_input.value or 0)
@@ -234,6 +304,7 @@ def build_schedule_editor(session) -> None:
     add_status_label = ui.label("").classes("text-xs text-red-700")
 
     def _render_task_list() -> None:
+        _refresh_altitude()
         task_list_container.clear()
         with task_list_container:
             if not tasks:

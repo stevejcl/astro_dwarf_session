@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+    ### New features
+    ### Program editor: target catalog + altitude planner
+    "Pick from catalog": choose a target from the DSO catalog shared with Dwarfium Scope Archive
+    (Messier, NGC, IC, Caldwell, bright stars), next to "Get from Stellarium". Search by name, filter by
+    type and by the highest altitude reached in the dark on the program's night.
+    The catalog is read from a Dwarfium Scope Archive install next to this app (or $DWARFIUM_ARCHIVE_DIR)
+    when present, otherwise from assets/dso_catalog.json (loose file next to the exe, replaceable).
+    "Altitude in the sky / best slot": the target's altitude over the night with the Sun and Moon,
+    darkness level (astronomical/nautical/civil) and minimum altitude settings, the best slot highlighted;
+    "Use best slot" fills the start date/time and the end time, a click on the curve sets the start time.
+
 ## [3.1.4] - 2026-10-02
     ### Improvements
     ### Native shooting schedule

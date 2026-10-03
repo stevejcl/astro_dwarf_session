@@ -1,0 +1,312 @@
+"""Target picking + night planning for the program editor (user-requested
+Oct 2026):
+  - open_catalog_dialog(): pick a target from the DSO catalog shared
+    with Dwarfium Scope Archive (components/dso_catalog.py) - a second
+    source next to "Get from Stellarium", with no external app needed.
+  - build_altitude_panel(): the selected target's altitude over the
+    night (plus Sun darkness and Moon), the best slot highlighted, and
+    one click to use it as the program's start/end time."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from typing import Callable, Optional
+
+from nicegui import ui
+
+from components.dso_catalog import catalog_source, load_catalog, max_dark_altitudes
+from components.i18n import t
+from components.sky_altitude import compute_night_plan
+
+_TYPE_CATEGORIES = ("galaxies", "nebulae", "clusters", "stars")
+
+
+def site_location(session) -> tuple[float, float] | None:
+    """(latitude, longitude) of this device's configured site, falling
+    back to another registered Dwarf's (same rule as pages/settings.py's
+    pre-fill - every Dwarf a person owns is usually at the same place)."""
+    lat, lon = session.config.latitude, session.config.longitude
+    if lat is None or lon is None:
+        try:
+            from device_registry import find_shared_config_value
+            from dwarf_python_api.lib.dwarf_session import get_manager
+
+            uid = session.config.dwarf_uid
+            lat = lat if lat is not None else find_shared_config_value(get_manager(), lambda c: c.latitude, exclude_uid=uid)
+            lon = lon if lon is not None else find_shared_config_value(get_manager(), lambda c: c.longitude, exclude_uid=uid)
+        except Exception:
+            return None
+    try:
+        return float(lat), float(lon)
+    except (TypeError, ValueError):
+        return None
+
+
+def night_of(date_str: str, time_str: str) -> datetime:
+    """The evening a program's date/time belongs to: a start before noon
+    is the second half of the PREVIOUS evening's night."""
+    try:
+        day = datetime.strptime((date_str or "").strip(), "%Y-%m-%d")
+    except ValueError:
+        day = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    try:
+        hour = int((time_str or "").strip().split(":")[0])
+    except (ValueError, IndexError):
+        hour = 12
+    return day - timedelta(days=1) if hour < 12 else day
+
+
+def open_catalog_dialog(session, on_pick: Callable[[dict], None], get_night: Callable[[], datetime]) -> None:
+    """on_pick(entry): called with the chosen catalog entry (its
+    ra_hours/dec_deg already parsed - see dso_catalog.load_catalog())."""
+    entries = load_catalog()
+    if not entries:
+        ui.notify(t("catalog_not_found"), type="warning")
+        return
+
+    location = site_location(session)
+    night = get_night()
+    altitudes = (
+        max_dark_altitudes(entries, location[0], location[1], night) if location else [None] * len(entries)
+    )
+
+    rows = []
+    for i, (entry, alt) in enumerate(zip(entries, altitudes)):
+        rows.append({
+            "id": i,
+            "designation": entry.get("designation", ""),
+            "name": entry.get("alternateNames") or "",
+            "type": entry.get("type") or "",
+            "category": entry.get("typeCategory") or "",
+            "constellation": entry.get("constellation") or "",
+            "mag": entry.get("magnitude"),
+            "size": entry.get("size") or "",
+            "alt": round(alt) if alt is not None else None,
+        })
+
+    columns = [
+        {"name": "designation", "label": t("catalog_col_designation"), "field": "designation", "sortable": True, "align": "left"},
+        {"name": "name", "label": t("catalog_col_name"), "field": "name", "sortable": True, "align": "left"},
+        {"name": "type", "label": t("catalog_col_type"), "field": "type", "sortable": True, "align": "left"},
+        {"name": "constellation", "label": t("catalog_col_constellation"), "field": "constellation", "sortable": True, "align": "left"},
+        {"name": "mag", "label": t("catalog_col_mag"), "field": "mag", "sortable": True},
+        {"name": "size", "label": t("catalog_col_size"), "field": "size"},
+    ]
+    if location:
+        columns.append({"name": "alt", "label": t("catalog_col_max_alt"), "field": "alt", "sortable": True})
+
+    with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl"):
+        ui.label(t("catalog_title")).classes("text-lg")
+        source = catalog_source()
+        ui.label(t("catalog_source", path=str(source), count=len(entries))).classes("text-xs text-grey-6")
+        if location:
+            ui.label(t("catalog_alt_hint", date=night.strftime("%Y-%m-%d"))).classes("text-xs text-grey-6")
+        else:
+            ui.label(t("planner_no_location")).classes("text-xs text-amber-700")
+
+        with ui.row().classes("w-full gap-2 items-end"):
+            search = ui.input(t("catalog_search")).props("clearable autofocus").classes("flex-1 min-w-[200px]")
+            category = ui.select(
+                {"": t("catalog_all_types"), **{c: t(f"catalog_cat_{c}") for c in _TYPE_CATEGORIES}},
+                value="",
+                label=t("catalog_col_type"),
+            ).classes("w-40")
+            min_alt = ui.number(t("catalog_min_alt"), value=0, min=0, max=90, step=5).classes("w-36")
+            min_alt.set_visibility(bool(location))
+
+        table = ui.table(
+            columns=columns,
+            rows=rows,
+            row_key="id",
+            pagination={"rowsPerPage": 10, "sortBy": "alt" if location else "designation", "descending": bool(location)},
+        ).classes("w-full").props("dense flat")
+        search.bind_value_to(table, "filter")
+
+        def _apply_filters() -> None:
+            wanted = category.value or ""
+            floor = float(min_alt.value or 0) if location else 0
+            table.rows = [
+                r for r in rows
+                if (not wanted or r["category"] == wanted)
+                and (not floor or (r["alt"] is not None and r["alt"] >= floor))
+            ]
+            table.update()
+
+        category.on_value_change(lambda _: _apply_filters())
+        min_alt.on_value_change(lambda _: _apply_filters())
+
+        def _on_row_click(e) -> None:
+            row = e.args[1] if isinstance(e.args, list) and len(e.args) > 1 else None
+            if not row:
+                return
+            dialog.close()
+            on_pick(entries[row["id"]])
+
+        table.on("rowClick", _on_row_click)
+        ui.label(t("catalog_click_hint")).classes("text-xs text-grey-6")
+        with ui.row().classes("w-full justify-end"):
+            ui.button(t("close"), on_click=dialog.close).props("flat")
+    dialog.open()
+
+
+def _fmt(dt: Optional[datetime]) -> str:
+    return dt.strftime("%H:%M") if dt else "-"
+
+
+def build_altitude_panel(
+    session,
+    *,
+    get_target: Callable[[], tuple[float, float] | None],
+    get_night: Callable[[], datetime],
+    apply_slot: Callable[[datetime, Optional[datetime]], None],
+):
+    """Altitude chart for the target returned by get_target() ((ra_hours,
+    dec_deg) or None). apply_slot(start, end) is called when the user
+    picks a slot (end=None for a single click on the curve). Returns
+    (panel, refresh) - refresh() is what the editor calls whenever the
+    target or date changes."""
+    state: dict = {"plan": None}
+
+    with ui.expansion(t("planner_title"), icon="show_chart").classes("w-full") as panel:
+        with ui.row().classes("w-full gap-2 items-end"):
+            min_alt_input = ui.number(t("planner_min_alt"), value=30, min=0, max=85, step=5).classes("w-40")
+            darkness = ui.select(
+                {
+                    "astronomical": t("planner_dark_astro"),
+                    "nautical": t("planner_dark_nautical"),
+                    "civil": t("planner_dark_civil"),
+                },
+                value="astronomical",
+                label=t("planner_darkness"),
+            ).classes("w-56")
+        message = ui.label("").classes("text-xs text-grey-6")
+        chart = ui.echart({
+            "animation": False,
+            "tooltip": {"trigger": "axis"},
+            "legend": {"top": 0},
+            "grid": {"left": 40, "right": 32, "top": 30, "bottom": 30},
+            "xAxis": {"type": "category", "data": []},
+            "yAxis": {"type": "value", "min": -10, "max": 90, "name": "°"},
+            "series": [],
+        }).classes("w-full h-64")
+        summary = ui.label("").classes("text-sm")
+        with ui.row().classes("w-full gap-2 items-center"):
+            use_best = ui.button(t("planner_use_best"), icon="schedule").props("flat dense")
+            ui.label(t("planner_click_hint")).classes("text-xs text-grey-6")
+
+    def _set_empty(text: str) -> None:
+        state["plan"] = None
+        message.set_text(text)
+        chart.set_visibility(False)
+        summary.set_text("")
+        use_best.disable()
+
+    def refresh() -> None:
+        target = get_target()
+        location = site_location(session)
+        if target is None:
+            _set_empty(t("planner_no_target"))
+            return
+        if location is None:
+            _set_empty(t("planner_no_location"))
+            return
+        night = get_night()
+        plan = compute_night_plan(
+            target[0],
+            target[1],
+            location[0],
+            location[1],
+            night,
+            min_altitude=float(min_alt_input.value or 0),
+            darkness=darkness.value,
+        )
+        state["plan"] = plan
+        message.set_text(t("planner_night_of", date=night.strftime("%Y-%m-%d")))
+        chart.set_visibility(True)
+
+        labels = [ts.strftime("%H:%M") for ts in plan.times]
+        mark_areas = []
+        if plan.dark_start and plan.dark_end:
+            mark_areas.append([
+                {"name": t("planner_night"), "xAxis": _fmt(plan.dark_start), "itemStyle": {"color": "rgba(60,80,140,0.18)"}},
+                {"xAxis": _fmt(plan.dark_end)},
+            ])
+        if plan.best_slot:
+            mark_areas.append([
+                {"name": t("planner_best"), "xAxis": _fmt(plan.best_slot[0]), "itemStyle": {"color": "rgba(56,200,112,0.22)"}},
+                {"xAxis": _fmt(plan.best_slot[1])},
+            ])
+        floor = float(min_alt_input.value or 0)
+        chart.options["xAxis"]["data"] = labels
+        chart.options["series"] = [
+            {
+                "name": t("planner_target"),
+                "type": "line",
+                # Small but real symbols: ECharts only fires a point click
+                # on a symbol, and the curve is the "click to set the
+                # start time" target.
+                "symbol": "circle",
+                "symbolSize": 5,
+                "data": [round(a, 1) for a in plan.target_alt],
+                "lineStyle": {"width": 3},
+                "markArea": {"silent": True, "data": mark_areas, "label": {"show": False}},
+                "markLine": {
+                    "silent": True,
+                    "symbol": "none",
+                    "lineStyle": {"type": "dashed", "color": "#f0a030"},
+                    "data": [{"yAxis": floor}],
+                },
+            },
+            {
+                "name": t("planner_moon", pct=round(plan.moon_illumination * 100)),
+                "type": "line",
+                "showSymbol": False,
+                "data": [round(a, 1) for a in plan.moon_alt],
+                "lineStyle": {"type": "dotted", "color": "#9e9e9e"},
+                "itemStyle": {"color": "#9e9e9e"},
+            },
+            {
+                "name": t("planner_sun"),
+                "type": "line",
+                "showSymbol": False,
+                "data": [round(a, 1) for a in plan.sun_alt],
+                "lineStyle": {"width": 1, "color": "#f0b840"},
+                "itemStyle": {"color": "#f0b840"},
+            },
+        ]
+        chart.update()
+
+        bits = [t("planner_culmination", time=_fmt(plan.transit_time), alt=round(plan.max_altitude or 0))]
+        if plan.dark_start:
+            bits.append(t("planner_dark_window", start=_fmt(plan.dark_start), end=_fmt(plan.dark_end)))
+        else:
+            bits.append(t("planner_never_dark"))
+        if plan.best_slot:
+            bits.append(t("planner_best_slot", start=_fmt(plan.best_slot[0]), end=_fmt(plan.best_slot[1])))
+            use_best.enable()
+        else:
+            bits.append(t("planner_no_slot", alt=round(floor)))
+            use_best.disable()
+        bits.append(t(
+            "planner_moon_info",
+            pct=round(plan.moon_illumination * 100),
+            sep=round(plan.moon_separation or 0),
+        ))
+        summary.set_text(" · ".join(bits))
+
+    def _on_use_best() -> None:
+        plan = state["plan"]
+        if plan and plan.best_slot:
+            apply_slot(plan.best_slot[0], plan.best_slot[1])
+
+    def _on_point_click(e) -> None:
+        plan = state["plan"]
+        index = getattr(e, "data_index", None)
+        if plan is None or index is None or not 0 <= index < len(plan.times):
+            return
+        apply_slot(plan.times[index], None)
+
+    use_best.on_click(_on_use_best)
+    chart.on_point_click(_on_point_click)
+    min_alt_input.on_value_change(lambda _: refresh())
+    darkness.on_value_change(lambda _: refresh())
+    return panel, refresh

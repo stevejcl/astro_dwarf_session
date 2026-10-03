@@ -36,6 +36,7 @@ WHITELIST_SAME: set[str] = {
     "tab_scripts", "settings_longitude", "settings_latitude", "action_eq_solving",
     "prog_mosaic", "dashboard_temperature", "dashboard_disk_space", "explorer_gain",
     "prog_binning_4k", "prog_binning_2k",
+    "catalog_cat_galaxies", "catalog_col_constellation", "catalog_col_mag", "catalog_col_type",
 }
 
 SEP = "-" * 70

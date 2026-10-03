@@ -45,6 +45,7 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 - **Controls several telescopes from one app**, side by side — a "mission control" dashboard shows every paired Dwarf at a glance: connected/disconnected, battery, sensor temperature, free storage, live capture progress (captured/requested count, stacked count, scheduled stop time if set), a live camera thumbnail while a capture is running, and the result of the last finished program. A **Connect all** button brings every disconnected Dwarf online in one click instead of opening each one's own page.
 - **Sites** bundle a Wi-Fi network and a location (lat/long, timezone) under one name, reusable across every Dwarf that observes from there — pick one instead of retyping the same Wi-Fi password and coordinates for every device, every time you change location.
 - **Runs and schedules imaging programs**: build a program once (goto, calibration, EQ Solving, camera settings, capture — including Mosaic panels) and either run it live or schedule it for later. A background scheduler picks up due programs even with no browser tab open. A capture step can optionally be given a scheduled end time — if the requested image count isn't reached by then, the session is stopped cleanly instead of running indefinitely.
+- **Picks targets from Stellarium or from a built-in DSO catalog** shared with [Dwarfium Scope Archive](https://github.com/stevejcl/dwarfium-scope-archive) (~880 objects: Messier, NGC, IC, Caldwell, bright stars) — search by name, filter by type, sorted by how high each object gets in the dark tonight. Once a target is set, an **altitude chart** shows its height over the night together with the Sun (darkness) and the Moon (phase and distance), highlights the best slot (dark sky + above a minimum altitude you choose), and fills in the program's start/end time in one click.
 - **Syncs and monitors the Dwarf's own on-device shooting schedule** (the native, firmware-side scheduling feature, separate from this app's own program scheduler) — view every schedule currently stored on the device with live status (planned/in progress/completed/expired) and per-target progress, delete one, or queue one for the next connection while offline.
 - **Spreads a batch of targets across identical Dwarfs**: when two or more paired devices share the same model, sending a session from the target-catalog page can target "any available" one of that model instead of a specific device, and the app picks whichever is actually free at send time.
 - **Plans a Milky Way mosaic** from a standalone planning tool (no login, works from a phone) — pick a Site or use your own location, see a twilight-aware sky chart with the galactic plane and a Moon position/phase check per tile, generate a grid of tiles sized to your Dwarf's own Wide field of view, and send the whole schedule straight into this app's scheduler.
@@ -136,6 +137,9 @@ astro_dwarf_session/          (this repo)
 │   ├── scheduler_runner.py    #   runs one program, step by step
 │   ├── scheduler_loop.py      #   background timer that picks up due programs
 │   ├── program_editor.py      #   the program-builder form
+│   ├── dso_catalog.py         #   DSO catalog shared with Dwarfium Scope Archive (assets/dso_catalog.json)
+│   ├── sky_altitude.py        #   target/Sun/Moon altitude over a night (no astropy)
+│   ├── target_planner.py      #   catalog picker dialog + altitude chart / best slot
 │   ├── schedule_editor.py     #   builds a shooting-schedule task list to sync to the device
 │   ├── camera_stream.py       #   live HTTP/RTSP camera preview, one collapsible panel per camera
 │   ├── device_card.py         #   the dashboard's per-device "mission control" card
@@ -163,7 +167,7 @@ Every paired Dwarf gets its own `DwarfSession` (own connection, own event loop, 
 
 ## See also
 
-**[Dwarfium Scope Archive](https://github.com/stevejcl/dwarfium-scope-archive)** — a companion tool for archiving and browsing completed Dwarf sessions via USB/FTP, without going through the device's live network API at all. Built on the same NiceGUI foundation as this app, which makes cross-launching between the two (jump straight from a just-finished session here into archiving it there, and back) a realistic near-term goal rather than a stretch.
+**[Dwarfium Scope Archive](https://github.com/stevejcl/dwarfium-scope-archive)** — a companion tool for archiving and browsing completed Dwarf sessions via USB/FTP, without going through the device's live network API at all. Both apps share the same DSO catalog (`db/dso_catalog.json` there): if Dwarfium Scope Archive is installed in a folder next to this one (`dwarfium-scope-archive/` or `DwarfiumScopeArchive/`, or pointed to by the `DWARFIUM_ARCHIVE_DIR` environment variable), its catalog is used automatically, otherwise the copy shipped in `assets/dso_catalog.json`. Built on the same NiceGUI foundation as this app, which makes cross-launching between the two (jump straight from a just-finished session here into archiving it there, and back) a realistic near-term goal rather than a stretch.
 
 ## Contributing
 

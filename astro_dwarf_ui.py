@@ -296,6 +296,7 @@ def main() -> None:
             reload=False,
         )
     else:
+        app.native.start_args['private_mode'] = False
         ui.run(
             title="Astro Dwarf Session",
             storage_secret="astro_dwarf_session_key_change_me",  # TODO: move to a .env

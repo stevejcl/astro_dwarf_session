@@ -42,6 +42,24 @@ def _altitude_deg(ra_deg: float, dec_deg: float, lst_deg: float, lat_deg: float)
     return math.degrees(math.asin(max(-1.0, min(1.0, sin_alt))))
 
 
+def _azimuth_deg(ra_deg: float, dec_deg: float, lst_deg: float, lat_deg: float) -> float:
+    """Azimuth measured from North through East (0=N, 90=E, 180=S, 270=W)."""
+    ha = (lst_deg - ra_deg) * _DEG
+    lat = lat_deg * _DEG
+    dec = dec_deg * _DEG
+    az = math.atan2(-math.sin(ha), math.tan(dec) * math.cos(lat) - math.sin(lat) * math.cos(ha))
+    return math.degrees(az) % 360.0
+
+
+# 8-point compass, in azimuth order (N, NE, E, ...) - index = round(az / 45) % 8.
+COMPASS_POINTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+
+
+def compass_index(azimuth_deg: float) -> int:
+    """Index into COMPASS_POINTS for an azimuth (0=N, clockwise)."""
+    return int(round(azimuth_deg / 45.0)) % 8
+
+
 def _ecliptic_to_equatorial(lon_deg: float, lat_deg: float, jd: float) -> tuple[float, float]:
     eps = (23.439 - 0.0000004 * (jd - 2451545.0)) * _DEG
     lon, lat = lon_deg * _DEG, lat_deg * _DEG
@@ -88,6 +106,7 @@ class NightPlan:
     the derived slots - everything the program editor's chart needs."""
     times: list[datetime] = field(default_factory=list)
     target_alt: list[float] = field(default_factory=list)
+    target_az: list[float] = field(default_factory=list)  # 0=N, 90=E, 180=S, 270=W
     sun_alt: list[float] = field(default_factory=list)
     moon_alt: list[float] = field(default_factory=list)
     dark_start: datetime | None = None
@@ -143,6 +162,7 @@ def compute_night_plan(
         mra, mdec, _ = moon_radec(jd)
         plan.times.append(local)
         plan.target_alt.append(_altitude_deg(ra_deg, dec_deg, lst, latitude))
+        plan.target_az.append(_azimuth_deg(ra_deg, dec_deg, lst, latitude))
         plan.sun_alt.append(_altitude_deg(sra, sdec, lst, latitude))
         plan.moon_alt.append(_altitude_deg(mra, mdec, lst, latitude))
 

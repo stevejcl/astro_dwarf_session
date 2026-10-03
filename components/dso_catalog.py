@@ -115,7 +115,7 @@ def load_catalog(force_reload: bool = False) -> list[dict]:
     shared_count = len(entries)
     for item in _with_coordinates(catalog_add_on.read_entries(_add_on_path_for(source))):
         if not catalog_add_on.find_duplicate(item, item["ra_hours"], item["dec_deg"], entries[:shared_count]):
-            entries.append(item)
+            entries.append({**item, "_addOn": True})
 
     _cache, _cache_source, _user_count = entries, source, len(entries) - shared_count
     return _cache

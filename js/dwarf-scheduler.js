@@ -25,6 +25,18 @@
 //     is the place to map name ? index once you have that table.
 
 var DWARF_SCHEDULE_BRIDGE_KEY = 'dso_dwarf_bridge_url';
+// "Keep these targets in the catalog" box - the user's choice, remembered
+// (off by default: nothing is kept unless asked).
+var DWARF_KEEP_IN_CATALOG_KEY = 'dso_dwarf_keep_in_catalog';
+
+function _dwarfKeepInCatalog() {
+  try { return localStorage.getItem(DWARF_KEEP_IN_CATALOG_KEY) === '1'; }
+  catch (e) { return false; }
+}
+
+function _dwarfSetKeepInCatalog(on) {
+  try { localStorage.setItem(DWARF_KEEP_IN_CATALOG_KEY, on ? '1' : '0'); } catch (e) {}
+}
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
@@ -328,6 +340,11 @@ export function openDwarfProgramPanel(plans, meta) {
       '<select id="dwarf-target-select" style="width:100%;box-sizing:border-box;margin:4px 0 12px;padding:6px 8px;background:var(--bg3,#0d1526);border:1px solid var(--border,#1c2c48);border-radius:6px;color:inherit;font-size:12px">' +
         '<option value="">Loading devices…</option>' +
       '</select>' +
+      '<label style="display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;font-size:12px;color:var(--text2,#7a9bc5);cursor:pointer">' +
+        '<input type="checkbox" id="dwarf-keep-in-catalog"' + (_dwarfKeepInCatalog() ? ' checked' : '') + ' style="margin-top:2px">' +
+        '<span>Keep these targets in astro_dwarf_session\'s catalog (catalog_add_on.json, shared with Dwarfium Scope Archive) ' +
+        '— objects already in the catalog are not added twice.</span>' +
+      '</label>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
         '<button type="button" id="dwarf-btn-send" class="btn-plan-mosaic">⇪ Send to bridge</button>' +
         '<button type="button" id="dwarf-btn-copy" class="btn-plan-mosaic">⧉ Copy JSON</button>' +
@@ -403,6 +420,8 @@ export function openDwarfProgramPanel(plans, meta) {
   // astro_dwarf_session with a fixed --port so this URL stays stable
   // across restarts; the default NiceGUI port is otherwise randomized.
   const select = document.getElementById('dwarf-target-select');
+  const keepBox = document.getElementById('dwarf-keep-in-catalog');
+  keepBox.addEventListener('change', () => _dwarfSetKeepInCatalog(keepBox.checked));
   const bridgeUrlForDevices = () => document.getElementById('dwarf-bridge-url').value.trim().replace(/\/api\/schedule\/?$/, '');
   const loadDevices = () => {
     fetch(bridgeUrlForDevices() + '/api/dwarfs')
@@ -450,7 +469,7 @@ export function openDwarfProgramPanel(plans, meta) {
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dwarfUid: dwarfUid, schedule: sched }),
+      body: JSON.stringify({ dwarfUid: dwarfUid, schedule: sched, saveToCatalog: keepBox.checked }),
     })
       .then(res => {
         // BUG FIX (Sep 2026, user-reported: "bizarre le Dwarf est bien
@@ -473,15 +492,17 @@ export function openDwarfProgramPanel(plans, meta) {
       })
       .then(data => {
         const label = dwarfUid && select.selectedOptions[0] ? select.selectedOptions[0].textContent : url;
+        const added = (data && Array.isArray(data.catalogAdded)) ? data.catalogAdded : [];
+        const addedNote = added.length ? ' Added to the catalog: ' + added.join(', ') + '.' : '';
         if (data && data.mode === 'deferred') {
           const at = data.syncAt ? new Date(data.syncAt).toLocaleString() : '?';
-          _dwarfToast('Saved for ' + label + ' — the Dwarf only accepts a schedule within 12h of its start, so it will be synced automatically from ' + at + ' (app running, Dwarf connected).');
+          _dwarfToast('Saved for ' + label + ' — the Dwarf only accepts a schedule within 12h of its start, so it will be synced automatically from ' + at + ' (app running, Dwarf connected).' + addedNote);
         } else if (data && data.mode === 'pending') {
-          _dwarfToast(label + ' is offline — schedule queued, will be offered on next connect.');
+          _dwarfToast(label + ' is offline — schedule queued, will be offered on next connect.' + addedNote);
         } else if (data && data.mode === 'busy_pending') {
-          _dwarfToast(label + ' is busy (manual/scheduled session running) — schedule queued, offered once it frees up.');
+          _dwarfToast(label + ' is busy (manual/scheduled session running) — schedule queued, offered once it frees up.' + addedNote);
         } else {
-          _dwarfToast('Sent “' + sched.scheduleName + '” (' + sched.shooting_tasks.length + ' target(s)) to ' + label + '.');
+          _dwarfToast('Sent “' + sched.scheduleName + '” (' + sched.shooting_tasks.length + ' target(s)) to ' + label + '.' + addedNote);
         }
       })
       .catch(err => {

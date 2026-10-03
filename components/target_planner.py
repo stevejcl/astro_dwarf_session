@@ -13,6 +13,7 @@ from typing import Callable, Optional
 
 from nicegui import ui
 
+from components import catalog_add_on
 from components.dso_catalog import add_on_path, catalog_source, load_catalog, max_dark_altitudes, user_entry_count
 from components.i18n import t
 import json
@@ -90,6 +91,7 @@ def open_catalog_dialog(
             "mag": entry.get("magnitude"),
             "size": entry.get("size") or "",
             "alt": round(alt) if alt is not None else None,
+            "addOn": bool(entry.get("_addOn")),
         })
 
     columns = [
@@ -102,6 +104,9 @@ def open_catalog_dialog(
     ]
     if location:
         columns.append({"name": "alt", "label": t("catalog_col_max_alt"), "field": "alt", "sortable": True})
+    has_add_on = any(r["addOn"] for r in rows)
+    if has_add_on:
+        columns.append({"name": "actions", "label": "", "field": "addOn"})
 
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl"):
         ui.label(t("catalog_title")).classes("text-lg")
@@ -133,6 +138,30 @@ def open_catalog_dialog(
             pagination={"rowsPerPage": 10, "sortBy": "alt" if location else "designation", "descending": bool(location)},
         ).classes("w-full").props("dense flat")
         search.bind_value_to(table, "filter")
+
+        # Objects from catalog_add_on.json can be removed again (user-
+        # requested Oct 2026: the user chooses whether to keep them).
+        if has_add_on:
+            table.add_slot(
+                "body-cell-actions",
+                '<q-td :props="props">'
+                '<q-btn v-if="props.row.addOn" flat dense round size="sm" icon="delete_outline" color="negative"'
+                ' @click.stop="() => $parent.$emit(\'remove_add_on\', props.row)">'
+                f'<q-tooltip>{t("catalog_add_on_remove")}</q-tooltip></q-btn>'
+                '</q-td>',
+            )
+
+            def _on_remove(e) -> None:
+                row = e.args if isinstance(e.args, dict) else None
+                if not row:
+                    return
+                designation = entries[row["id"]].get("designation", "")
+                if catalog_add_on.remove_entry(designation):
+                    rows[:] = [r for r in rows if r["id"] != row["id"]]
+                    _apply_filters()
+                    ui.notify(t("catalog_add_on_removed", name=designation), type="positive")
+
+            table.on("remove_add_on", _on_remove)
 
         def _apply_filters() -> None:
             wanted = category.value or ""

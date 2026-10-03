@@ -20,12 +20,16 @@ came from, e.g. "catalog.html") and "addedAt" (ISO timestamp).
 dso_catalog.load_catalog() merges them after the shared catalog,
 skipping any the shared catalog already has.
 
-Today's only source: the /catalog page (JD's Deep Sky Catalog) - every
-target it sends to /api/schedule carries a "catalogMeta" block (atlas
+Today's only source: the /catalog page (JD's Deep Sky Catalog), when
+the user ticks "keep these targets in the catalog" (user-requested Oct
+2026: "il faut que l'utilisateur choisisse s'il conserve cette
+donnee") - every target it sends to /api/schedule carries a
+"catalogMeta" block (atlas
 id, type code, magnitude, size, constellation, common name, Messier
 cross-reference - see js/dwarf-scheduler.js), converted here. An object
 already in the shared catalog or in this file (same designation, or
-within DUPLICATE_RADIUS_ARCMIN) is not added again."""
+within DUPLICATE_RADIUS_ARCMIN) is not added again. An object can be
+removed again from the program editor's catalog dialog."""
 from __future__ import annotations
 
 import json
@@ -254,12 +258,13 @@ def find_duplicate(entry: dict, ra_hours: float, dec_deg: float, existing: list[
 
 # -- adding ----------------------------------------------------------------
 
-def add_from_schedule(schedule: dict) -> list[str]:
+def add_from_schedule(schedule: dict, save: bool = True) -> list[str]:
     """Removes every task's "catalogMeta" from a /api/schedule payload
     (the device never sees it - dwarf_utils builds the task params from
     named fields only, but there's no reason to store/send it either)
-    and adds the objects not already known. Returns the designations
-    added."""
+    and, when `save` (the "keep in the catalog" box ticked on the
+    /catalog page), adds the objects not already known. Returns the
+    designations added."""
     found = []
     for task in schedule.get("shooting_tasks") or []:
         if not isinstance(task, dict):
@@ -267,7 +272,23 @@ def add_from_schedule(schedule: dict) -> list[str]:
         meta = task.pop("catalogMeta", None)
         if isinstance(meta, dict):
             found.append((meta, task.get("ra"), task.get("dec")))
-    return add_entries(found) if found else []
+    return add_entries(found) if save and found else []
+
+
+def remove_entry(designation: str) -> bool:
+    """Removes an object from catalog_add_on.json (the user changed
+    their mind). True when something was removed."""
+    from components import dso_catalog
+
+    with _lock:
+        path = dso_catalog.add_on_path()
+        stored = read_entries(path)
+        kept = [e for e in stored if not (isinstance(e, dict) and e.get("designation") == designation)]
+        if len(kept) == len(stored):
+            return False
+        _write_entries(path, kept)
+        dso_catalog.load_catalog(force_reload=True)
+    return True
 
 
 def add_entries(items: list[tuple[dict, object, object]]) -> list[str]:

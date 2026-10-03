@@ -25,6 +25,20 @@
     /api/program accepts startEpochMs/endEpochMs (absolute instants, converted to site time); the Milky Way
     mosaic planners send them, so a browser in another timezone (e.g. remote access over Tailscale) schedules
     at the right time. The plain date/time/endTime fields are still accepted.
+    ### Altitude chart: compass direction of the target
+    The target's direction (N, NE, E, SE, S, SW, W, NW - in French N, NE, E, SE, S, SO, O, NO) is labelled
+    on the curve each time it changes while the target is above the horizon, shown in the tooltip with the
+    azimuth (e.g. "S (187°)") and in the summary ("Highest at 00:45 (36°, S)") - to see when the target is
+    behind trees or a house on one side. Program editor and native schedule editor.
+    ### Improvements
+    ### Target picked from the catalog
+    Short target name, as Dwarfium Scope Archive shows it: the catalog name up to the first comma
+    ("M 42 - Great Nebula in Orion, Great Orion Nebula,Orion Nebula" -> "M 42 - Great Nebula in Orion"),
+    also used in the program description.
+    ### Mobile layout
+    Target row (program editor and native schedule editor): on a phone the target name gets its own
+    full-width line instead of being squeezed between RA and Dec; RA/Dec are narrower and stay together
+    on the next line. Unchanged on desktop.
 
 ## [3.1.4] - 2026-10-02
     ### Improvements

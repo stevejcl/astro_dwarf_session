@@ -32,7 +32,12 @@ from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.session_dirs import ensure_dirs
 from components.site_time import site_now, site_tz
-from components.dso_catalog import describe as describe_catalog_entry, parse_dec_degrees, parse_ra_hours
+from components.dso_catalog import (
+    describe as describe_catalog_entry,
+    parse_dec_degrees,
+    parse_ra_hours,
+    short_name,
+)
 from components.stellarium import get_target_from_stellarium
 from components.target_planner import build_altitude_panel, night_of, open_catalog_dialog
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
@@ -215,7 +220,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             # 2026): the DSO catalog shared with Dwarfium Scope Archive -
             # see components/dso_catalog.py for where it's read from.
             def _apply_catalog_entry(entry: dict) -> None:
-                name = entry.get("displayName") or entry.get("designation") or ""
+                name = short_name(entry)
                 manual_target.value = name
                 ra_input.value = f"{entry['ra_hours']:.6f}"
                 dec_input.value = f"{entry['dec_deg']:.6f}"

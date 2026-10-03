@@ -54,6 +54,7 @@ from components.camera_settings import _exposure_names, _gain_range, _GAIN_STEP,
 from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.native_schedule import schedule_tz
+from components.dso_catalog import short_name
 from components.stellarium import get_target_from_stellarium
 from components.target_planner import build_altitude_panel, night_of, open_catalog_dialog
 import dwarf_python_api.lib.my_logger as log
@@ -178,7 +179,7 @@ def build_schedule_editor(session) -> None:
         _refresh_altitude(open_panel=True)
 
     def _apply_catalog_entry(entry: dict) -> None:
-        name = entry.get("displayName") or entry.get("designation") or ""
+        name = short_name(entry)
         target_name_input.value = name
         ra_input.value = f"{entry['ra_hours']:.6f}"
         dec_input.value = f"{entry['dec_deg']:.6f}"

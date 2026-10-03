@@ -315,9 +315,10 @@ async def sync_device_clock(session) -> None:
     """Pushes this PC's time, the configured timezone and the site location
     to the Dwarf, as the official app does on every connection (SET_TIME /
     SET_TIME_ZONE / SET_LOCATION, 13000/13001/13010 in every capture).
-    Called by connect_and_enter_astro_mode() (manual connect) and by
-    _auto_reconnect() (startup auto-connection and reconnects); the caller
-    holds the command slot.
+    Called by connect_and_enter_astro_mode() (manual connect); the caller
+    holds the command slot. _auto_reconnect() (startup auto-connection and
+    reconnects) sends the same three commands itself, SET_TIME first since
+    it is what opens the connection there.
 
     The native shooting schedule runs on the DEVICE clock: until now only
     dwarf_session.py set it, so a Dwarf connected through this UI alone
@@ -340,8 +341,8 @@ async def _auto_reconnect(session: DwarfSession) -> None:
     awaited by the poll loop, since a reconnect sequence can itself
     take a while per attempt.
 
-    Deliberately light: perform_get_device_state_info() only, NOT
-    connect_and_enter_astro_mode() - see the module docstring's AUTO-
+    Deliberately light: time / timezone / location only (no mode switch),
+    NOT connect_and_enter_astro_mode() - see the module docstring's AUTO-
     RECONNECT section for why forcing a fresh mode switch on every
     unattended retry is the wrong default."""
     uid = session.dwarf_uid
@@ -354,15 +355,23 @@ async def _auto_reconnect(session: DwarfSession) -> None:
                 return
             try:
                 await run.io_bound(perform_disconnect, session=session)
-                result = await run.io_bound(perform_get_device_state_info, session=session)
+                # The reconnect is opened by SET_TIME itself (user-tested,
+                # Oct 2026: ~5 s instead of ~11 s). Opening the socket
+                # already sends GET_DEVICE_STATE_INFO (send_message_init),
+                # so the former explicit perform_get_device_state_info()
+                # only asked the same thing twice. This also covers the
+                # automatic connection at app startup: the device clock is
+                # set like the official app does on every connection.
+                result = await run.io_bound(perform_time, session=session)
                 success = result is not False
                 if success:
-                    # Also covers the automatic connection at app startup
-                    # (every known device goes through here): the clock is
-                    # set like on a manual connect. Unlike a mode switch it
-                    # doesn't disturb anything running on the device - the
-                    # official app sends it on every connection too.
-                    await sync_device_clock(session)
+                    # Best effort, never the success criterion: both return
+                    # False (without sending) when the timezone / location
+                    # is not configured, which must not count as a failed
+                    # reconnect.
+                    for label, func in (("timezone", perform_timezone), ("location", perform_set_location)):
+                        if await run.io_bound(func, session=session) is False:
+                            log.warning(f"[{uid}] Device {label} not synced.")
                     # Reconciliation runs here, still holding the slot -
                     # see reconcile_after_reconnect()'s own docstring
                     # (user-reported Sep 2026: a force-stopped run's

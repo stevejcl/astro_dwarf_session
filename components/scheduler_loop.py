@@ -36,6 +36,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 import pending_schedules
 from components import connection_health, scheduler_runner
 from components.session_dirs import session_dirs_for
+from components.site_time import site_now
 
 _CHECK_INTERVAL_S = 15.0
 
@@ -69,17 +70,17 @@ def _read_schedule(filepath: str) -> tuple[datetime, dict] | None:
     return scheduled, data
 
 
-def _next_due_file(todo_dir: str) -> str | None:
+def _next_due_file(todo_dir: str, now: datetime) -> str | None:
     """Returns the path of the earliest-scheduled ToDo file whose time
     has already arrived, or None if none are due yet. Files with a
     missing/unparseable date-time are silently skipped (never
     auto-started - matches astro_dwarf_scheduler.py's own
     "Missing date/time" skip-and-continue behaviour) rather than
-    treated as an error."""
+    treated as an error. `now`: the device's SITE time (components/
+    site_time.py) - a program's date/time is site wall-clock time."""
     if not os.path.isdir(todo_dir):
         return None
 
-    now = datetime.now()
     due: list[tuple[datetime, str]] = []
     for filename in os.listdir(todo_dir):
         if not filename.endswith(".json"):
@@ -112,7 +113,7 @@ def check_all(manager) -> None:
             continue
 
         dirs = session_dirs_for(session)
-        filepath = _next_due_file(dirs["TODO_DIR"])
+        filepath = _next_due_file(dirs["TODO_DIR"], site_now(session.config))
         if filepath is None:
             continue
 
@@ -228,6 +229,7 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
     decide what's shown. Sorted earliest first; each entry carries its
     own "status" (todo/done/error) so the page can tag it."""
     dirs = session_dirs_for(session)
+    now = site_now(session.config)
     out = []
     for status, dir_key in _LOCAL_PROGRAM_DIRS:
         folder = dirs[dir_key]
@@ -247,7 +249,7 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
                 "description": id_command.get("description") or "",
                 "scheduledAt": scheduled.strftime("%Y-%m-%d %H:%M:%S"),
                 "endAt": _extract_end_time(cmd, scheduled),
-                "due": status == "todo" and scheduled <= datetime.now(),
+                "due": status == "todo" and scheduled <= now,
                 "status": status,
                 # ACTUAL run timing (user-requested Sep 2026), distinct
                 # from the scheduled date/time and the optional end_time

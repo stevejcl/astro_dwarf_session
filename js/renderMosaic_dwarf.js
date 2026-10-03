@@ -348,7 +348,13 @@ async function _dwSend(btn) {
       payload.count = count * nat.n;                      // total images = mosaic_count x panels (e.g. 20 x 2 = 40)
       if (DW_MOSAIC_IN_SETUP_CAMERA) payload.setup_camera = mos; else Object.assign(payload, mos);
     }
-    if (P.durationMode === 'duration' && nat.n === 1) payload.endTime = _dwPad(t.end.getHours()) + ':' + _dwPad(t.end.getMinutes());
+    // Absolute instants: the server converts them to the Dwarf's site time
+    // (this browser may be in another timezone, e.g. remote access).
+    payload.startEpochMs = t.start.getTime();
+    if (P.durationMode === 'duration' && nat.n === 1) {
+      payload.endTime = _dwPad(t.end.getHours()) + ':' + _dwPad(t.end.getMinutes());
+      payload.endEpochMs = t.end.getTime();
+    }
     try {
       var res = await fetch(_dwApiBase() + '/api/program', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       var data = await res.json(); if (!res.ok || data.error) errN++; else okN++;

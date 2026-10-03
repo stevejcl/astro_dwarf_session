@@ -31,6 +31,7 @@ from components.camera_settings import (
 from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
 from components.session_dirs import ensure_dirs
+from components.site_time import site_now, site_tz
 from components.dso_catalog import describe as describe_catalog_entry, parse_dec_degrees, parse_ra_hours
 from components.stellarium import get_target_from_stellarium
 from components.target_planner import build_altitude_panel, night_of, open_catalog_dialog
@@ -39,13 +40,14 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 _SOLAR_TARGETS = ["", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Sun"]
 
 
-def _blank_program() -> dict:
+def _blank_program(config=None) -> dict:
     """Mirrors save_to_json()'s own "data" dict shape exactly, with
     generic wait_before/wait_after (0) and empty/default values -
     astro_dwarf_session's own form reuses ONE wait_before/wait_after
     pair across eq_solving/auto_focus/infinite_focus/calibration, so
-    this editor does too."""
-    now = datetime.now()
+    this editor does too. config: the Dwarf's config - defaults are in
+    its SITE time (components/site_time.py), the scheduler's clock."""
+    now = site_now(config)
     return {
         "command": {
             "id_command": {
@@ -113,7 +115,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
     """initial_program: load an existing script's dict for editing (None
     = blank template). on_saved(filepath): called after a successful
     save, e.g. to refresh a scripts list."""
-    program = json.loads(json.dumps(initial_program)) if initial_program else _blank_program()
+    program = json.loads(json.dumps(initial_program)) if initial_program else _blank_program(session.config)
     cmd = program["command"]
 
     # Wrapped in a card (user-reported Sep 2026, native-window
@@ -227,7 +229,9 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 ui.button(
                     t("prog_pick_from_catalog"),
                     icon="menu_book",
-                    on_click=lambda: open_catalog_dialog(session, _apply_catalog_entry, _current_night),
+                    on_click=lambda: open_catalog_dialog(
+                        session, _apply_catalog_entry, _current_night, tz=site_tz(session.config)
+                    ),
                 ).props("flat dense")
 
             # Altitude over the night + best slot (user-requested Oct
@@ -268,6 +272,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 get_target=_current_target,
                 get_night=_current_night,
                 apply_slot=_apply_slot,
+                tz=site_tz(session.config),
             )
 
             def _refresh_altitude(open_panel: bool = False) -> None:

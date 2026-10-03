@@ -16,6 +16,15 @@
     timezone like the rest of that form. Targets already added are drawn on the chart (red) so the next one
     can be fitted around them. "Use best slot" sets the start; duration stays count x exposure, with a
     warning when it runs past the end of the slot.
+    ### Site timezone everywhere (remote setups)
+    Program date/time and End time are now wall-clock times of the Dwarf's SITE (its configured timezone,
+    written from the Site), no longer of the PC running the app: the scheduler starts programs, stops at
+    End time, stamps realStart/realEnd, and the editors/APIs fill their defaults with the site's clock.
+    Same timezone as the native schedule. Falls back to the PC's timezone when none is set (unchanged
+    behaviour), so nothing changes when the PC and the site share a timezone.
+    /api/program accepts startEpochMs/endEpochMs (absolute instants, converted to site time); the Milky Way
+    mosaic planners send them, so a browser in another timezone (e.g. remote access over Tailscale) schedules
+    at the right time. The plain date/time/endTime fields are still accepted.
 
 ## [3.1.4] - 2026-10-02
     ### Improvements

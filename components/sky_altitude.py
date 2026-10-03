@@ -7,13 +7,11 @@ precision" Sun and Moon) - good to well under a degree, which is all a
 "when is it high enough, and is it dark yet" planning curve needs, and
 keeps the frozen .exe free of a heavy astronomy dependency.
 
-All datetimes here are NAIVE wall-clock times. By default (tz=None)
-they're this PC's local time - the same clock scheduler_loop.py compares
-a program's date/time against (datetime.now()), so a slot picked on the
-chart is exactly what the scheduler will act on. The native schedule
-editor passes the DEVICE's timezone instead (native_schedule.schedule_
-tz()), since that's the clock its start times are typed in. Either way
-they're converted to UTC internally, DST included."""
+All datetimes here are NAIVE wall-clock times in `tz` - both editors
+pass the Dwarf's SITE timezone (components/site_time.py), the clock
+program and native-schedule times are typed in and checked against, so
+a slot picked on the chart is exactly what will run. tz=None means this
+PC's local time. Converted to UTC internally, DST included."""
 from __future__ import annotations
 
 import math

@@ -97,6 +97,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_read_astro_stacking_status_
 
 from components import connection_health
 from components.session_dirs import session_dirs_for
+from components.site_time import session_now, site_from_timestamp
 
 
 @dataclass
@@ -193,7 +194,14 @@ class RunState:
 _runs: dict[str, RunState] = {}
 
 
-def _update_process_status(program: dict, status: str, *, result: bool | None = None, message: str | None = None) -> None:
+def _update_process_status(
+    program: dict,
+    status: str,
+    *,
+    result: bool | None = None,
+    message: str | None = None,
+    session=None,
+) -> None:
     """Field-for-field port of astro_dwarf_scheduler.py's own
     update_process_status() - same semantics, including the fact that
     passing status="done" always sets id_command['process']="done"
@@ -206,7 +214,9 @@ def _update_process_status(program: dict, status: str, *, result: bool | None = 
         command["result"] = result
     if message:
         command["message"] = message
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Site time (components/site_time.py) - same clock as the program's
+    # own date/time, so realStart/realEnd line up with it.
+    now = session_now(session).strftime("%Y-%m-%d %H:%M:%S")
     if status == "pending":
         command["starting_date"] = now
     if status == "done":
@@ -453,7 +463,7 @@ def check_stuck_runs() -> None:
                         full_program = {"command": program}
                         error_path = os.path.join(dirs["ERROR_DIR"], os.path.basename(state.current_path))
                         os.makedirs(dirs["ERROR_DIR"], exist_ok=True)
-                        _update_process_status(full_program, "done")
+                        _update_process_status(full_program, "done", session=session)
                         _write_json(error_path, full_program)
                         os.remove(state.current_path)
                         state.last_saved_path = error_path
@@ -541,7 +551,7 @@ def reconcile_after_reconnect(dwarf_uid: str, session) -> None:
     _set_dwarf_field(id_command, session)
 
     dirs = session_dirs_for(session)
-    starting_date = id_command.get("starting_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    starting_date = id_command.get("starting_date", session_now(session).strftime("%Y-%m-%d %H:%M:%S"))
     dt_str = starting_date.replace(":", "-").replace(" ", "-")
     new_filename_base = re.sub(
         r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}_", "", os.path.basename(state.last_saved_path)
@@ -550,7 +560,7 @@ def reconcile_after_reconnect(dwarf_uid: str, session) -> None:
     os.makedirs(dirs["DONE_DIR"], exist_ok=True)
 
     full_program = {"command": program}
-    _update_process_status(full_program, "done")
+    _update_process_status(full_program, "done", session=session)
     _write_json(done_path, full_program)
     if os.path.exists(state.last_saved_path):
         os.remove(state.last_saved_path)
@@ -724,7 +734,7 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
             "Session completed successfully (resumed after restart)"
             if success else "Session failed (resumed after restart)"
         )
-        _update_process_status(full_program, "done")
+        _update_process_status(full_program, "done", session=session)
 
         dest_dir = dirs["DONE_DIR"] if success else dirs["ERROR_DIR"]
         dest_path = os.path.join(dest_dir, filename)
@@ -773,7 +783,7 @@ def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
             ts = None
         if ts is None:
             try:
-                ts = datetime.fromtimestamp(os.path.getmtime(path))
+                ts = site_from_timestamp(os.path.getmtime(path), getattr(session, "config", None))
             except OSError:
                 ts = datetime.min
         parsed.append((ts, filename, path, program, id_command))
@@ -791,7 +801,7 @@ def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
     ts, filename, path, program, id_command = newest
     device_busy = device_is_actively_capturing(session)
     if device_busy:
-        age = (datetime.now() - ts).total_seconds()
+        age = (session_now(session) - ts).total_seconds()
         if age <= _ORPHAN_CORRELATION_MAX_AGE_S:
             background_tasks.create(
                 run.io_bound(
@@ -919,8 +929,8 @@ def _run_blocking(
         id_command.pop("ir_actual", None)
         id_command.pop("eq_azimut_error", None)
         id_command.pop("eq_altitude_error", None)
-        _update_process_status(full_program, "pending")
-        id_command["time"] = datetime.now().strftime("%H:%M:%S")
+        _update_process_status(full_program, "pending", session=session)
+        id_command["time"] = session_now(session).strftime("%H:%M:%S")
         _write_json(current_path, full_program)
 
     # Stashed on RunState so check_stuck_runs()'s _force_stop() can finalize
@@ -940,7 +950,7 @@ def _run_blocking(
 
         if current_path is not None:
             id_command["last_step"] = label
-            id_command["last_step_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            id_command["last_step_time"] = session_now(session).strftime("%Y-%m-%d %H:%M:%S")
             try:
                 _write_json(current_path, full_program)
             except OSError:
@@ -1041,7 +1051,7 @@ def _run_blocking(
             if current_path is not None:
                 dirs = session_dirs_for(session)
                 starting_date = id_command.get(
-                    "starting_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "starting_date", session_now(session).strftime("%Y-%m-%d %H:%M:%S")
                 )
                 dt_str = starting_date.replace(":", "-").replace(" ", "-")
                 new_filename_base = re.sub(
@@ -1051,7 +1061,7 @@ def _run_blocking(
                 done_path = os.path.join(dirs["DONE_DIR"], new_filename)
                 os.makedirs(dirs["DONE_DIR"], exist_ok=True)
 
-                _update_process_status(full_program, "done")
+                _update_process_status(full_program, "done", session=session)
                 _write_json(done_path, full_program)
                 if os.path.exists(current_path):
                     os.remove(current_path)
@@ -1078,7 +1088,7 @@ def _run_blocking(
                 dirs = session_dirs_for(session)
                 error_path = os.path.join(dirs["ERROR_DIR"], os.path.basename(current_path))
                 os.makedirs(dirs["ERROR_DIR"], exist_ok=True)
-                _update_process_status(full_program, "done")
+                _update_process_status(full_program, "done", session=session)
                 _write_json(error_path, full_program)
                 if os.path.exists(current_path):
                     os.remove(current_path)

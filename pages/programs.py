@@ -23,6 +23,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from components import scheduler_loop, scheduler_runner
 from components.i18n import get_language, t
 from components.program_editor import build_program_editor
+from components.site_time import site_now
 from components.schedule_editor import build_schedule_editor
 from components.session_dirs import session_dirs_for
 from components.pwa import add_pwa_head_tags
@@ -308,7 +309,7 @@ def build_programs_page() -> None:
 
                         cmd = data.get("command", {})
                         id_command = cmd.setdefault("id_command", {})
-                        now = datetime.now()
+                        now = site_now(session.config)
                         id_command["uuid"] = f"{uuid.uuid4()}-00001"
                         id_command["date"] = now.strftime("%Y-%m-%d")
                         id_command["time"] = now.strftime("%H:%M:%S")

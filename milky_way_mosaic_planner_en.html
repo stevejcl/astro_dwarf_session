@@ -1146,6 +1146,9 @@ document.getElementById('sendAllBtn').addEventListener('click', async () => {
       exposure, gain, count,
       date: `${t.start.getFullYear()}-${pad(t.start.getMonth() + 1)}-${pad(t.start.getDate())}`,
       time: `${pad(t.start.getHours())}:${pad(t.start.getMinutes())}:${pad(t.start.getSeconds())}`,
+      // Absolute instant: the server converts it to the Dwarf's site time
+      // (this browser may be in another timezone, e.g. remote access).
+      startEpochMs: t.start.getTime(),
       autofocus: autofocusFirstOnly ? (t.row === 0 && t.col === 0) : true,
       // Matches durationForIndex()'s own criterion at generation time
       // (user-reported Sep 2026: this used to key off position in the
@@ -1164,6 +1167,7 @@ document.getElementById('sendAllBtn').addEventListener('click', async () => {
       // (dwarf_session.py's _wait_for_astro_end()), same as the
       // program editor's manual field.
       payload.endTime = `${pad(t.end.getHours())}:${pad(t.end.getMinutes())}`;
+      payload.endEpochMs = t.end.getTime();
     }
     try {
       const res = await fetch(`${apiBase()}/api/program`, {

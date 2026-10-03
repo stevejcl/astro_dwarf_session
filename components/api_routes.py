@@ -78,7 +78,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from fastapi import Request
@@ -100,6 +100,7 @@ from components import connection_health, scheduler_runner, scheduler_loop, nati
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
 from components.session_dirs import ensure_dirs
+from components.site_time import site_from_timestamp, site_now
 from components.native_schedule import parse_native_schedule_info
 import pending_schedules
 import dwarf_python_api.lib.my_logger as log
@@ -585,12 +586,15 @@ def register_api_routes() -> None:
         if camera not in ("wide", "tele"):
             return JSONResponse({"error": "camera must be 'wide' or 'tele'"}, status_code=400)
 
-        program = _blank_program()
+        program = _blank_program(session.config)
         cmd = program["command"]
         cmd["id_command"]["description"] = name
-        cmd["id_command"]["date"] = body.get("date") or datetime.now().strftime("%Y-%m-%d")
+        # Defaults in the Dwarf's SITE time (components/site_time.py), the
+        # clock the scheduler checks programs against.
+        site_clock = site_now(session.config)
+        cmd["id_command"]["date"] = body.get("date") or site_clock.strftime("%Y-%m-%d")
         cmd["id_command"]["time"] = (
-            body.get("time") or (datetime.now() + timedelta(minutes=5)).strftime("%H:%M:%S")
+            body.get("time") or (site_clock + timedelta(minutes=5)).strftime("%H:%M:%S")
         )
 
         # Manual RA/Dec goto - a Milky Way mosaic tile (the driving use
@@ -628,6 +632,25 @@ def register_api_routes() -> None:
         active["gain"] = str(body.get("gain", active["gain"]))
         active["count"] = str(body.get("count", active["count"]))
         active["end_time"] = body.get("endTime", "")
+        # Absolute instants (optional, preferred): the sending page runs in
+        # the BROWSER's timezone, which in a remote setup (Tailscale from
+        # home...) isn't the site's - its "date"/"time"/"endTime" wall-
+        # clock strings would then be off by the difference. Converted
+        # here to the Dwarf's site time, the scheduler's clock.
+        start_epoch_ms = body.get("startEpochMs")
+        if start_epoch_ms is not None:
+            try:
+                start_site = site_from_timestamp(float(start_epoch_ms) / 1000, session.config)
+            except (TypeError, ValueError, OverflowError, OSError):
+                return JSONResponse({"error": "startEpochMs must be a number (ms since epoch)"}, status_code=400)
+            cmd["id_command"]["date"] = start_site.strftime("%Y-%m-%d")
+            cmd["id_command"]["time"] = start_site.strftime("%H:%M:%S")
+        end_epoch_ms = body.get("endEpochMs")
+        if end_epoch_ms is not None and active["end_time"]:
+            try:
+                active["end_time"] = site_from_timestamp(float(end_epoch_ms) / 1000, session.config).strftime("%H:%M")
+            except (TypeError, ValueError, OverflowError, OSError):
+                return JSONResponse({"error": "endEpochMs must be a number (ms since epoch)"}, status_code=400)
         mosaic, mosaic_err = _native_mosaic_fields(body)
         if mosaic_err:
             return JSONResponse({"error": mosaic_err}, status_code=400)

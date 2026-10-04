@@ -108,6 +108,8 @@ from __future__ import annotations
 
 import asyncio
 import time
+
+from components import device_lock
 import dwarf_python_api.lib.my_logger as log
 
 from nicegui import background_tasks, run
@@ -194,12 +196,58 @@ _priority_pending: set[str] = set()
 
 _manual_disconnect: set[str] = set()
 
+# Taken over (user-reported Oct 2026, Dwarf Mini): a Dwarf that drops the
+# connection _QUICK_DROP_S after each (re)connection is being used by
+# another client - the Mini accepts only one connection, whatever the
+# client_id (an older Astro Dwarf Session, another PC, the official app).
+# Auto-reconnecting would just take it back from that client, which then
+# takes it back in turn. After _MAX_QUICK_DROPS such drops in a row, auto-
+# reconnect stops until the user connects again themselves.
+_QUICK_DROP_S = 60.0
+_MAX_QUICK_DROPS = 3
+_connected_at: dict[str, float] = {}
+_quick_drops: dict[str, int] = {}
+_taken_over: set[str] = set()
+
+
+def _note_drop(dwarf_uid: str) -> None:
+    """Records a lost connection (once per connection): a drop within
+    _QUICK_DROP_S of connecting counts towards the taken-over state."""
+    started = _connected_at.pop(dwarf_uid, None)
+    if started is None:
+        return
+    if time.monotonic() - started < _QUICK_DROP_S:
+        _quick_drops[dwarf_uid] = _quick_drops.get(dwarf_uid, 0) + 1
+        if _quick_drops[dwarf_uid] >= _MAX_QUICK_DROPS:
+            _taken_over.add(dwarf_uid)
+            log.warning(
+                f"[{dwarf_uid}] Connection dropped {_quick_drops[dwarf_uid]} times right after connecting - "
+                "another client is using this Dwarf, auto-reconnect stopped."
+            )
+    else:
+        _quick_drops.pop(dwarf_uid, None)
+
+
+def is_taken_over(dwarf_uid: str) -> bool:
+    """True when auto-reconnect stopped because another client keeps
+    taking this Dwarf (see _note_drop())."""
+    return dwarf_uid in _taken_over
+
+
+def clear_taken_over(dwarf_uid: str) -> None:
+    """Call on a manual connect: the user decides to take the Dwarf back."""
+    _taken_over.discard(dwarf_uid)
+    _quick_drops.pop(dwarf_uid, None)
+
+
 def mark_manual_disconnect(dwarf_uid: str) -> None:
     """Called by the UI's own Disconnect action - suppresses auto_
     reconnect() for this device until the user reconnects it themselves
     (mark_just_connected() or an explicit new connect action clears
     this)."""
     _manual_disconnect.add(dwarf_uid)
+    # Not a drop: doesn't count towards the taken-over state
+    _connected_at.pop(dwarf_uid, None)
 
 
 def clear_manual_disconnect(dwarf_uid: str) -> None:
@@ -304,6 +352,9 @@ async def connect_and_enter_astro_mode(session) -> bool:
     actually asked for - so a separate perform_get_device_state_info()
     call first would just send that same command twice on every fresh
     connect."""
+    if not device_lock.claim(session.dwarf_uid):
+        # Another Astro Dwarf Session instance on this PC uses this Dwarf
+        return False
     result = await run.io_bound(perform_enter_astro_mode, session=session)
     if result is False:
         return False
@@ -347,6 +398,11 @@ async def _auto_reconnect(session: DwarfSession) -> None:
     unattended retry is the wrong default."""
     uid = session.dwarf_uid
     if uid in _auto_reconnect_in_progress:
+        return
+    if not device_lock.claim(uid):
+        # Used by another instance on this PC: connecting would drop it
+        # (same client_id). Not counted as a failed attempt - retried on
+        # the next poll tick, so this instance takes over once it's free.
         return
     _auto_reconnect_in_progress.add(uid)
     try:
@@ -445,8 +501,10 @@ async def maybe_check(session: DwarfSession) -> None:
         await _cleanup_stale_event_loop(session)
         forget(session.dwarf_uid)
         uid = session.dwarf_uid
+        _note_drop(uid)
         if (
             uid not in _manual_disconnect
+            and uid not in _taken_over
             and uid not in _auto_reconnect_exhausted
             and uid not in _auto_reconnect_in_progress
         ):
@@ -472,7 +530,17 @@ async def maybe_check(session: DwarfSession) -> None:
         release_command_slot(uid)
         _check_started_at.pop(uid, None)
 
-    if not ok and uid not in _auto_reconnect_exhausted and uid not in _auto_reconnect_in_progress:
+    if not ok:
+        _note_drop(uid)
+    elif uid in _connected_at and time.monotonic() - _connected_at[uid] >= _QUICK_DROP_S:
+        # Held long enough: earlier quick drops were not a takeover
+        _quick_drops.pop(uid, None)
+    if (
+        not ok
+        and uid not in _auto_reconnect_exhausted
+        and uid not in _auto_reconnect_in_progress
+        and uid not in _taken_over
+    ):
         background_tasks.create(_auto_reconnect(session), name=f"auto-reconnect-{uid}")
 
 
@@ -494,4 +562,5 @@ def mark_just_connected(dwarf_uid: str) -> None:
     next time it drops."""
     _last_check_ok.pop(dwarf_uid, None)
     _last_check_at[dwarf_uid] = time.monotonic()
+    _connected_at[dwarf_uid] = time.monotonic()
     _auto_reconnect_exhausted.discard(dwarf_uid)

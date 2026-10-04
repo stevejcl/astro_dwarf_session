@@ -46,7 +46,7 @@ from dwarf_python_api.lib.my_logger import (
     unregister_thread_device_label,
 )
 
-from components import connection_health, scheduler_runner, native_schedule
+from components import connection_health, device_lock, scheduler_runner, native_schedule
 from components.native_schedule import parse_native_schedule_info
 from components.actions_section import build_actions_section
 from components.camera_stream import build_camera_stream_section
@@ -471,6 +471,11 @@ async def _handle_sync_pending(session, dwarf_uid: str, refresh_view: Callable[[
 
 
 async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
+    if device_lock.held_elsewhere(dwarf_uid):
+        _safe_notify(t("device_used_elsewhere"), type="warning")
+        return
+    # The user takes the Dwarf back (auto-reconnect resumes too)
+    connection_health.clear_taken_over(dwarf_uid)
     if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.connect"):
         _safe_notify(t("device_busy"), type="warning")
         return
@@ -527,6 +532,8 @@ async def _handle_disconnect(session, dwarf_uid: str, refresh_view: Callable[[],
     if thread is not None:
         unregister_thread_device_label(thread.ident)
     connection_health.forget(dwarf_uid)
+    # Lets another instance on this PC take this Dwarf
+    device_lock.release(dwarf_uid)
     connection_health.mark_manual_disconnect(dwarf_uid)  # <-- ADD: suppresses
         # auto_reconnect() until the user reconnects again themselves -
         # otherwise maybe_check() sees is_connected=False right after this

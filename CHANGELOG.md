@@ -40,6 +40,12 @@
     full-width line instead of being squeezed between RA and Dec; RA/Dec are narrower and stay together
     on the next line. Unchanged on desktop.
 
+  ### BugFix
+    ### Port detection
+    Launched one after the other, this app and Dwarfium Scope Archive could pick the same port on Windows (a free test
+    bind on 0.0.0.0 doesn't see a server listening on 127.0.0.1). A port is now free only when nothing answers on it and
+    it binds on 127.0.0.1, 0.0.0.0 and the --host address (exclusive bind on Windows).
+
 ## [3.1.4] - 2026-10-02
     ### Improvements
     ### Native shooting schedule

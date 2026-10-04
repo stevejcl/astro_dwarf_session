@@ -7,6 +7,15 @@
     editor and for a click on the curve; a slot already over is refused with a message.
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
+  ### Improvements
+    ### Current target on the dashboard and the watch page
+    The dashboard card and the watch page (/watch/<device>) now show the target being shot: the goto target of
+    the program run by this app (also added to the program name in the "program in progress" banner), or the
+    native shooting schedule task run by the Dwarf itself ("Schedule <name> · <target>", task n/total and its
+    time window, in the device's timezone), also before its capture starts (goto, calibration).
+    The schedule list is read from the Dwarf only when a capture starts outside a program of this app, once a
+    little after each task's start (so a task the Dwarf didn't run isn't shown for its whole window), and every
+    10 min while a capture stays unexplained - never polled otherwise.
 
 ## [3.1.6] - 2026-10-04
   ### BugFix

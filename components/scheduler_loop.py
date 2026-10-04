@@ -385,6 +385,29 @@ async def refresh_schedule_on_capture(manager) -> None:
             native_schedule.set_cached(uid, native_schedule.parse_native_schedule_info(info))
 
 
+# (dwarf_uid, Current/ file) already resumed or tried by the retry below
+_resume_tried: set[tuple[str, str]] = set()
+
+
+async def resume_orphan_by_target(manager) -> None:
+    """Resumes following a program left in Current/ by a restart (user-
+    reported Oct 2026: restart at 01:00 during a capture started at 22:39)
+    as soon as the Dwarf reports capturing that program's target - see
+    scheduler_runner.reconcile_orphaned_current_files(). Once per file."""
+    from nicegui import run
+
+    for session in manager.all():
+        uid = session.dwarf_uid
+        if not session.is_connected or scheduler_runner.is_running(uid) or connection_health.is_busy(uid):
+            continue
+        filename = scheduler_runner.orphan_matching_device_target(session)
+        if filename is None or (uid, filename) in _resume_tried:
+            continue
+        _resume_tried.add((uid, filename))
+        log.info(f"[{uid}] Dwarf is capturing the target of {filename} - resuming it.")
+        await run.io_bound(scheduler_runner.reconcile_orphaned_current_files, uid, session)
+
+
 def start_background_loop(manager) -> None:
     """Call once at app startup (astro_dwarf_ui.py). Uses app.timer, not
     ui.timer - see the module docstring."""
@@ -395,3 +418,4 @@ def start_background_loop(manager) -> None:
     # Names the native schedule task when a capture starts without a
     # program of this app (see components/current_activity.py)
     app.timer(_CHECK_INTERVAL_S, lambda: refresh_schedule_on_capture(manager))
+    app.timer(_CHECK_INTERVAL_S, lambda: resume_orphan_by_target(manager))

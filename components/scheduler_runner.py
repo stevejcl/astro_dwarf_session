@@ -80,7 +80,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from nicegui import background_tasks, run
 
@@ -572,7 +572,11 @@ def reconcile_after_reconnect(dwarf_uid: str, session) -> None:
     state.last_saved_path = done_path
     log.notice(f"[{dwarf_uid}] Force-stopped run reconciled as successful after reconnect ({current_count}/{requested}).")
 
-_ORPHAN_CORRELATION_MAX_AGE_S = 300
+# A program left in Current/ by a restart is resumed when its last step
+# (usually the capture start - nothing is recorded while it captures) is
+# at most this old (user-requested Oct 2026: "pas plus de 15h", a whole
+# night), unless the Dwarf reports capturing another target.
+_ORPHAN_CORRELATION_MAX_AGE_S = 15 * 3600
 
 def _requeue_orphan_to_todo(dwarf_uid, dirs, filename, path, program, id_command) -> None:
     """Puts an interrupted-before-any-real-progress session back into
@@ -605,7 +609,50 @@ _RESUME_BUSY_CHECK_EVERY_S = 20  # how often to cross-check with a FRESH device 
 _RESUME_ACQUIRE_ATTEMPTS = 3
 _RESUME_ACQUIRE_DELAY_S = 3
 
-def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted) -> int:
+def _program_end_time(program: dict, camera_key: str) -> datetime | None:
+    """End time of a resumed program (user-reported Oct 2026: not applied
+    after a restart, so a capture could run long past it). Anchored on the
+    program's own start date/time - not "the next HH:MM from now" like
+    dwarf_session._parse_end_time(), which would push an end time already
+    past to the next day: end_time "06:10" for a start at 22:39 is 06:10
+    the next morning. None when blank or unparseable."""
+    value = (program.get(camera_key) or {}).get("end_time") or ""
+    id_command = program.get("id_command") or {}
+    try:
+        hour, minute = str(value).strip().split(":")
+        start = datetime.strptime(
+            f"{id_command.get('date', '')} {id_command.get('time', '')}".strip(), "%Y-%m-%d %H:%M:%S"
+        )
+        end = start.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
+    except (ValueError, AttributeError):
+        return None
+    return end + timedelta(days=1) if end <= start else end
+
+
+def _normalized_name(name) -> str:
+    return " ".join(str(name or "").lower().split())
+
+
+def device_target_match(session, program: dict) -> bool | None:
+    """Compares the target the Dwarf reports it is capturing (its
+    notifications' target_name, dwarf_python_api's "CurrentTargetName")
+    with this program's goto target: True (the program it is still
+    running), False (another target), None (either name unknown)."""
+    from components.current_activity import program_target  # local: imports this module
+
+    status = get_client_status(session)
+    device_name = _normalized_name((status.get("fullStatus") or {}).get("CurrentTargetName"))
+    target = _normalized_name(program_target({"command": program}))
+    if not device_name or not target:
+        return None
+    return device_name == target or target in device_name or device_name in target
+
+
+def device_target_matches(session, program: dict) -> bool:
+    return device_target_match(session, program) is True
+
+
+def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted, end_time=None) -> int:
     """Returns the final current_count once the resumed capture is
     considered finished.
 
@@ -640,6 +687,9 @@ def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted
             last_count = current_count
 
         if requested_count and current_count >= requested_count:
+            return current_count
+        if end_time is not None and session_now(session) >= end_time:
+            # The program's end time (the caller stops the capture)
             return current_count
 
         now = time.monotonic()
@@ -702,19 +752,28 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
         try:
             if take_photo:
                 requested = _parse_requested_count(state.requested_count_tele)
-                final_count = _wait_for_resumed_capture(session, "Tele", requested, interrupted)
+                end_time = _program_end_time(program, "setup_camera")
+                final_count = _wait_for_resumed_capture(session, "Tele", requested, interrupted, end_time)
                 if interrupted():
                     perform_stopAstroPhoto(session=session)
                     success = False
+                elif end_time is not None and session_now(session) >= end_time:
+                    # End time reached: stopped like a normal run does
+                    log.notice(f"[{dwarf_uid}] Resumed capture: end time {end_time:%H:%M} reached - stopping.")
+                    perform_stopAstroPhoto(session=session)
                 elif requested and final_count < requested:
                     success = False  # device stopped short of the target
 
             if success and take_widephoto:
                 requested = _parse_requested_count(state.requested_count_wide)
-                final_count = _wait_for_resumed_capture(session, "Wide", requested, interrupted)
+                end_time = _program_end_time(program, "setup_wide_camera")
+                final_count = _wait_for_resumed_capture(session, "Wide", requested, interrupted, end_time)
                 if interrupted():
                     perform_stopAstroWidePhoto(session=session)
                     success = False
+                elif end_time is not None and session_now(session) >= end_time:
+                    log.notice(f"[{dwarf_uid}] Resumed capture: end time {end_time:%H:%M} reached - stopping.")
+                    perform_stopAstroWidePhoto(session=session)
                 elif requested and final_count < requested:
                     success = False
         except Exception as e:
@@ -753,6 +812,31 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
     finally:
         state.running = False
         connection_health.release_command_slot(dwarf_uid)
+
+
+def orphan_matching_device_target(session) -> str | None:
+    """Cheap check for scheduler_loop's resume retry (no device command):
+    the newest Current/ file of this device when its program's target is
+    the one the Dwarf reports capturing, else None. reconcile_orphaned_
+    current_files() runs right after a reconnect, usually before the
+    Dwarf's first progress notification has brought the target name."""
+    if is_running(session.dwarf_uid):
+        return None
+    current_dir = session_dirs_for(session)["CURRENT_DIR"]
+    try:
+        files = [f for f in os.listdir(current_dir) if f.endswith(".json")]
+    except OSError:
+        return None
+    if not files:
+        return None
+    newest = max(files, key=lambda f: os.path.getmtime(os.path.join(current_dir, f)))
+    try:
+        with open(os.path.join(current_dir, newest), "r", encoding="utf-8") as f:
+            full_program = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    program = full_program.get("command", full_program)
+    return newest if device_target_matches(session, program) else None
 
 
 def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
@@ -802,7 +886,13 @@ def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
     device_busy = device_is_actively_capturing(session)
     if device_busy:
         age = (session_now(session) - ts).total_seconds()
-        if age <= _ORPHAN_CORRELATION_MAX_AGE_S:
+        # The Dwarf reports this program's target, or no target name yet
+        # and a last step within _ORPHAN_CORRELATION_MAX_AGE_S (user-
+        # reported Oct 2026: last step at 22:39 - the capture start - and
+        # a restart at 01:00 wasn't resumed with the former 5 min limit).
+        # Never when the Dwarf reports capturing another target.
+        match = device_target_match(session, program)
+        if match is True or (match is None and age <= _ORPHAN_CORRELATION_MAX_AGE_S):
             background_tasks.create(
                 run.io_bound(
                     _resume_capture, dwarf_uid, session, dirs, filename, path, program, id_command

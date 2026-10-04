@@ -16,6 +16,8 @@
     The schedule list is read from the Dwarf only when a capture starts outside a program of this app, once a
     little after each task's start (so a task the Dwarf didn't run isn't shown for its whole window), and every
     10 min while a capture stays unexplained - never polled otherwise.
+    Any other capture (started from another app, by hand...) shows the target name the Dwarf itself sends in its
+    tracking / capture progress notifications. Requires dwarf_python_api 3.1.5.
     ### One instance per Dwarf on this PC
     Two Astro Dwarf Session open together (e.g. the .exe and a source run) connected to the same Dwarf with the
     same client_id: the Dwarf dropped one each time the other connected, and both reconnected in turn. The first

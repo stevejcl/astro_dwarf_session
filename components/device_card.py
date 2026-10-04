@@ -353,6 +353,9 @@ class DeviceCardView:
             kind = "program_running"
         elif connection_lost:
             kind = "connection_lost"
+        elif not session.is_connected and connection_health.is_taken_over(session.dwarf_uid):
+            # Dropped right after each reconnection: another client has it
+            kind = "taken_over"
         elif not session.is_connected and device_lock.held_elsewhere(session.dwarf_uid):
             # Another Astro Dwarf Session instance on this PC uses it
             kind = "used_elsewhere"
@@ -503,6 +506,9 @@ class DeviceCardView:
                     )
                 elif kind == "connection_lost":
                     status_banner(t("connection_lost"), kind="danger")
+                elif kind == "taken_over":
+                    status_banner(t("device_taken_over"), kind="warning",
+                                  detail=t("device_taken_over_detail"))
                 elif kind == "used_elsewhere":
                     status_banner(t("device_used_elsewhere"), kind="warning",
                                   detail=t("device_used_elsewhere_detail"))

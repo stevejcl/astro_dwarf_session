@@ -474,6 +474,8 @@ async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], No
     if device_lock.held_elsewhere(dwarf_uid):
         _safe_notify(t("device_used_elsewhere"), type="warning")
         return
+    # The user takes the Dwarf back (auto-reconnect resumes too)
+    connection_health.clear_taken_over(dwarf_uid)
     if not connection_health.try_acquire_command_slot(dwarf_uid, caller="session.connect"):
         _safe_notify(t("device_busy"), type="warning")
         return

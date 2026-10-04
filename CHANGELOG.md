@@ -23,6 +23,10 @@
     a crash); the other one doesn't connect, its card says the Dwarf is used by another instance with an "Open its
     view" link to that instance's watch page (target, program, progress), and it connects by itself once the Dwarf
     is free. Only instances with this change take part: an older version still running isn't detected.
+    A Dwarf that drops the connection right after each reconnection (3 times within a minute of connecting) is
+    being used by another client - a Dwarf Mini accepts only one connection whatever the client_id (an older
+    version, another PC, the official app): auto-reconnect then stops instead of taking it back in a loop, and the
+    card says so until the user connects again.
 
 ## [3.1.6] - 2026-10-04
   ### BugFix

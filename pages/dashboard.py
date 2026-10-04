@@ -58,6 +58,7 @@ async def _handle_connect_all(button: ui.button | None = None) -> None:
             if device_lock.held_elsewhere(session.dwarf_uid):
                 skipped += 1
                 continue
+            connection_health.clear_taken_over(session.dwarf_uid)
             if not connection_health.try_acquire_command_slot(session.dwarf_uid, caller="dashboard.connect_all"):
                 skipped += 1
                 continue

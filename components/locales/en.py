@@ -34,6 +34,8 @@ TRANSLATIONS: dict[str, str] = {
     "device_used_elsewhere":        "Used by another Astro Dwarf Session on this PC",
     "device_used_elsewhere_detail": "Connects here as soon as the other one disconnects or closes.",
     "device_open_owner":            "Open its view",
+    "device_taken_over":            "Connection taken by another application",
+    "device_taken_over_detail":     "Dropped right after each reconnection (a Dwarf Mini accepts only one connection): auto-reconnect stopped. Connect again once the other one is closed.",
     "connection_lost":              "Connection lost",
     "reconnect":                    "Reconnect",
     "reconnecting_in_progress":     "Reconnecting...",

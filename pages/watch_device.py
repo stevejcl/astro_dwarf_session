@@ -119,11 +119,11 @@ def _capture_kind(full_status: dict) -> str | None:
 def _activity_banner(text: str, detail: str = "") -> None:
     """Text + small spinner, readable in light and dark theme. Display only.
     detail: optional second line (current target, schedule task)."""
-    with ui.row().classes("items-center gap-2 w-full px-3 py-2 rounded-borders").style(
+    with ui.row().classes("items-center gap-2 w-full px-3 py-2 rounded-borders no-wrap").style(
         "background: rgba(25, 118, 210, 0.15)"
     ):
-        ui.spinner(size="sm")
-        with ui.column().classes("gap-0"):
+        ui.spinner(size="sm").classes("shrink-0")
+        with ui.column().classes("gap-0 min-w-0"):
             ui.label(text).classes("text-sm font-medium")
             if detail:
                 ui.label(detail).classes("text-xs opacity-80")

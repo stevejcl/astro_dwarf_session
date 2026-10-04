@@ -116,10 +116,15 @@ def current_activity(session) -> dict | None:
     return None
 
 
+def format_time(session, ts: int | None) -> str:
+    """"22:30" in the device's timezone (the one schedules use)."""
+    if not ts:
+        return ""
+    return datetime.fromtimestamp(ts, schedule_tz(session.config)).strftime("%H:%M")
+
+
 def format_window(session, start: int | None, end: int | None) -> str:
-    """"21:05-22:30" in the device's timezone (the one schedules use)."""
+    """"21:05-22:30" in the device's timezone."""
     if not start or not end:
         return ""
-    tz = schedule_tz(session.config)
-    fmt = lambda ts: datetime.fromtimestamp(ts, tz).strftime("%H:%M")
-    return f"{fmt(start)}–{fmt(end)}"
+    return f"{format_time(session, start)}\u2013{format_time(session, end)}"

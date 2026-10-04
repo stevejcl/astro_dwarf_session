@@ -567,9 +567,11 @@ class DeviceCardView:
         detail_label) tuple instead of a single label - title is the
         program name, detail is the current step, both independently
         mutable without a rebuild."""
-        with ui.row().classes(f"items-center gap-2 rounded-lg px-3 py-2 w-full {css}"):
-            ui.icon(icon).classes("text-lg")
-            with ui.column().classes("gap-0"):
+        # no-wrap: a long target name wraps inside the text column instead
+        # of pushing it under the icon
+        with ui.row().classes(f"items-center gap-2 rounded-lg px-3 py-2 w-full no-wrap {css}"):
+            ui.icon(icon).classes("text-lg shrink-0")
+            with ui.column().classes("gap-0 min-w-0"):
                 if static_message is not None:
                     ui.label(static_message).classes("text-sm font-medium")
                     return ui.label("").classes("text-xs opacity-80")

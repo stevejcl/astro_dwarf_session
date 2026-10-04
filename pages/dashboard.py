@@ -201,6 +201,11 @@ def build_dashboard_page() -> None:
                 built_layout.clear()
                 await poll()  # rebuilt now, in the new order
 
+            async def _move(uid: str, where: str) -> None:
+                device_prefs.move(uid, manager.all(), where)
+                built_layout.clear()
+                await poll()
+
             async def poll() -> None:
                 sessions = device_prefs.display_order(manager.all())
                 layout = [(s.dwarf_uid, device_prefs.is_hidden(s.dwarf_uid)) for s in sessions]
@@ -217,7 +222,7 @@ def build_dashboard_page() -> None:
                         for session, (_uid, hidden) in zip(sessions, layout):
                             cards[session.dwarf_uid] = DeviceCardView(
                                 session, on_open=_open_device,
-                                on_toggle_hidden=_toggle_hidden, hidden=hidden,
+                                on_toggle_hidden=_toggle_hidden, hidden=hidden, on_move=_move,
                             )
                     built_layout[:] = layout
                     empty_label.set_visibility(not sessions)

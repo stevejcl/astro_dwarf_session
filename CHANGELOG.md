@@ -12,6 +12,9 @@
     The eye button on a card hides a Dwarf not used for now: only its header (name, IP, status) stays, it moves after
     the others, and it isn't auto-connected (no more failed attempts for a Dwarf that is off). The same button shows
     it again. Saved in device_prefs.json in the working folder.
+    ### Dashboard order
+    The ⇅ button on a card moves it first, up, down or last (hidden Dwarfs stay after the others, ordered among
+    themselves the same way). Saved in device_prefs.json, also used by the watch dashboard.
     The watch dashboard (/watch) shows the same order and hidden Dwarfs (display only, no hide button).
     ### Current target on the dashboard and the watch page
     The dashboard card and the watch page (/watch/<device>) now show the target being shot: the goto target of

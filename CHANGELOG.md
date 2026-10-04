@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [3.1.5] - 2026-10-04
     ### New features
     ### Program editor: target catalog + altitude planner
     "Pick from catalog": choose a target from the DSO catalog shared with Dwarfium Scope Archive
@@ -48,6 +48,24 @@
     Target row (program editor and native schedule editor): on a phone the target name gets its own
     full-width line instead of being squeezed between RA and Dec; RA/Dec are narrower and stay together
     on the next line. Unchanged on desktop.
+    ### Native shooting schedule: failure reason
+    The error code recorded by the Dwarf for a failed or interrupted task is now shown next to the task,
+    in the session page's Shooting Schedule section and on the Programs page (e.g. "-16310
+    SHOOTING_SCHEDULE_INTERRUPTED" when the Dwarf was off or unavailable at start time, "-11504
+    ASTRO_CALIBRATION_FAILED"), instead of only in the official mobile app.
+    ### Native window
+    The native window (pywebview) no longer runs in private mode: its browser storage (language,
+    remembered choices) is kept between launches.
+  ### BugFix
+    ### Device clock set on every connection
+    The native schedule runs on the Dwarf's own clock, but the app only set it when a local program
+    started: a Dwarf connected through the UI kept whatever clock it had, and valid schedules were
+    rejected with -16301 (INVALID_SHOOTING_DURATION) until the official app had been opened once.
+    Time, timezone and location are now sent on every connection, as the official app does: manual
+    connect, automatic connection at startup and reconnects (opened with SET_TIME itself, ~5 s instead
+    of ~11 s).
+    Requires dwarf_python_api 3.1.4 (also sets the clock on any new connection, and logs the Dwarf
+    clock offset on each schedule sync).
 
 ## [3.1.4] - 2026-10-02
     ### Improvements

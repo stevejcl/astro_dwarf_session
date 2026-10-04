@@ -16,7 +16,7 @@ from nicegui import ui,run,app
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 
-from components import connection_health, device_lock
+from components import connection_health, device_lock, device_prefs
 from components.device_card import DeviceCardView
 from components.network_info import watch_qr_svg, watch_url
 from components.i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
@@ -55,7 +55,7 @@ async def _handle_connect_all(button: ui.button | None = None) -> None:
         skipped = 0
         failed = 0
         for session in targets:
-            if device_lock.held_elsewhere(session.dwarf_uid):
+            if device_lock.held_elsewhere(session.dwarf_uid) or device_prefs.is_hidden(session.dwarf_uid):
                 skipped += 1
                 continue
             connection_health.clear_taken_over(session.dwarf_uid)
@@ -193,23 +193,33 @@ def build_dashboard_page() -> None:
             # page so poll() below can update() them in place instead of
             # rebuilding the whole list.
             cards: dict[str, DeviceCardView] = {}
+            # Order and hidden flags the cards were built with
+            built_layout: list = []
+
+            async def _toggle_hidden(uid: str) -> None:
+                device_prefs.set_hidden(uid, not device_prefs.is_hidden(uid))
+                built_layout.clear()
+                await poll()  # rebuilt now, in the new order
 
             async def poll() -> None:
-                sessions = manager.all()
-                current_uids = {s.dwarf_uid for s in sessions}
+                sessions = device_prefs.display_order(manager.all())
+                layout = [(s.dwarf_uid, device_prefs.is_hidden(s.dwarf_uid)) for s in sessions]
 
                 # Rare path: the device list itself changed (a device
-                # was paired/removed while this page stayed open) - full
+                # was paired/removed while this page stayed open), or a
+                # Dwarf was hidden/shown (moves to / from the end) - full
                 # rebuild is fine here since it happens once, not every
                 # tick.
-                if current_uids != set(cards):
+                if layout != built_layout:
                     cards_container.clear()
                     cards.clear()
                     with cards_container:
-                        for session in sessions:
+                        for session, (_uid, hidden) in zip(sessions, layout):
                             cards[session.dwarf_uid] = DeviceCardView(
-                                session, on_open=_open_device
+                                session, on_open=_open_device,
+                                on_toggle_hidden=_toggle_hidden, hidden=hidden,
                             )
+                    built_layout[:] = layout
                     empty_label.set_visibility(not sessions)
                     return
 

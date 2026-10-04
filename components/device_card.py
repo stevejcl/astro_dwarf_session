@@ -148,8 +148,18 @@ class DeviceCardView:
     """One card per DwarfSession, built once. Call update(session) on
     every poll instead of recreating the card."""
 
-    def __init__(self, session: DwarfSession, on_open: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        session: DwarfSession,
+        on_open: Callable[[str], None],
+        on_toggle_hidden: Callable[[str], None] | None = None,
+        hidden: bool = False,
+    ) -> None:
+        """on_toggle_hidden(uid): called by the card's hide/show button
+        (the dashboard moves the card and saves the choice - see
+        components/device_prefs.py). hidden: only the header is shown."""
         self.dwarf_uid = session.dwarf_uid
+        self.hidden = hidden
         self._banner_kind: str | None = None
         self._dynamic_label: ui.label | None = None
         self._dynamic_detail: ui.label | None = None
@@ -175,6 +185,19 @@ class DeviceCardView:
                             "text-xs text-grey-6 truncate"
                         )
                 with ui.row().classes("items-center gap-1"):
+                    if on_toggle_hidden is not None:
+                        # Hide / show this Dwarf (header only, listed last,
+                        # not auto-connected); stopPropagation: not the
+                        # card's own click, which opens the device
+                        ui.button(
+                            icon="visibility" if hidden else "visibility_off"
+                        ).props("flat round dense size=sm").classes("text-grey-6").tooltip(
+                            t("device_show") if hidden else t("device_hide")
+                        ).on(
+                            "click",
+                            lambda: on_toggle_hidden(self.dwarf_uid),
+                            js_handler="(e) => { e.stopPropagation(); emit(); }",
+                        )
                     # Always present (not conditionally created) so
                     # toggling the scheduler for this device never
                     # reflows the card - just a colour/visibility swap
@@ -319,6 +342,11 @@ class DeviceCardView:
             # Only this small container is ever cleared/rebuilt, and
             # only when the banner's structural kind changes.
             self._banner_slot = ui.column().classes("w-full gap-0")
+            if hidden:
+                # Header only (name, IP, status dot)
+                self._info_row.set_visibility(False)
+                self._banner_slot.set_visibility(False)
+                self.card.classes("opacity-70")
 
         self.update(session)
 

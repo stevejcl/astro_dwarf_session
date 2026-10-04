@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+  ### BugFix
+    ### "Use best slot" (program editor)
+    A best slot whose start has already passed now starts 5 min from now (site time), also in the native schedule
+    editor and for a click on the curve; a slot already over is refused with a message.
+    The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
+    mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
     ### Current target on the dashboard and the watch page
     The dashboard card and the watch page (/watch/<device>) now show the target being shot: the goto target of

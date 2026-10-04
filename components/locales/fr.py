@@ -438,6 +438,8 @@ TRANSLATIONS: dict[str, str] = {
     "planner_use_best":             "Utiliser le meilleur cr\xe9neau",
     "planner_click_hint":           "ou cliquez sur la courbe pour fixer l'heure de d\xe9but.",
     "planner_slot_applied":         "D\xe9but {start}, heure de fin {end} appliqu\xe9s.",
+    "planner_slot_applied_count":   "D\xe9but {start}, heure de fin {end}, {count} images appliqu\xe9s.",
+    "planner_slot_over":            "Ce cr\xe9neau est d\xe9j\xe0 termin\xe9 (fin \xe0 {end}).",
     "planner_start_applied":        "D\xe9but fix\xe9 \xe0 {start}.",
     "planner_night_of_tz":          "Nuit du {date} (fuseau du site : {tz})",
     "planner_sched_exceeds":        "D\xe9but fix\xe9 \xe0 {start} - mais nombre \xd7 exposition d\xe9passe de {over} min la fin du cr\xe9neau ({end}) : r\xe9duisez le nombre de poses.",

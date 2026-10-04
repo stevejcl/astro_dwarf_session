@@ -154,10 +154,13 @@ class DeviceCardView:
         on_open: Callable[[str], None],
         on_toggle_hidden: Callable[[str], None] | None = None,
         hidden: bool = False,
+        on_move: Callable[[str, str], None] | None = None,
     ) -> None:
         """on_toggle_hidden(uid): called by the card's hide/show button
         (the dashboard moves the card and saves the choice - see
-        components/device_prefs.py). hidden: only the header is shown."""
+        components/device_prefs.py). hidden: only the header is shown.
+        on_move(uid, where): called by the card's order menu, where being
+        "first", "up", "down" or "last"."""
         self.dwarf_uid = session.dwarf_uid
         self.hidden = hidden
         self._banner_kind: str | None = None
@@ -185,6 +188,28 @@ class DeviceCardView:
                             "text-xs text-grey-6 truncate"
                         )
                 with ui.row().classes("items-center gap-1"):
+                    if on_move is not None:
+                        # Display order: stopPropagation so the menu button
+                        # doesn't open the device (the menu itself is
+                        # rendered outside the card)
+                        with ui.button(icon="swap_vert").props("flat round dense size=sm").classes(
+                            "text-grey-6"
+                        ).tooltip(t("device_order")).on(
+                            "click", js_handler="(e) => e.stopPropagation()"
+                        ):
+                            with ui.menu():
+                                for where, icon, label in (
+                                    ("first", "vertical_align_top", "device_move_first"),
+                                    ("up", "arrow_upward", "device_move_up"),
+                                    ("down", "arrow_downward", "device_move_down"),
+                                    ("last", "vertical_align_bottom", "device_move_last"),
+                                ):
+                                    with ui.menu_item(
+                                        on_click=lambda _e, w=where: on_move(self.dwarf_uid, w)
+                                    ):
+                                        with ui.row().classes("items-center gap-2 no-wrap"):
+                                            ui.icon(icon).classes("text-grey-7")
+                                            ui.label(t(label))
                     if on_toggle_hidden is not None:
                         # Hide / show this Dwarf (header only, listed last,
                         # not auto-connected); stopPropagation: not the

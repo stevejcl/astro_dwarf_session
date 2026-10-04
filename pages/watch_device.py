@@ -260,7 +260,7 @@ def build_watch_device_page() -> None:
 
                 error = full_status.get("ErrorConnection")
                 capture_key = _capture_kind(full_status)
-                activity = current_activity.current_activity(session)
+                activity = current_activity.current_activity(session, full_status)
                 banner_col.clear()
                 with banner_col:
                     if error:

@@ -339,7 +339,7 @@ class DeviceCardView:
         program_running = scheduler_runner.is_running(session.dwarf_uid)
         # Program of this app or native schedule task running now (target
         # shown in the banner - see components/current_activity.py)
-        activity = current_activity.current_activity(session) if session.is_connected else None
+        activity = current_activity.current_activity(session, full_status) if session.is_connected else None
 
         if error:
             kind = "error"

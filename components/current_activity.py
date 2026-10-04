@@ -3,13 +3,16 @@ watch page (user-requested Oct 2026: the current target was only shown in
 the program's details, and a native shooting schedule running on the
 Dwarf wasn't shown at all).
 
-Two sources:
+Three sources:
   - a program run by this app (scheduler_runner's RunState): its target
     comes from the program's goto (manual or solar system);
   - a native shooting schedule run by the Dwarf itself: the task comes
     from the last schedule list read from the device (native_schedule's
     cache) - the task flagged "shooting", else the task whose time window
-    contains now.
+    contains now;
+  - any other capture (started from another app, by hand...): the target
+    name the Dwarf sends in its tracking / capture progress notifications
+    (dwarf_python_api's "CurrentTargetName").
 
 Read-only: nothing here sends a command (used by the watch page). The
 schedule list is read from the device by scheduler_loop.
@@ -88,10 +91,22 @@ def current_schedule_task(dwarf_uid: str, now: float | None = None) -> dict | No
     return best
 
 
-def current_activity(session) -> dict | None:
-    """{"source": "program"|"schedule", "title", "target", "start", "end"}
-    for what the device is doing now, or None. title is the program or
-    schedule name; target the program's target or the schedule task."""
+def _is_capturing(full_status: dict) -> bool:
+    return bool(
+        full_status.get("AstroCapture")
+        or full_status.get("takePhotoStarted")
+        or full_status.get("takeWidePhotoStarted")
+    )
+
+
+def current_activity(session, full_status: dict | None = None) -> dict | None:
+    """{"source": "program"|"schedule"|"device", "title", "target", "start",
+    "end"} for what the device is doing now, or None. title is the program
+    or schedule name; target the program's target or the schedule task.
+    full_status (get_client_status()'s, already read by the caller): for a
+    capture neither a program of this app nor a cached schedule explains
+    (started from another app, by hand...), the target name the Dwarf
+    itself sends ("CurrentTargetName", dwarf_python_api >= 3.1.5)."""
     uid = session.dwarf_uid
     if scheduler_runner.is_running(uid):
         run_state = scheduler_runner.get_run_state(uid)
@@ -113,6 +128,10 @@ def current_activity(session) -> dict | None:
             "start": task["start"],
             "end": task["end"],
         }
+    full_status = full_status or {}
+    device_target = full_status.get("CurrentTargetName") or ""
+    if device_target and _is_capturing(full_status):
+        return {"source": "device", "title": "", "target": device_target, "start": None, "end": None}
     return None
 
 

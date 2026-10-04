@@ -21,6 +21,8 @@ import logging
 import os
 import socket
 import sys
+import pathlib
+from pathlib import Path
 from multiprocessing import freeze_support
 
 # Windows only: forces the WHOLE PROCESS (not just dwarf_python_api's
@@ -118,23 +120,43 @@ from pages.watch_dashboard import build_watch_dashboard_page
 from pages.watch_device import build_watch_device_page
 
 
+def _port_in_use(port: int) -> bool:
+    """True when a server already answers on this port on the loopback."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _can_bind(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if sys.platform == "win32":
+            # Without it Windows lets 0.0.0.0:port bind while another
+            # process holds 127.0.0.1:port (and the other way round)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        try:
+            s.bind((host, port))
+            return True
+        except OSError:
+            return False
+
+
 def _find_open_port(host: str, start_port: int = 8000, end_port: int = 8999) -> int:
     """Own replacement for nicegui.native.find_open_port() (user-
     reported Sep 2026: the default launch picked a port that was
     already in use by something else). That function only test-binds
-    on 'localhost' (127.0.0.1) regardless of what host the app will
-    actually listen on - with --host defaulting to 0.0.0.0 (see
-    parse_args() below), a port already held by another process
-    specifically on 0.0.0.0 or on a particular LAN adapter's address
-    can slip through as "free" when only tested against localhost.
-    This probes the SAME host the server will actually bind to."""
+    on 'localhost', and a single test bind is not enough on Windows
+    either (user-reported Oct 2026: launched one after the other, this
+    app and Dwarfium Scope Archive - local, 127.0.0.1 - ended up on the
+    same port): Windows lets a socket bind 0.0.0.0:port while another
+    process holds 127.0.0.1:port, and the other way round. A port is
+    free only when nothing answers on it and it binds on the loopback,
+    on all interfaces and on the host the server will use."""
+    hosts = {"127.0.0.1", "0.0.0.0", host}
     for port in range(start_port, end_port + 1):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind((host, port))
-                return port
-        except OSError:
+        if _port_in_use(port):
             continue
+        if all(_can_bind(h, port) for h in hosts):
+            return port
     raise OSError("No open port found")
 
 
@@ -205,7 +227,6 @@ def main() -> None:
     # served from /images/<name>.png. Resolved relative to THIS file
     # (not the current working directory), so it works regardless of
     # where the app is launched from.
-    from pathlib import Path
 
     # Detect PyInstaller running
     if getattr(sys, 'frozen', False):
@@ -285,6 +306,16 @@ def main() -> None:
     app.timer(30.0, scheduler_runner.check_stuck_runs)
 
     if not args.no_native:
+        # Persistent WebView data folder instead of pywebview's private mode
+        # (temp folder deleted at exit): keeps the browser cookie, so the
+        # per-user settings (app.storage.user) survive a restart. Next to
+        # the exe in a PyInstaller build (__file__ is the temp extraction
+        # folder there), next to the sources otherwise.
+        _app_dir = pathlib.Path(__file__).parent
+        _webview_base = (pathlib.Path(sys.executable).parent if getattr(sys, "frozen", False)
+                         else _app_dir)
+        app.native.start_args['private_mode'] = False
+        app.native.start_args['storage_path'] = str(_webview_base / ".nicegui" / "webview")
         ui.run(
             title="Astro Dwarf Session",
             storage_secret="astro_dwarf_session_key_change_me",  # TODO: move to a .env

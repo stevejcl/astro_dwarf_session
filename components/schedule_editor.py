@@ -56,7 +56,7 @@ from components.i18n import t
 from components.native_schedule import schedule_tz
 from components.dso_catalog import short_name
 from components.stellarium import get_target_from_stellarium
-from components.target_planner import build_altitude_panel, night_of, open_catalog_dialog
+from components.target_planner import build_altitude_panel, earliest_start, night_of, open_catalog_dialog
 import dwarf_python_api.lib.my_logger as log
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
@@ -251,6 +251,11 @@ def build_schedule_editor(session) -> None:
         return night_of(date_input.value, start_time_input.value)
 
     def _apply_slot(start: datetime, end: datetime | None) -> None:
+        # A start already past becomes now + 5 min (device time)
+        start = earliest_start(start, datetime.now(user_tz).replace(tzinfo=None))
+        if end is not None and start >= end:
+            ui.notify(t("planner_slot_over", end=f"{end:%H:%M}"), type="warning")
+            return
         date_input.value = start.strftime("%Y-%m-%d")
         start_time_input.value = start.strftime("%H:%M")
         # Duration stays count x exposure (see duration_input above) - only

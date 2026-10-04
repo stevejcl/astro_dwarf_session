@@ -434,6 +434,8 @@ TRANSLATIONS: dict[str, str] = {
     "planner_use_best":             "Use best slot",
     "planner_click_hint":           "or click the curve to set the start time.",
     "planner_slot_applied":         "Start {start}, end time {end} applied.",
+    "planner_slot_applied_count":   "Start {start}, end time {end}, {count} images applied.",
+    "planner_slot_over":            "This slot is already over (ended at {end}).",
     "planner_start_applied":        "Start set to {start}.",
     "planner_night_of_tz":          "Night of {date} (site timezone: {tz})",
     "planner_sched_exceeds":        "Start set to {start} - but count \xd7 exposure runs {over} min past the end of the slot ({end}): reduce the count to fit.",

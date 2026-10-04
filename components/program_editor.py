@@ -39,7 +39,7 @@ from components.dso_catalog import (
     short_name,
 )
 from components.stellarium import get_target_from_stellarium
-from components.target_planner import build_altitude_panel, night_of, open_catalog_dialog
+from components.target_planner import build_altitude_panel, earliest_start, night_of, open_catalog_dialog
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 
 _SOLAR_TARGETS = ["", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Sun"]
@@ -268,13 +268,27 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 return night_of(date_input.value, time_input.value)
 
             def _apply_slot(start: datetime, end: datetime | None) -> None:
+                # A start already past becomes now + 5 min (site time)
+                start = earliest_start(start, site_now(session.config))
+                if end is not None and start >= end:
+                    ui.notify(t("planner_slot_over", end=f"{end:%H:%M}"), type="warning")
+                    return
                 date_input.value = start.strftime("%Y-%m-%d")
                 time_input.value = start.strftime("%H:%M:%S")
-                if end is not None:
-                    end_time_input.value = end.strftime("%H:%M")
-                    ui.notify(t("planner_slot_applied", start=f"{start:%H:%M}", end=f"{end:%H:%M}"))
-                else:
+                if end is None:
                     ui.notify(t("planner_start_applied", start=f"{start:%Y-%m-%d %H:%M}"))
+                    return
+                end_time_input.value = end.strftime("%H:%M")
+                # Image count filling the slot (user-reported Oct 2026: it
+                # stayed at the default 20, so the program stopped long
+                # before the chosen end time)
+                count = _count_for_duration((end - start).total_seconds())
+                if count is None:
+                    ui.notify(t("planner_slot_applied", start=f"{start:%H:%M}", end=f"{end:%H:%M}"))
+                    return
+                _set_total_count(count)
+                ui.notify(t("planner_slot_applied_count", start=f"{start:%H:%M}", end=f"{end:%H:%M}",
+                            count=int(count_input.value or 0)))
 
             altitude_panel, _refresh_altitude_chart = build_altitude_panel(
                 session,
@@ -420,16 +434,29 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             # erroring.
             duration_estimate_label = ui.label("").classes("text-xs text-grey-6 self-center")
 
-        def _update_duration_estimate() -> None:
+        def _exposure_seconds() -> float | None:
+            """Selected exposure in seconds ("30", "1/2"...), None if unparsable."""
             try:
-                exposure_seconds = float(exposure_input.value)
+                return float(exposure_input.value)
             except (TypeError, ValueError):
                 try:
                     num, denom = str(exposure_input.value).split("/")
-                    exposure_seconds = float(num) / float(denom)
+                    return float(num) / float(denom)
                 except (TypeError, ValueError, ZeroDivisionError):
-                    duration_estimate_label.set_text("")
-                    return
+                    return None
+
+        def _count_for_duration(seconds: float) -> int | None:
+            """Number of exposures fitting in `seconds` (at least 1)."""
+            exposure_seconds = _exposure_seconds()
+            if not exposure_seconds or exposure_seconds <= 0:
+                return None
+            return max(1, int(seconds // exposure_seconds))
+
+        def _update_duration_estimate() -> None:
+            exposure_seconds = _exposure_seconds()
+            if exposure_seconds is None:
+                duration_estimate_label.set_text("")
+                return
 
             count = int(count_input.value or 0)
             total_seconds = int(exposure_seconds * count)
@@ -539,6 +566,24 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 return 2
             return 1
 
+        def _current_panels() -> int:
+            try:
+                fx_pct = int(round(float(framing_x_input.value or 1.0) * 100))
+                fy_pct = int(round(float(framing_y_input.value or 1.0) * 100))
+            except (TypeError, ValueError):
+                fx_pct = fy_pct = 100
+            return _panel_count(fx_pct, fy_pct)
+
+        def _set_total_count(total: int) -> None:
+            """Sets the number of images to take: count_input, or for a
+            real mosaic (count locked to panels x per view) the count per
+            view."""
+            panels = _current_panels() if camera_choice.value == "tele" and mosaic_cb.value else 1
+            if panels > 1:
+                mosaic_count_input.value = max(1, total // panels)
+            else:
+                count_input.value = total
+
         def _sync_mosaic_stack_count() -> None:
             """User-requested (Sep 2026): in the official app, the total
             "subframes to stack" count for a Mosaic session isn't
@@ -565,12 +610,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             if not in_mosaic:
                 count_input.enable()
                 return
-            try:
-                fx_pct = int(round(float(framing_x_input.value or 1.0) * 100))
-                fy_pct = int(round(float(framing_y_input.value or 1.0) * 100))
-            except (TypeError, ValueError):
-                fx_pct = fy_pct = 100
-            panels = _panel_count(fx_pct, fy_pct)
+            panels = _current_panels()
             per_view = int(mosaic_count_input.value or 0)
             count_input.value = panels * per_view
             if panels == 1:

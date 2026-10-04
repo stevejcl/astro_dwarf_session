@@ -58,6 +58,22 @@ def night_of(date_str: str, time_str: str) -> datetime:
     return day - timedelta(days=1) if hour < 12 else day
 
 
+# A slot whose start has already passed starts this many minutes from now
+START_LEAD_MINUTES = 5
+
+
+def earliest_start(start: datetime, now: datetime) -> datetime:
+    """start, or now + START_LEAD_MINUTES (to the next whole minute) when
+    start is already past (user-requested Oct 2026: "Use best slot" kept a
+    start time already gone). Both naive wall-clock times of the same
+    timezone."""
+    if start >= now:
+        return start
+    lead = now + timedelta(minutes=START_LEAD_MINUTES)
+    rounded = lead.replace(second=0, microsecond=0)
+    return rounded if rounded == lead else rounded + timedelta(minutes=1)
+
+
 def open_catalog_dialog(
     session,
     on_pick: Callable[[dict], None],

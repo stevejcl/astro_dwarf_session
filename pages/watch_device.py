@@ -46,7 +46,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
 
 from components.camera_stream import build_camera_stream_section
 from components.camera_settings import ir_filter_display_label
-from components import scheduler_runner
+from components import current_activity, scheduler_runner
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
@@ -116,13 +116,31 @@ def _capture_kind(full_status: dict) -> str | None:
     return "watch_capture_astro"
  
  
-def _activity_banner(text: str) -> None:
-    """Text + small spinner, readable in light and dark theme. Display only."""
-    with ui.row().classes("items-center gap-2 w-full px-3 py-2 rounded-borders").style(
+def _activity_banner(text: str, detail: str = "") -> None:
+    """Text + small spinner, readable in light and dark theme. Display only.
+    detail: optional second line (current target, schedule task)."""
+    with ui.row().classes("items-center gap-2 w-full px-3 py-2 rounded-borders no-wrap").style(
         "background: rgba(25, 118, 210, 0.15)"
     ):
-        ui.spinner(size="sm")
-        ui.label(text).classes("text-sm font-medium")
+        ui.spinner(size="sm").classes("shrink-0")
+        with ui.column().classes("gap-0 min-w-0"):
+            ui.label(text).classes("text-sm font-medium")
+            if detail:
+                ui.label(detail).classes("text-xs opacity-80")
+
+
+def _activity_detail(session, activity: dict | None) -> str:
+    """Second banner line: the program's target, or "Schedule · task
+    (2/3, 21:05-22:30)" for a native schedule task - see
+    components/current_activity.py (cache read only, no command sent)."""
+    if not activity or not activity["target"]:
+        return ""
+    if activity["source"] != "schedule":
+        return t("watch_target", target=activity["target"])
+    text = t("card_schedule_target", schedule=activity["title"], target=activity["target"])
+    window = current_activity.format_window(session, activity["start"], activity["end"])
+    task = t("card_schedule_task", index=activity["index"], total=activity["total"])
+    return f"{text} ({task}{', ' + window if window else ''})"
  
 
 def build_watch_device_page() -> None:
@@ -242,15 +260,19 @@ def build_watch_device_page() -> None:
 
                 error = full_status.get("ErrorConnection")
                 capture_key = _capture_kind(full_status)
+                activity = current_activity.current_activity(session)
                 banner_col.clear()
                 with banner_col:
                     if error:
                         status_banner(t("error_with_detail", error=error), kind="danger")
                     elif capture_key:
-                        _activity_banner(t(capture_key))
+                        _activity_banner(t(capture_key), _activity_detail(session, activity))
                     elif scheduler_runner.is_running(dwarf_uid):
                         # goto / calibration / camera-setup phases, before capturing starts
-                        _activity_banner(t("program_running_banner"))
+                        _activity_banner(t("program_running_banner"), _activity_detail(session, activity))
+                    elif activity:
+                        # Native schedule task window, before its capture starts
+                        _activity_banner(t("watch_schedule_running"), _activity_detail(session, activity))
   
                 tele_count_metric.clear()
                 with tele_count_metric:

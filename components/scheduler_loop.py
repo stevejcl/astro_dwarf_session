@@ -31,10 +31,14 @@ import time
 from datetime import datetime, timedelta
 
 import dwarf_python_api.lib.my_logger as log
-from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
+from dwarf_python_api.lib.dwarf_session_socket import get_client_status
+from dwarf_python_api.lib.dwarf_utils import (
+    perform_get_all_shooting_schedule_full,
+    perform_sync_shooting_schedule,
+)
 
 import pending_schedules
-from components import connection_health, scheduler_runner
+from components import connection_health, current_activity, native_schedule, scheduler_runner
 from components.session_dirs import session_dirs_for
 from components.site_time import site_now
 
@@ -316,6 +320,71 @@ async def check_pending_schedules(manager) -> None:
             log.error(f"[{uid}] Deferred schedule sync failed - retrying in {_PENDING_RETRY_S // 60} min.")
 
 
+# A capture still unexplained is not re-checked more often than this
+_SCHEDULE_REFRESH_RETRY_S = 10 * 60
+# Delay after a cached task's start before reading its real state back
+_TASK_START_CHECK_DELAY_S = 2 * 60
+_was_capturing: dict[str, bool] = {}
+_last_schedule_refresh: dict[str, float] = {}
+
+
+def _is_capturing(session) -> bool:
+    full_status = get_client_status(session).get("fullStatus", {})
+    return bool(
+        full_status.get("AstroCapture")
+        or full_status.get("takePhotoStarted")
+        or full_status.get("takeWidePhotoStarted")
+    )
+
+
+async def refresh_schedule_on_capture(manager) -> None:
+    """Reads the device's native schedule list (components/
+    current_activity.py names the task being shot from it) only:
+      - when a capture starts outside a program of this app (a schedule
+        run by the Dwarf itself, maybe synced by the official app);
+      - once per cached task, a little after its start, to get its real
+        state;
+      - every _SCHEDULE_REFRESH_RETRY_S while a capture stays unexplained.
+    Never polled otherwise: a capture may be running."""
+    from nicegui import run
+
+    now = time.time()
+    for session in manager.all():
+        uid = session.dwarf_uid
+        if not session.is_connected:
+            _was_capturing.pop(uid, None)
+            continue
+        capturing = _is_capturing(session)
+        started = capturing and not _was_capturing.get(uid, False)
+        _was_capturing[uid] = capturing
+        if scheduler_runner.is_running(uid) or connection_health.is_busy(uid):
+            continue
+        last = _last_schedule_refresh.get(uid, 0)
+        task = current_activity.current_schedule_task(uid, now)
+        # A cached task whose window has begun is read back once, a little
+        # after its start, so a task the Dwarf didn't run (off, failed
+        # calibration...) isn't shown as running for its whole window.
+        task_check_due = (
+            task is not None and task["start"] is not None
+            and now - task["start"] > _TASK_START_CHECK_DELAY_S and last < task["start"]
+        )
+        unexplained = capturing and task is None and now - last >= _SCHEDULE_REFRESH_RETRY_S
+        if not (started or task_check_due or unexplained):
+            continue
+        if not connection_health.try_acquire_command_slot(uid, caller="scheduler_loop.schedule_refresh"):
+            continue
+        _last_schedule_refresh[uid] = now
+        try:
+            info = await run.io_bound(perform_get_all_shooting_schedule_full, session=session)
+        except Exception as e:
+            info = None
+            log.debug(f"[{uid}] Schedule read on capture start failed: {e}")
+        finally:
+            connection_health.release_command_slot(uid)
+        if info is not None:
+            native_schedule.set_cached(uid, native_schedule.parse_native_schedule_info(info))
+
+
 def start_background_loop(manager) -> None:
     """Call once at app startup (astro_dwarf_ui.py). Uses app.timer, not
     ui.timer - see the module docstring."""
@@ -323,3 +392,6 @@ def start_background_loop(manager) -> None:
 
     app.timer(_CHECK_INTERVAL_S, lambda: check_all(manager))
     app.timer(_PENDING_CHECK_INTERVAL_S, lambda: check_pending_schedules(manager))
+    # Names the native schedule task when a capture starts without a
+    # program of this app (see components/current_activity.py)
+    app.timer(_CHECK_INTERVAL_S, lambda: refresh_schedule_on_capture(manager))

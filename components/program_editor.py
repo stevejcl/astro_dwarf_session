@@ -29,6 +29,7 @@ from components.camera_settings import (
     _ir_filter_table,
 )
 from components.datetime_picker import date_picker_input, time_picker_input
+from components.current_activity import program_target
 from components.i18n import t
 from components.session_dirs import ensure_dirs
 from components.site_time import site_now, site_tz
@@ -104,14 +105,7 @@ def _filename_for(program: dict) -> str:
     id_command = program["command"]["id_command"]
     date = id_command.get("date", "")
     time_str = id_command.get("time", "").replace(":", "-")
-    goto_manual = program["command"]["goto_manual"]
-    goto_solar = program["command"]["goto_solar"]
-    if goto_manual.get("do_action") and goto_manual.get("target"):
-        target = goto_manual["target"]
-    elif goto_solar.get("do_action") and goto_solar.get("target"):
-        target = goto_solar["target"]
-    else:
-        target = id_command.get("description") or "session"
+    target = program_target(program) or "session"
     safe_target = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(target))
     return f"{date}-{time_str}-{safe_target}.json"
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.6] - 2026-10-04
+  ### BugFix
+    ### Port detection
+    Launched one after the other, this app and Dwarfium Scope Archive could pick the same port on Windows (a free test
+    bind on 0.0.0.0 doesn't see a server listening on 127.0.0.1). A port is now free only when nothing answers on it and
+    it binds on 127.0.0.1, 0.0.0.0 and the --host address (exclusive bind on Windows).
+
 ## [3.1.5] - 2026-10-04
     ### New features
     ### Program editor: target catalog + altitude planner
@@ -66,15 +73,6 @@
     of ~11 s).
     Requires dwarf_python_api 3.1.4 (also sets the clock on any new connection, and logs the Dwarf
     clock offset on each schedule sync).
-
-  ### BugFix
-    ### Port detection
-    Launched one after the other, this app and Dwarfium Scope Archive could pick the same port on Windows (a free test
-    bind on 0.0.0.0 doesn't see a server listening on 127.0.0.1). A port is now free only when nothing answers on it and
-    it binds on 127.0.0.1, 0.0.0.0 and the --host address (exclusive bind on Windows).
-    ### Settings kept after a restart
-    The native window keeps its WebView data in .nicegui/webview next to the app (no more private mode), so the
-    browser cookie and the per-user settings survive a restart.
 
 ## [3.1.4] - 2026-10-02
     ### Improvements

@@ -12,6 +12,7 @@
     The eye button on a card hides a Dwarf not used for now: only its header (name, IP, status) stays, it moves after
     the others, and it isn't auto-connected (no more failed attempts for a Dwarf that is off). The same button shows
     it again. Saved in device_prefs.json in the working folder.
+    The watch dashboard (/watch) shows the same order and hidden Dwarfs (display only, no hide button).
     ### Current target on the dashboard and the watch page
     The dashboard card and the watch page (/watch/<device>) now show the target being shot: the goto target of
     the program run by this app (also added to the program name in the "program in progress" banner), or the

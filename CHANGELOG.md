@@ -2,6 +2,13 @@
 
 ## [Unreleased]
   ### BugFix
+    ### Program followed again after a restart
+    A program left in Current/ by an app restart during its capture was only resumed if its last step (the capture
+    start - nothing is recorded while it captures) was less than 5 min old: a restart at 01:00 for a capture started
+    at 22:39 left it unfollowed. It is now resumed when the Dwarf reports capturing the program's target, or, while
+    that name isn't known yet, when the last step is less than 15 h old - never when the Dwarf reports another
+    target. Retried as soon as the Dwarf's first progress notification brings the target name. The program's end
+    time is applied again while resumed (counted from the program's start date/time, across midnight).
     ### "Use best slot" (program editor)
     A best slot whose start has already passed now starts 5 min from now (site time), also in the native schedule
     editor and for a click on the curve; a slot already over is refused with a message.

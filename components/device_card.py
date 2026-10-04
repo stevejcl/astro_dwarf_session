@@ -23,7 +23,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_session import DwarfSession
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 
-from components import connection_health, scheduler_loop, scheduler_runner
+from components import connection_health, current_activity, scheduler_loop, scheduler_runner
 from components.camera_stream import (
     build_dashboard_thumbnail,
     dashboard_thumbnail_refresh_source,
@@ -125,6 +125,23 @@ def _apply_warning_style(icon: ui.icon, label: ui.label, is_low: bool) -> None:
     else:
         icon.classes(replace=f"text-grey-6 {_INFO_ICON_CLASSES}")
         label.classes(replace=f"text-grey-7 {_INFO_TEXT_CLASSES}")
+
+
+def _activity_title(activity: dict | None) -> str:
+    """Banner title for the current target: "M 42" for a program,
+    "Schedule name · M 42" for a native schedule task."""
+    if not activity or not activity["target"]:
+        return ""
+    if activity["source"] == "schedule":
+        return t("card_schedule_target", schedule=activity["title"], target=activity["target"])
+    return activity["target"]
+
+
+def _schedule_detail(session: DwarfSession, activity: dict) -> str:
+    """"Task 2/3 · 21:05–22:30" for a native schedule task."""
+    text = t("card_schedule_task", index=activity["index"], total=activity["total"])
+    window = current_activity.format_window(session, activity["start"], activity["end"])
+    return f"{text} \u00b7 {window}" if window else text
 
 
 class DeviceCardView:
@@ -320,6 +337,9 @@ class DeviceCardView:
         connected = connection_health.is_actually_connected(session)
         connection_lost = session.is_connected and not connected
         program_running = scheduler_runner.is_running(session.dwarf_uid)
+        # Program of this app or native schedule task running now (target
+        # shown in the banner - see components/current_activity.py)
+        activity = current_activity.current_activity(session) if session.is_connected else None
 
         if error:
             kind = "error"
@@ -335,6 +355,9 @@ class DeviceCardView:
             kind = "connection_lost"
         elif not session.is_connected:
             kind = "disconnected"
+        elif activity and activity["source"] == "schedule":
+            # Native schedule window (goto/calibration before the capture)
+            kind = "schedule_running"
         else:
             kind = "connected"
 
@@ -458,8 +481,14 @@ class DeviceCardView:
                 if kind == "error":
                     status_banner(t("error_with_detail", error=error), kind="danger")
                 elif kind == "capturing":
-                    self._dynamic_label = self._build_dynamic_banner(
-                        icon="play_arrow", css="bg-blue-50 text-blue-800"
+                    # Title: the current target (hidden when unknown),
+                    # detail: the capture progress
+                    self._dynamic_detail, self._dynamic_label = self._build_dynamic_banner(
+                        icon="play_arrow", css="bg-blue-50 text-blue-800", two_lines=True
+                    )
+                elif kind == "schedule_running":
+                    self._dynamic_label, self._dynamic_detail = self._build_dynamic_banner(
+                        icon="event", css="bg-blue-50 text-blue-800", two_lines=True
                     )
                 elif kind == "program_running":
                     # Dynamic (not a static status_banner()) so the
@@ -499,12 +528,24 @@ class DeviceCardView:
                 text = t("capture_progress_with_total", current=current, total=total, stacked=stacked)
             else:
                 text = t("capture_progress_no_total", current=current, stacked=stacked)
-            if run_state and run_state.end_time_display:
+            if run_state and run_state.end_time_display and scheduler_runner.is_running(self.dwarf_uid):
                 text += " \u00b7 " + t("card_end_time", time=run_state.end_time_display)
+            elif activity and activity["source"] == "schedule" and activity["end"]:
+                text += " \u00b7 " + t("card_end_time", time=current_activity.format_time(session, activity["end"]))
             self._dynamic_label.set_text(text)
+            if self._dynamic_detail is not None:
+                self._dynamic_detail.set_text(_activity_title(activity))
+                self._dynamic_detail.set_visibility(bool(activity and activity["target"]))
+        elif kind == "schedule_running" and self._dynamic_label is not None and activity:
+            self._dynamic_label.set_text(_activity_title(activity))
+            if self._dynamic_detail is not None:
+                self._dynamic_detail.set_text(_schedule_detail(session, activity))
         elif kind == "program_running" and self._dynamic_label is not None:
             run_state = scheduler_runner.get_run_state(self.dwarf_uid)
             name = (run_state.program_name if run_state else "") or t("program_untitled")
+            target = current_activity.program_target(run_state.program if run_state else None)
+            if target and target not in name:
+                name = f"{name} \u00b7 {target}"
             self._dynamic_label.set_text(name)
             if self._dynamic_detail is not None:
                 last_step = run_state.steps[-1].label if run_state and run_state.steps else ""

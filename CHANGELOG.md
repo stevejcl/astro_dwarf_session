@@ -8,6 +8,10 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### Hide a Dwarf on the dashboard
+    The eye button on a card hides a Dwarf not used for now: only its header (name, IP, status) stays, it moves after
+    the others, and it isn't auto-connected (no more failed attempts for a Dwarf that is off). The same button shows
+    it again. Saved in device_prefs.json in the working folder.
     ### Current target on the dashboard and the watch page
     The dashboard card and the watch page (/watch/<device>) now show the target being shot: the goto target of
     the program run by this app (also added to the program name in the "program in progress" banner), or the

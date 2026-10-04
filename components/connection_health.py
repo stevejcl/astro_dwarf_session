@@ -109,7 +109,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from components import device_lock
+from components import device_lock, device_prefs
 import dwarf_python_api.lib.my_logger as log
 
 from nicegui import background_tasks, run
@@ -505,6 +505,8 @@ async def maybe_check(session: DwarfSession) -> None:
         if (
             uid not in _manual_disconnect
             and uid not in _taken_over
+            # Hidden on the dashboard: not used for now, no auto-connect
+            and not device_prefs.is_hidden(uid)
             and uid not in _auto_reconnect_exhausted
             and uid not in _auto_reconnect_in_progress
         ):

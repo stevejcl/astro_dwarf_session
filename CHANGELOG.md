@@ -45,6 +45,9 @@
     Launched one after the other, this app and Dwarfium Scope Archive could pick the same port on Windows (a free test
     bind on 0.0.0.0 doesn't see a server listening on 127.0.0.1). A port is now free only when nothing answers on it and
     it binds on 127.0.0.1, 0.0.0.0 and the --host address (exclusive bind on Windows).
+    ### Settings kept after a restart
+    The native window keeps its WebView data in .nicegui/webview next to the app (no more private mode), so the
+    browser cookie and the per-user settings survive a restart.
 
 ## [3.1.4] - 2026-10-02
     ### Improvements

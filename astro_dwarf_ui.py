@@ -21,6 +21,8 @@ import logging
 import os
 import socket
 import sys
+import pathlib
+from pathlib import Path
 from multiprocessing import freeze_support
 
 # Windows only: forces the WHOLE PROCESS (not just dwarf_python_api's
@@ -225,7 +227,6 @@ def main() -> None:
     # served from /images/<name>.png. Resolved relative to THIS file
     # (not the current working directory), so it works regardless of
     # where the app is launched from.
-    from pathlib import Path
 
     # Detect PyInstaller running
     if getattr(sys, 'frozen', False):
@@ -305,6 +306,16 @@ def main() -> None:
     app.timer(30.0, scheduler_runner.check_stuck_runs)
 
     if not args.no_native:
+        # Persistent WebView data folder instead of pywebview's private mode
+        # (temp folder deleted at exit): keeps the browser cookie, so the
+        # per-user settings (app.storage.user) survive a restart. Next to
+        # the exe in a PyInstaller build (__file__ is the temp extraction
+        # folder there), next to the sources otherwise.
+        _app_dir = pathlib.Path(__file__).parent
+        _webview_base = (pathlib.Path(sys.executable).parent if getattr(sys, "frozen", False)
+                         else _app_dir)
+        app.native.start_args['private_mode'] = False
+        app.native.start_args['storage_path'] = str(_webview_base / ".nicegui" / "webview")
         ui.run(
             title="Astro Dwarf Session",
             storage_secret="astro_dwarf_session_key_change_me",  # TODO: move to a .env

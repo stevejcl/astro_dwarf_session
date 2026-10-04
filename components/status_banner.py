@@ -32,9 +32,11 @@ def status_banner(message: str, kind: str = "info", *, detail: str | None = None
     icon = _ICONS.get(kind, _ICONS["info"])
     classes = _CLASSES.get(kind, _CLASSES["info"])
 
-    with ui.row().classes(f"items-center gap-2 rounded-lg px-3 py-2 w-full {classes}") as row:
-        ui.icon(icon).classes("text-lg")
-        with ui.column().classes("gap-0"):
+    # no-wrap: a long message wraps inside the text column instead of
+    # dropping under the icon
+    with ui.row().classes(f"items-center gap-2 rounded-lg px-3 py-2 w-full no-wrap {classes}") as row:
+        ui.icon(icon).classes("text-lg shrink-0")
+        with ui.column().classes("gap-0 min-w-0"):
             ui.label(message).classes("text-sm font-medium")
             if detail:
                 ui.label(detail).classes("text-xs opacity-80")

@@ -1119,6 +1119,9 @@ def start_run(
 
     if is_running(dwarf_uid):
         raise RuntimeError("A program is already running for this device.")
+    from components import device_lock  # local import, as connection_health's
+    if not device_lock.claim(dwarf_uid):
+        raise RuntimeError("This Dwarf is used by another Astro Dwarf Session instance on this PC.")
 
     # Marked here, BEFORE the background thread even starts (user-
     # reported Sep 2026: a real overnight log showed a scheduled

@@ -103,7 +103,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 
 from device_registry import bootstrap_devices
 from components.pwa import register_manifest_route
-from components import rtsp_worker
+from components import device_lock, rtsp_worker
 from components import scheduler_runner
 from components.api_routes import register_api_routes
 from components.scheduler_loop import start_background_loop
@@ -209,6 +209,9 @@ def main() -> None:
         my_logger.update_log_file(default_name="astro_session.log")
 
     PORT = args.port if args.port else _find_open_port(args.host)
+    # Shown by another instance whose Dwarf this one holds (link to our
+    # watch page - see components/device_lock.py)
+    device_lock.set_port(PORT)
 
     # Read back by pages/settings.py's LAN-access label (user-requested
     # Sep 2026) - app.storage.general is server-wide (see components/

@@ -23,7 +23,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_session import DwarfSession
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 
-from components import connection_health, current_activity, scheduler_loop, scheduler_runner
+from components import connection_health, current_activity, device_lock, scheduler_loop, scheduler_runner
 from components.camera_stream import (
     build_dashboard_thumbnail,
     dashboard_thumbnail_refresh_source,
@@ -353,6 +353,9 @@ class DeviceCardView:
             kind = "program_running"
         elif connection_lost:
             kind = "connection_lost"
+        elif not session.is_connected and device_lock.held_elsewhere(session.dwarf_uid):
+            # Another Astro Dwarf Session instance on this PC uses it
+            kind = "used_elsewhere"
         elif not session.is_connected:
             kind = "disconnected"
         elif activity and activity["source"] == "schedule":
@@ -500,6 +503,21 @@ class DeviceCardView:
                     )
                 elif kind == "connection_lost":
                     status_banner(t("connection_lost"), kind="danger")
+                elif kind == "used_elsewhere":
+                    status_banner(t("device_used_elsewhere"), kind="warning",
+                                  detail=t("device_used_elsewhere_detail"))
+                    port = device_lock.owner_port(self.dwarf_uid)
+                    if port:
+                        # Same host as this page (phone on the LAN too), the
+                        # owner's port; stopPropagation: not the card's click
+                        url_js = (f"location.protocol + '//' + location.hostname + ':{port}"
+                                  f"/watch/' + encodeURIComponent({self.dwarf_uid!r})")
+                        with ui.row().classes("w-full justify-end"):
+                            ui.button(t("device_open_owner"), icon="open_in_new").props(
+                                "flat dense no-caps"
+                            ).on(
+                                "click", js_handler=f"(e) => {{ e.stopPropagation(); window.open({url_js}, '_blank'); }}"
+                            )
                 elif kind == "disconnected":
                     status_banner(t("disconnected"), kind="warning")
                 else:  # connected

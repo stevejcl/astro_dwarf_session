@@ -16,6 +16,13 @@
     The schedule list is read from the Dwarf only when a capture starts outside a program of this app, once a
     little after each task's start (so a task the Dwarf didn't run isn't shown for its whole window), and every
     10 min while a capture stays unexplained - never polled otherwise.
+    ### One instance per Dwarf on this PC
+    Two Astro Dwarf Session open together (e.g. the .exe and a source run) connected to the same Dwarf with the
+    same client_id: the Dwarf dropped one each time the other connected, and both reconnected in turn. The first
+    instance to connect now holds the Dwarf (lock file in the temp folder, released on Disconnect, on exit or after
+    a crash); the other one doesn't connect, its card says the Dwarf is used by another instance with an "Open its
+    view" link to that instance's watch page (target, program, progress), and it connects by itself once the Dwarf
+    is free. Only instances with this change take part: an older version still running isn't detected.
 
 ## [3.1.6] - 2026-10-04
   ### BugFix

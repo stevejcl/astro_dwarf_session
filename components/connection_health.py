@@ -108,6 +108,8 @@ from __future__ import annotations
 
 import asyncio
 import time
+
+from components import device_lock
 import dwarf_python_api.lib.my_logger as log
 
 from nicegui import background_tasks, run
@@ -304,6 +306,9 @@ async def connect_and_enter_astro_mode(session) -> bool:
     actually asked for - so a separate perform_get_device_state_info()
     call first would just send that same command twice on every fresh
     connect."""
+    if not device_lock.claim(session.dwarf_uid):
+        # Another Astro Dwarf Session instance on this PC uses this Dwarf
+        return False
     result = await run.io_bound(perform_enter_astro_mode, session=session)
     if result is False:
         return False
@@ -347,6 +352,11 @@ async def _auto_reconnect(session: DwarfSession) -> None:
     unattended retry is the wrong default."""
     uid = session.dwarf_uid
     if uid in _auto_reconnect_in_progress:
+        return
+    if not device_lock.claim(uid):
+        # Used by another instance on this PC: connecting would drop it
+        # (same client_id). Not counted as a failed attempt - retried on
+        # the next poll tick, so this instance takes over once it's free.
         return
     _auto_reconnect_in_progress.add(uid)
     try:

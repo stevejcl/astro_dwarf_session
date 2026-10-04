@@ -16,7 +16,7 @@ from nicegui import ui,run,app
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 
-from components import connection_health
+from components import connection_health, device_lock
 from components.device_card import DeviceCardView
 from components.network_info import watch_qr_svg, watch_url
 from components.i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
@@ -55,6 +55,9 @@ async def _handle_connect_all(button: ui.button | None = None) -> None:
         skipped = 0
         failed = 0
         for session in targets:
+            if device_lock.held_elsewhere(session.dwarf_uid):
+                skipped += 1
+                continue
             if not connection_health.try_acquire_command_slot(session.dwarf_uid, caller="dashboard.connect_all"):
                 skipped += 1
                 continue

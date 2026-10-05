@@ -67,6 +67,10 @@ from dwarf_python_api.lib.dwarf_utils import perform_get_all_shooting_schedule_f
 # calibrate (same gap as js/dwarf-scheduler.js's _DWARF_TASK_GAP_MS).
 TASK_GAP_MIN = 5
 
+# The Dwarf's schedule list is read again when the editor opens if the
+# cached copy is older than this (see build_schedule_editor()).
+_DEVICE_LIST_MAX_AGE_S = 10 * 60
+
 
 def _duration_min(start_hhmm: str, end_hhmm: str) -> int | None:
     """Minutes from start to end time (an end at or before the start is
@@ -208,21 +212,26 @@ def build_schedule_editor(session) -> None:
 
         _render_device_schedules()
 
-    async def _refresh_device_schedules() -> None:
+    async def _refresh_device_schedules(quiet: bool = False) -> None:
         """Reads the Dwarf's schedule list (same command as the device
-        page's own Refresh) and updates the reminder and the chart."""
+        page's own Refresh) and updates the reminder and the chart.
+        quiet: automatic read - no message when it can't be done, the
+        cached list simply stays."""
         if not session.is_connected:
-            ui.notify(t("disconnected"), type="warning")
+            if not quiet:
+                ui.notify(t("disconnected"), type="warning")
             return
         if not connection_health.try_acquire_command_slot(dwarf_uid, caller="schedule_editor.refresh"):
-            ui.notify(t("device_busy"), type="warning")
+            if not quiet:
+                ui.notify(t("device_busy"), type="warning")
             return
         try:
             info = await run.io_bound(perform_get_all_shooting_schedule_full, session=session)
         finally:
             connection_health.release_command_slot(dwarf_uid)
         if info is None:
-            ui.notify(t("sched_read_error"), type="negative")
+            if not quiet:
+                ui.notify(t("sched_read_error"), type="negative")
             return
         native_schedule.set_cached(dwarf_uid, native_schedule.parse_native_schedule_info(info))
         _render_device_schedules.refresh()
@@ -230,7 +239,14 @@ def build_schedule_editor(session) -> None:
         if not tasks:
             _set_next_free_slot()
 
-    device_refresh_button.on_click(_refresh_device_schedules)
+    device_refresh_button.on_click(lambda: _refresh_device_schedules())
+
+    # Cached list missing or older than _DEVICE_LIST_MAX_AGE_S: read it
+    # from the Dwarf once when the editor opens (user-requested Oct 2026),
+    # instead of waiting for a Refresh click.
+    fetched_at = native_schedule.get_cached_fetched_at(dwarf_uid)
+    if fetched_at is None or time.time() - fetched_at > _DEVICE_LIST_MAX_AGE_S:
+        ui.timer(0.5, lambda: _refresh_device_schedules(quiet=True), once=True)
 
     # min-w on the name: on a phone it wraps onto its own full-width line
     # instead of being squeezed to a few characters; RA/Dec (~9 chars each)

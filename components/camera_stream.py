@@ -26,7 +26,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from nicegui import ui
+from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 
@@ -251,6 +251,65 @@ def dashboard_thumbnail_refresh_source(session, image: ui.image, new_values: dic
     image.set_source(f"{url}?t={time.monotonic()}")
 
 
+# displaySource values (dwarf_python_api's PARAM_ID_ASTRO_DISPLAY_SOURCE):
+# 0 = last frame ("Single"), 1 = stacked image - from a capture of the
+# official app toggling it during a capture (Oct 2026).
+_DISPLAY_LAST_FRAME = 0
+_DISPLAY_STACKED = 1
+
+
+def _build_display_source_toggle(session, previews: list) -> None:
+    """Stacked image / last frame switch for the astro preview (user-
+    requested Oct 2026, the official app's own toggle): CMD_PARAM_SET_
+    GENERAL_INT_PARAM on the shared displaySource parameter. Control page
+    only. The current value isn't readable (no GET), so nothing is
+    selected until the user picks one.
+
+    During a program the command slot is held for the whole run; while it
+    captures, the run only reads the cached status (no command of its
+    own until its end time), so the switch is sent then without the slot
+    instead of reporting the device busy all night."""
+    from dwarf_python_api.lib.dwarf_utils import perform_set_astro_display_source_v3
+    from components import connection_health
+
+    uid = session.dwarf_uid
+    with ui.row().classes("items-center gap-2 w-full"):
+        ui.label(t("display_source_label")).classes("text-sm text-grey-7")
+        toggle = ui.toggle(
+            {_DISPLAY_STACKED: t("display_source_stacked"), _DISPLAY_LAST_FRAME: t("display_source_last_frame")},
+            value=None,
+        ).props("dense no-caps")
+
+    previous = {"value": None}
+
+    async def _on_change(e) -> None:
+        value = e.value
+        if value is None or value == previous["value"]:
+            return
+        full_status = get_client_status(session).get("fullStatus") or {} if session.is_connected else {}
+        capturing = full_status.get("takePhotoStarted") or full_status.get("takeWidePhotoStarted")
+        acquired = connection_health.try_acquire_command_slot(uid, caller="camera_stream.display_source")
+        if not acquired and not (scheduler_runner.is_running(uid) and capturing):
+            ui.notify(t("device_busy"), type="warning")
+            toggle.set_value(previous["value"])
+            return
+        try:
+            result = await run.io_bound(perform_set_astro_display_source_v3, value, session=session)
+        finally:
+            if acquired:
+                connection_health.release_command_slot(uid)
+        if result is False:
+            ui.notify(t("command_failed"), type="negative")
+            toggle.set_value(previous["value"])
+            return
+        previous["value"] = value
+        # Show the new source right away, not at the next stacked frame
+        for preview in previews:
+            preview.image.set_source(f"{preview.url}?t={time.time()}")
+
+    toggle.on_value_change(_on_change)
+
+
 def build_camera_stream_section(session, show_links: bool = True) -> None:
     """Call once per page load. Tele and Wide each get their OWN
     ui.expansion (user-requested Sep 2026 - see _build_preview()'s own
@@ -331,6 +390,9 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
         _build_preview(cfg, urls[cfg["url_key"]], urls[cfg["rtsp_key"]], show_links)
         for cfg in _CAMERAS
     ]
+
+    if show_links:
+        _build_display_source_toggle(session, previews)
 
     for preview in previews:
         def _on_expansion_change(e, preview=preview) -> None:

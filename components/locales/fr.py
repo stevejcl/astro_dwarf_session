@@ -272,7 +272,7 @@ TRANSLATIONS: dict[str, str] = {
     "settings_stellarium_port":     "Port Stellarium",
     "settings_dwarfium_hint":       "Utilis\u00e9 par les liens \u00ab Ouvrir dans Dwarfium Scope Archive \u00bb et \u00ab Archiver dans Dwarfium Scope Archive \u00bb. Le DwarfId est l'identifiant num\u00e9rique affich\u00e9 pour cet appareil dans la page Configuration Dwarf de Dwarfium Scope Archive.",
     "settings_dwarfium_url":        "URL Dwarfium Scope Archive",
-    "settings_dwarfium_id":         "DwarfId Dwarfium Scope Archive",
+    "settings_dwarfium_id":         "Dwarf Id",
     "open_scope_label":             "Dwarfium Scope Archive :",
     "open_scope_config":            "Config",
     "open_scope_explore_dwarf":     "Sessions du Dwarf",

@@ -57,6 +57,9 @@
     ### Native schedules: "View" on successful tasks
     A successful native task gets a blue "View" button opening the same dialog as "Check" (stacked / taken images,
     integration, stacked thumbnail). "Check" is now red on a failed task, orange on a warning (-1).
+    ### Session explorer: download the stacked image
+    The explorer's large view gets a Download button: the session's stacked.jpg, fetched from the Dwarf by the app
+    and saved as "<session folder>_stacked.jpg". Downloads are now allowed in the native window (pywebview).
     ### Native schedules: check what the Dwarf saved for a failed task
     A failed or interrupted task (e.g. "error -1") gets a "Check" button on the device page: it finds the task's
     session in the Dwarf's album (target name + time window), reads its shotsInfo.json and shows the images

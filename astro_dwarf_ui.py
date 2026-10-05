@@ -93,6 +93,9 @@ if is_win32:
     print("start win32")
 
     app.native.start_args["gui"] = "edgechromium"
+    # Image downloads from the session explorer (pywebview blocks them
+    # by default)
+    app.native.settings["ALLOW_DOWNLOADS"] = True
 
     app.native.settings["WEBVIEW2_RUNTIME_PATH"] = (
         r"C:\Program Files\Microsoft\EdgeWebView\Application>"

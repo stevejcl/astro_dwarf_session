@@ -2,6 +2,10 @@
 
 ## [Unreleased]
   ### BugFix
+    ### Session explorer: download in the native window
+    The download did nothing in the .exe / python native window (pywebview), only in a browser. The app now writes
+    the file itself there: the system Save dialog (or the Downloads folder if it can't open), then a notification
+    with the path. In a browser, the browser's own download as before.
     ### Preview "Stacked / Last frame" never selected
     The current value was read once, 0.5 s after the device page opened: a page opened before the Dwarf was connected
     never got it. It is now read once the Dwarf is connected (up to 3 attempts), and a response without the value
@@ -55,6 +59,11 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### Session explorer: download the PNG too
+    The download button becomes a JPG / PNG menu. The session's PNG (the Dwarf's own
+    "stacked-16_M 42 ..._60s40_Duo-Band_...png") is looked for in the session folder over the Dwarf's anonymous FTP
+    when the large view opens; PNG is offered only when it is there. Files are read over HTTP, then FTP if that
+    fails, and keep the Dwarf's own name when it says what the session is.
     ### Program page: newest first and "Show more" in "All"
     The "All" filter now lists the newest rows first, 20 at a time, with a "Show more (n left)" button. "Future" is
     unchanged (upcoming rows, soonest first).

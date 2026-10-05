@@ -21,6 +21,7 @@ from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_utils import perform_list_astro_sessions_http
 
+from components import task_check_cache
 from components.current_activity import program_target
 from components.i18n import t
 from components.site_time import site_tz
@@ -145,13 +146,17 @@ def summarize(session, task: dict) -> dict:
             out["integration"] = _format_duration(float(info["shotsStacked"]) * float(info["exp"]))
         except (KeyError, TypeError, ValueError):
             pass
+    # Shown directly in the lists afterwards (task_check_cache.py)
+    task_check_cache.remember(session.dwarf_uid, task, out)
     return out
 
 
-async def open_task_check(session, task: dict, make_dialog=ui.dialog) -> None:
+async def open_task_check(session, task: dict, make_dialog=ui.dialog, on_result=None) -> None:
     """Dialog with what the Dwarf saved for this task. make_dialog: the
     caller's dialog factory (the device page attaches its dialogs to the
-    page, see pages/session.py's _page_dialog())."""
+    page, see pages/session.py's _page_dialog()). on_result: called once
+    the result is in (and kept, see task_check_cache.py), e.g. to show
+    the new counts in the caller's list."""
     with make_dialog() as dialog, ui.card().classes("w-[min(90vw,480px)]"):
         with ui.row().classes("w-full items-center justify-between"):
             ui.label(t("task_check_title", name=task.get("name") or "?")).classes("text-base font-medium")
@@ -162,6 +167,8 @@ async def open_task_check(session, task: dict, make_dialog=ui.dialog) -> None:
     dialog.open()
 
     result = await run.io_bound(summarize, session, task)
+    if on_result is not None:
+        on_result()
     body.clear()
     with body:
         status = result["status"]

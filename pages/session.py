@@ -47,7 +47,7 @@ from dwarf_python_api.lib.my_logger import (
     unregister_thread_device_label,
 )
 
-from components import connection_health, device_lock, scheduler_runner, native_schedule
+from components import connection_health, device_lock, scheduler_runner, native_schedule, task_check_cache
 from components.native_schedule import parse_native_schedule_info
 from components.actions_section import build_actions_section
 from components.camera_stream import build_camera_stream_section
@@ -1082,6 +1082,12 @@ def build_session_page() -> None:
                                         line = f"• {tsk['name']}: {_task_state_label(tsk['state_code'])}"
                                     if tsk.get("error_code") and not warning:
                                         line += f" [{tsk['error_code']} {tsk.get('error_name') or ''}]".replace(" ]", "]")
+                                    # Counts found by an earlier View / Check
+                                    shots = task_check_cache.shots_text(
+                                        task_check_cache.get(dwarf_uid, tsk), t("prog_shots_stacked")
+                                    )
+                                    if shots:
+                                        line += f" \u00b7 {shots}"
                                     if detail:
                                         line += f" ({detail})"
                                     failed = bool(tsk.get("error_code")) or tsk.get("state_code") in (3, 4)
@@ -1102,7 +1108,8 @@ def build_session_page() -> None:
                                                 label,
                                                 icon=icon,
                                                 on_click=lambda _, task=tsk: open_task_check(
-                                                    actions_session, task, make_dialog=_page_dialog
+                                                    actions_session, task, make_dialog=_page_dialog,
+                                                    on_result=shooting_schedule_view.refresh,
                                                 ),
                                             ).props(f"flat dense no-caps size=sm color={color}")
                                     else:

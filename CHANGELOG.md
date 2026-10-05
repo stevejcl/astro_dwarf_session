@@ -51,6 +51,9 @@
     The same dialog (stacked / taken images, integration, stacked thumbnail) is now reachable from the Programs
     page's Results tab and from the Program HTML page, for native tasks and for this app's own finished programs
     (their target and real start / end). New route /api/task-check/<dwarfUid>.
+    What a View / Check finds is kept (task_check_cache.json, per Dwarf and per task): the images stacked / taken
+    then show directly in the lists - device page, Program page, Results tab - without opening it again. Only final
+    results (task over, session found with its shotsInfo.json); entries not checked again for 120 days are dropped.
     ### Native schedules: "View" on successful tasks
     A successful native task gets a blue "View" button opening the same dialog as "Check" (stacked / taken images,
     integration, stacked thumbnail). "Check" is now red on a failed task, orange on a warning (-1).

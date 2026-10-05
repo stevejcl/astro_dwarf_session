@@ -20,7 +20,7 @@ from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 
-from components import scheduler_loop, scheduler_runner
+from components import scheduler_loop, scheduler_runner, task_check_cache
 from components.i18n import get_language, t
 from components.program_editor import build_program_editor
 from components.site_time import site_now
@@ -418,6 +418,14 @@ def build_programs_page() -> None:
                                                 f" \u00b7 {t('prog_mosaic')}"
                                             )
                                         ui.label(detail).classes("text-xs")
+                                    check_task = program_task(program, session.config)
+                                    if not id_command.get("shots_taken") and check_task is not None:
+                                        # Counts found by an earlier View / Check
+                                        shots = task_check_cache.shots_text(
+                                            task_check_cache.get(dwarf_uid, check_task), t("prog_shots_stacked")
+                                        )
+                                        if shots:
+                                            ui.label(shots).classes("text-xs")
                                     if id_command.get("starting_date") or id_command.get("processed_date"):
                                         # "Error" date for a failed run
                                         end_label = t("results_failed_at") if kind == "error" else t("results_finished")
@@ -436,12 +444,13 @@ def build_programs_page() -> None:
                                         ).props("flat dense round color=primary")
                                         # What the Dwarf saved for this run: "View" (done,
                                         # blue) / "Check" (error, red), see task_check.py
-                                        check_task = program_task(program, session.config)
                                         if check_task is not None:
                                             ui.button(
                                                 t("task_view") if kind == "done" else t("task_check"),
                                                 icon="image" if kind == "done" else "fact_check",
-                                                on_click=lambda _, task=check_task: open_task_check(session, task),
+                                                on_click=lambda _, task=check_task: open_task_check(
+                                                    session, task, on_result=render_results
+                                                ),
                                             ).props(
                                                 f"flat dense no-caps size=sm color={'primary' if kind == 'done' else 'negative'}"
                                             )

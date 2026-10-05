@@ -235,6 +235,7 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
     dirs = session_dirs_for(session)
     # Imported here: task_check -> current_activity -> scheduler_runner
     from components.task_check import program_task
+    from components import task_check_cache
 
     now = site_now(session.config)
     out = []
@@ -275,6 +276,8 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
             # Check (task_check.py) - a run that finished either way
             if status != "todo":
                 entry["checkTask"] = program_task(cmd, session.config)
+                if entry["checkTask"] is not None:
+                    entry["check"] = task_check_cache.get(dwarf_uid, entry["checkTask"])
             out.append(entry)
     out.sort(key=lambda p: p["scheduledAt"])
     return out

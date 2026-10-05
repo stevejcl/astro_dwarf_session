@@ -47,6 +47,7 @@
   .task-error { color: var(--err); }
   .tag.state-warning { background: rgba(224,168,60,0.15); color: var(--warn); border-color: var(--warn); }
   .task-warning { color: var(--warn); }
+  .check-shots { margin-left: 4px; }
   .check-btn { font-size: 0.72rem; padding: 1px 8px; border-radius: 6px; background: transparent; cursor: pointer; margin-left: 4px; border: 1px solid currentColor; }
   .check-btn.view { color: var(--accent); }
   .check-btn.failed { color: var(--err); }
@@ -205,10 +206,16 @@ function renderStatus(entry) {
 // native task or a local program run - /api/task-check (task_check.py)
 const CHECK_TEXT = {"view": "Voir", "check": "Vérifier", "title": "Ce que le Dwarf a enregistré : ", "loading": "Lecture de l'album du Dwarf...", "album_error": "Impossible de lire l'album du Dwarf.", "not_found": "Aucune session trouvée sur le Dwarf pour cette tâche (créneau horaire).", "ok": "Session enregistrée : l'empilement semble exploitable.", "empty": "Session trouvée, mais aucune image n'a été empilée.", "unknown": "Session trouvée, mais son shotsInfo.json n'a pas pu être lu.", "name_differs": "Trouvée par l'heure seulement : le nom de la cible diffère de celui de la tâche.", "shots": "images empilées", "integration": "intégration"};
 function epochS(v) { v = Number(v); return v > 1e10 ? Math.floor(v / 1000) : v; }
-function checkButton(uid, name, start, end, kind) {
+function shotsText(c) {
+  return c && c.stacked != null && c.taken != null ? `${c.stacked}/${c.taken} ${CHECK_TEXT.shots}` : "";
+}
+// cached: what an earlier View / Check found (task_check_cache.py), shown
+// before the button and updated when it is opened again
+function checkButton(uid, name, start, end, kind, cached) {
   if (!start || !end) return "";
   const label = kind === "view" ? CHECK_TEXT.view : CHECK_TEXT.check;
-  return `<button class="check-btn ${kind}" data-uid="${encodeURIComponent(uid)}" data-name="${encodeURIComponent(name || "")}"`
+  const shots = shotsText(cached);
+  return `<span class="check-shots capture-summary-inline">${shots}</span><button class="check-btn ${kind}" data-uid="${encodeURIComponent(uid)}" data-name="${encodeURIComponent(name || "")}"`
     + ` data-start="${epochS(start)}" data-end="${epochS(end)}">${label}</button>`;
 }
 function escText(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
@@ -237,6 +244,8 @@ async function openCheck(btn) {
   if (bits.length) html += `<div class="muted">${bits.join(" · ")}</div>`;
   if (r.thumbnailUrl) html += `<img src="${r.thumbnailUrl}" alt="">`;
   body.innerHTML = html;
+  const shotsSpan = btn.previousElementSibling;
+  if (shotsSpan && shotsSpan.classList.contains("check-shots") && shotsText(r)) shotsSpan.textContent = shotsText(r);
 }
 document.addEventListener("click", (e) => {
   const btn = e.target.closest(".check-btn");
@@ -279,7 +288,7 @@ function renderPrograms(entry) {
     if (bits.length) detail += `<div class="capture-summary">${bits.join(" · ")}</div>`;
     if (p.checkTask) {
       detail += checkButton(entry.dwarfUid, p.checkTask.name, p.checkTask.startTime, p.checkTask.endTime,
-                            p.status === "done" ? "view" : "failed");
+                            p.status === "done" ? "view" : "failed", p.shotsTaken != null ? null : p.check);
     }
     rows.push({
       origin: "local",
@@ -317,7 +326,7 @@ function renderPrograms(entry) {
         : "";
       const failed = !!t.error_code || t.state_code === 3 || t.state_code === 4;
       const check = (failed || t.state_code === 2)
-        ? checkButton(entry.dwarfUid, t.name, t.startTime, t.endTime, !failed ? "view" : (warning ? "warning" : "failed"))
+        ? checkButton(entry.dwarfUid, t.name, t.startTime, t.endTime, !failed ? "view" : (warning ? "warning" : "failed"), t.check)
         : "";
       return `<div class="task-line"><span class="tag ${cls}">${t.name}</span>${err}${summary}${check}</div>`;
     }).join("");

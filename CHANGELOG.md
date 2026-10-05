@@ -2,6 +2,10 @@
 
 ## [Unreleased]
   ### BugFix
+    ### Device page: clicks sometimes ignored
+    The page rebuilds its main view every 2 s; a click landing during a rebuild hit a button just replaced and was
+    lost. The view is no longer rebuilt right after a press on the page (1.5 s). The device page's dialogs also stay
+    open across that refresh, and their notifications (e.g. "Shutdown command sent") are shown again.
     ### Native schedule editor: end time instead of image count
     A task's window was count x exposure + 2 min: too short for the goto/calibration and per-frame overhead, so it
     ended before the last frames (17 of 20 for an M42 task) and the Dwarf reported an error although the stack was

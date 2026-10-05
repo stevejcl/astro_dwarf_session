@@ -257,12 +257,25 @@ async function openCheck(btn) {
   if (r.integration) bits.push(`${CHECK_TEXT.integration} ${escText(r.integration)}`);
   if (bits.length) html += `<div class="muted">${bits.join(" · ")}</div>`;
   if (r.thumbnailUrl) html += `<img src="${r.thumbnailUrl}" alt="">`;
-  if (r.archiveUrl) html += `<div style="margin-top:8px"><a href="${escText(r.archiveUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">&#128230; Archive in Dwarfium Scope Archive</a></div>`;
+  if (r.archiveUrl) html += `<div style="margin-top:8px"><button class="check-btn view archive-btn" data-uid="${btn.dataset.uid}" data-media="${encodeURIComponent(r.thumbnailPath || "")}">&#128230; Archive in Dwarfium Scope Archive</button> <span class="archive-status capture-summary-inline"></span></div>`;
   body.innerHTML = html;
   const shotsSpan = btn.previousElementSibling;
   if (shotsSpan && shotsSpan.classList.contains("check-shots") && shotsText(r)) shotsSpan.textContent = shotsText(r);
 }
+// Scope Archive's window when it runs as an app, else a browser tab
+async function openArchive(btn) {
+  const status = btn.parentElement.querySelector(".archive-status");
+  let r = { opened: false, url: null };
+  try {
+    const resp = await fetch(`/api/scope-archive/open/${btn.dataset.uid}?media=${btn.dataset.media}`);
+    r = await resp.json();
+  } catch (e) { /* tab below */ }
+  if (r.opened) { if (status) status.textContent = "Opened in Dwarfium Scope Archive"; }
+  else if (r.url) window.open(r.url, "_blank", "noopener");
+}
 document.addEventListener("click", (e) => {
+  const archiveBtn = e.target.closest(".archive-btn");
+  if (archiveBtn) { openArchive(archiveBtn); return; }
   const btn = e.target.closest(".check-btn");
   if (btn) { openCheck(btn); return; }
   if (e.target.id === "checkModal" || e.target.closest("#checkClose")) document.getElementById("checkModal").classList.remove("open");

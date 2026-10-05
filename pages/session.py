@@ -1131,6 +1131,18 @@ def build_session_page() -> None:
 
             shooting_schedule_view()
 
+            # Counts kept by a View / Check run elsewhere (Program page,
+            # another tab): this list is built once, so it follows the
+            # cache's version instead of waiting for a reload
+            seen_check_version = [task_check_cache.version()]
+
+            def _follow_task_checks() -> None:
+                if task_check_cache.version() != seen_check_version[0]:
+                    seen_check_version[0] = task_check_cache.version()
+                    shooting_schedule_view.refresh()
+
+            ui.timer(3.0, _follow_task_checks)
+
             # Program (scheduler): also built once, not on the 2s poll -
             # it holds its own upload widget + a running program's live
             # step log, neither of which should be torn down every tick.

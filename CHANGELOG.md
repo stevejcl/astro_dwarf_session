@@ -43,6 +43,9 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### Device page: Shut down button
+    Next to Disconnect, a "Shut down" button powers the Dwarf off after a confirmation (CMD_RGB_POWER_POWER_DOWN).
+    On success the connection is closed as with a manual Disconnect, so the app doesn't try to reconnect to it.
     ### Preview: stacked image / last frame
     The device page's camera previews get a "Stacked / Last frame" switch, the official app's own toggle
     (displaySource parameter, CMD_PARAM_SET_GENERAL_INT_PARAM - 1 stacked, 0 last frame, from a capture of the

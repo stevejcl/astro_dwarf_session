@@ -36,6 +36,7 @@ from nicegui import run, ui
 from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
+from dwarf_python_api.lib.dwarf_utils import perform_powerdown
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 from dwarf_python_api.lib.dwarf_utils import perform_get_all_shooting_schedule_full
 from dwarf_python_api.lib.dwarf_utils import perform_get_last_connection_error
@@ -542,6 +543,64 @@ async def _handle_disconnect(session, dwarf_uid: str, refresh_view: Callable[[],
     refresh_view()
 
 
+async def _handle_shutdown(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
+    """Powers the Dwarf off after a confirmation (user-requested Oct 2026:
+    next to Disconnect, the Reboot of the actions section was the only way
+    and was clicked instead)."""
+    with ui.dialog() as dialog, ui.card():
+        ui.label(t("shutdown_confirm"))
+        with ui.row().classes("w-full justify-end gap-2 mt-2"):
+            ui.button(t("cancel"), on_click=dialog.close).props("flat")
+
+            async def _confirmed() -> None:
+                dialog.close()
+                await _shutdown(session, dwarf_uid, refresh_view)
+
+            ui.button(t("shutdown_confirm_button"), icon="power_settings_new",
+                      on_click=_confirmed).props("color=negative")
+    dialog.open()
+
+
+async def _shutdown(session, dwarf_uid: str, refresh_view: Callable[[], None]) -> None:
+    # Priority over the periodic health check, as actions_section's
+    # _run_and_notify()
+    connection_health.mark_priority_pending(dwarf_uid)
+    try:
+        acquired = connection_health.try_acquire_command_slot(dwarf_uid, caller="session.shutdown")
+    finally:
+        connection_health.clear_priority_pending(dwarf_uid)
+    if not acquired:
+        _safe_notify(t("device_busy"), type="warning")
+        return
+    _busy_uids.add(dwarf_uid)
+    thread = getattr(session, "event_loop_thread", None)
+    try:
+        # perform_powerdown() returns True on success, None otherwise
+        result = await run.io_bound(perform_powerdown, session=session)
+        if result is True:
+            # The Dwarf drops the connection while powering off: close
+            # ours too, so nothing waits on a dead socket
+            try:
+                await run.io_bound(perform_disconnect, session=session)
+            except Exception:
+                pass
+    finally:
+        _busy_uids.discard(dwarf_uid)
+        connection_health.release_command_slot(dwarf_uid)
+    if result is not True:
+        _safe_notify(t("shutdown_failed"), type="negative")
+        return
+    if thread is not None:
+        unregister_thread_device_label(thread.ident)
+    # Same as a manual Disconnect: no auto-reconnect to a powered-off
+    # Dwarf, and another instance on this PC may take it once back on
+    connection_health.forget(dwarf_uid)
+    device_lock.release(dwarf_uid)
+    connection_health.mark_manual_disconnect(dwarf_uid)
+    _safe_notify(t("shutdown_sent"), type="positive")
+    refresh_view()
+
+
 def build_session_page() -> None:
     @ui.page("/session/{dwarf_uid}")
     def session_page(dwarf_uid: str) -> None:
@@ -777,6 +836,13 @@ def build_session_page() -> None:
                                 t("disconnect"),
                                 icon="link_off",
                                 on_click=lambda: _handle_disconnect(
+                                    session, dwarf_uid, refresh_view_and_camera_settings
+                                ),
+                            ).props("flat color=negative")
+                            ui.button(
+                                t("shutdown"),
+                                icon="power_settings_new",
+                                on_click=lambda: _handle_shutdown(
                                     session, dwarf_uid, refresh_view_and_camera_settings
                                 ),
                             ).props("flat color=negative")

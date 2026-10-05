@@ -60,13 +60,30 @@ def open_in_app(url: str) -> bool:
         return False
 
 
-async def archive_session(config, media_path: str) -> None:
-    """The "Archive in Dwarfium Scope Archive" action: Scope Archive's
-    window when it has one, else a browser tab."""
-    url = transfer_url(config, media_path)
+def page_url(config, page: str) -> str | None:
+    """One of Scope Archive's own pages for this Dwarf: "config" (Dwarf
+    Configuration) or "explore" (its sessions), or None when the URL /
+    DwarfId isn't set."""
+    base = (getattr(config, "dwarfium_base_url", "") or "").rstrip("/")
+    dwarf_id = str(getattr(config, "dwarfium_id", "") or "").strip()
+    if not base or not dwarf_id:
+        return None
+    path = {"config": "/Dwarf", "explore": "/Explore/"}[page]
+    return f"{base}{path}?{urlencode({'DwarfId': dwarf_id})}"
+
+
+async def open_page(url: str | None) -> None:
+    """Shows a Scope Archive page: in its window when it runs as an app
+    (notified), else in a browser tab."""
     if not url:
         return
     if await run.io_bound(open_in_app, url):
         ui.notify(t("archive_opened_in_app"), type="positive")
     else:
         ui.navigate.to(url, new_tab=True)
+
+
+async def archive_session(config, media_path: str) -> None:
+    """The "Archive in Dwarfium Scope Archive" action (import then
+    Transfer page)."""
+    await open_page(transfer_url(config, media_path))

@@ -47,7 +47,7 @@ from dwarf_python_api.lib.my_logger import (
     unregister_thread_device_label,
 )
 
-from components import connection_health, device_lock, scheduler_runner, native_schedule, task_check_cache
+from components import connection_health, device_lock, scheduler_runner, native_schedule, scope_archive, task_check_cache
 from components.native_schedule import parse_native_schedule_info
 from components.actions_section import build_actions_section
 from components.camera_stream import build_camera_stream_section
@@ -701,18 +701,19 @@ def build_session_page() -> None:
             # pattern already used for dwarf_model_id in scheduler_
             # runner.py. Degrades to simply not showing these links
             # rather than crashing the whole session page.
-            dwarfium_base_url = getattr(_header_session.config, "dwarfium_base_url", "") if _header_session else ""
-            dwarfium_id = getattr(_header_session.config, "dwarfium_id", "") if _header_session else ""
-            if dwarfium_base_url and dwarfium_id:
-                base = dwarfium_base_url.rstrip("/")
-                did = dwarfium_id
+            # In Scope Archive's own window when it runs as an app, else a
+            # browser tab (user-requested Oct 2026 - see scope_archive.py)
+            _header_config = _header_session.config if _header_session else None
+            config_url = scope_archive.page_url(_header_config, "config")
+            explore_url = scope_archive.page_url(_header_config, "explore")
+            if config_url and explore_url:
                 with ui.row().classes("items-center gap-3 -mt-1"):
-                    ui.link(t("open_in_dwarfium_config"), f"{base}/Dwarf?DwarfId={did}", new_tab=True).classes(
-                        "text-xs"
-                    )
-                    ui.link(
-                        t("open_in_dwarfium_explore"), f"{base}/Explore/?DwarfId={did}", new_tab=True
-                    ).classes("text-xs")
+                    ui.button(
+                        t("open_in_dwarfium_config"), on_click=lambda: scope_archive.open_page(config_url)
+                    ).props("flat dense no-caps size=sm color=primary").classes("text-xs")
+                    ui.button(
+                        t("open_in_dwarfium_explore"), on_click=lambda: scope_archive.open_page(explore_url)
+                    ).props("flat dense no-caps size=sm color=primary").classes("text-xs")
 
             # Defined HERE, inside the page function, not at module
             # level - see the module docstring for why: this gives THIS

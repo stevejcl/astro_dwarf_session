@@ -65,7 +65,8 @@
     When Scope Archive runs as an app, the import and Transfer pages now open in its own window, brought to front (its
     /api/open-in-app), with its system folder dialogs - in a web browser they aren't available. A notification says
     so; without an app window, or with a Scope Archive not answering (not running, older version), the page opens in a
-    browser tab as before. The explorer, View / Check dialog and Program page use a button for it.
+    browser tab as before. The explorer, View / Check dialog and Program page use a button for it, and so do the device
+    page's "Open in Dwarfium Scope Archive (Config / Explore)" links.
     ### Archive a session with Dwarfium Scope Archive
     The session explorer's large view, the View / Check dialog and the Program page's modal get an "Archive in
     Dwarfium Scope Archive" link to Scope Archive's ImportSession page: it reads and registers this session only from the

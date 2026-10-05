@@ -101,6 +101,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from device_registry import list_device_entries
 from site_registry import list_site_entries
 from components import connection_health, scheduler_runner, scheduler_loop, native_schedule, catalog_add_on
+from components import task_check
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
 from components.session_dirs import ensure_dirs
@@ -407,6 +408,23 @@ def register_api_routes() -> None:
 
             out.append(device_entry)
         return JSONResponse({"devices": out})
+
+    @app.get("/api/task-check/{dwarf_uid}")
+    async def api_task_check(dwarf_uid: str, start: int, end: int, name: str = ""):
+        """What the Dwarf saved for a native task or a program run (the
+        Program page's View / Check buttons) - task_check.summarize(),
+        plus the stacked thumbnail's URL on the Dwarf itself."""
+        try:
+            session = get_manager().get(dwarf_uid)
+        except KeyError:
+            return JSONResponse({"status": "unknown_device"}, status_code=404)
+        if not session.config.dwarf_ip:
+            return JSONResponse({"status": "album_error"})
+        task = {"name": name, "startTime": start, "endTime": end}
+        result = await run.io_bound(task_check.summarize, session, task)
+        if result.get("thumbnailPath"):
+            result["thumbnailUrl"] = f"http://{session.config.dwarf_ip}{result['thumbnailPath']}"
+        return JSONResponse(result)
 
     @app.get("/api/sites")
     def api_sites():

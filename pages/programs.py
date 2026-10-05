@@ -26,6 +26,7 @@ from components.program_editor import build_program_editor
 from components.site_time import site_now
 from components.schedule_editor import build_schedule_editor
 from components.session_dirs import session_dirs_for
+from components.task_check import open_task_check, program_task
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
 
@@ -433,6 +434,17 @@ def build_programs_page() -> None:
                                             icon="replay",
                                             on_click=lambda p=filepath: relaunch_result(p),
                                         ).props("flat dense round color=primary")
+                                        # What the Dwarf saved for this run: "View" (done,
+                                        # blue) / "Check" (error, red), see task_check.py
+                                        check_task = program_task(program, session.config)
+                                        if check_task is not None:
+                                            ui.button(
+                                                t("task_view") if kind == "done" else t("task_check"),
+                                                icon="image" if kind == "done" else "fact_check",
+                                                on_click=lambda _, task=check_task: open_task_check(session, task),
+                                            ).props(
+                                                f"flat dense no-caps size=sm color={'primary' if kind == 'done' else 'negative'}"
+                                            )
                                         # The Dwarf is still capturing this
                                         # program's target (error < 15 h)
                                         if kind == "error" and scheduler_runner.can_force_resume(

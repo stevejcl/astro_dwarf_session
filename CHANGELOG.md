@@ -47,6 +47,10 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### View / Check on the Programs page and on this app's own program runs
+    The same dialog (stacked / taken images, integration, stacked thumbnail) is now reachable from the Programs
+    page's Results tab and from the Program HTML page, for native tasks and for this app's own finished programs
+    (their target and real start / end). New route /api/task-check/<dwarfUid>.
     ### Native schedules: "View" on successful tasks
     A successful native task gets a blue "View" button opening the same dialog as "Check" (stacked / taken images,
     integration, stacked thumbnail). "Check" is now red on a failed task, orange on a warning (-1).

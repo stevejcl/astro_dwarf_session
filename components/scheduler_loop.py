@@ -233,6 +233,9 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
     decide what's shown. Sorted earliest first; each entry carries its
     own "status" (todo/done/error) so the page can tag it."""
     dirs = session_dirs_for(session)
+    # Imported here: task_check -> current_activity -> scheduler_runner
+    from components.task_check import program_task
+
     now = site_now(session.config)
     out = []
     for status, dir_key in _LOCAL_PROGRAM_DIRS:
@@ -268,6 +271,10 @@ def list_upcoming_programs(dwarf_uid: str, session) -> list[dict]:
                 "realEnd": id_command.get("processed_date"),
             }
             entry.update(_extract_capture_summary(cmd, id_command))
+            # Target + real run window, for the Program page's View /
+            # Check (task_check.py) - a run that finished either way
+            if status != "todo":
+                entry["checkTask"] = program_task(cmd, session.config)
             out.append(entry)
     out.sort(key=lambda p: p["scheduledAt"])
     return out

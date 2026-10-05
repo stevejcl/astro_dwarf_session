@@ -356,7 +356,7 @@ TRANSLATIONS: dict[str, str] = {
     "reboot_confirm_button":        "Red\u00e9marrer",
     "reboot_sent":                  "Commande de red\u00e9marrage envoy\u00e9e",
     "shutdown":                     "\u00c9teindre",
-    "shutdown_confirm":             "Vraiment \u00e9teindre l'appareil ? Toute session en cours sera interrompue et il faudra le rallumer \u00e0 la main.",
+    "shutdown_confirm":             "Merci de confirmer l'arr\u00eat complet du Dwarf ?",
     "shutdown_confirm_button":      "\u00c9teindre",
     "shutdown_sent":                "Commande d'extinction envoy\u00e9e",
     "shutdown_failed":              "\u00c9chec de l'extinction",

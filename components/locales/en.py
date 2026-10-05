@@ -356,7 +356,7 @@ TRANSLATIONS: dict[str, str] = {
     "reboot_confirm_button":        "Reboot",
     "reboot_sent":                  "Reboot command sent",
     "shutdown":                     "Shut down",
-    "shutdown_confirm":             "Really shut down the device? Any ongoing session will be interrupted and it will have to be switched on again by hand.",
+    "shutdown_confirm":             "Please confirm the complete shutdown of the Dwarf?",
     "shutdown_confirm_button":      "Shut down",
     "shutdown_sent":                "Shutdown command sent",
     "shutdown_failed":              "Shutdown failed",

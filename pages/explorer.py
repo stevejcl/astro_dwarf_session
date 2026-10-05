@@ -21,8 +21,13 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 
+import re
+from urllib.parse import quote
+
 import requests
-from nicegui import run, ui
+from fastapi import HTTPException
+from fastapi.responses import Response
+from nicegui import app, run, ui
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_utils import perform_list_astro_sessions_http
@@ -117,7 +122,52 @@ def _format_datetime(unix_ts) -> str:
         return ""
 
 
+def _download_name(path: str) -> str:
+    """"<session folder>_stacked.jpg" for a session's image path: the
+    file itself is always stacked.jpg, the folder says which session."""
+    parts = path.strip("/").split("/")
+    name = "_".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+    return re.sub(r'[\\/:*?"<>|]', "_", name)
+
+
+def _content_disposition(name: str) -> str:
+    # HTTP headers are latin-1: ASCII fallback + the UTF-8 name (RFC 6266)
+    ascii_name = name.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+
+
+def _fetch_image(dwarf_ip: str, path: str) -> bytes | None:
+    try:
+        response = requests.get(_thumbnail_url(dwarf_ip, path), timeout=30)
+        response.raise_for_status()
+        return response.content
+    except requests.RequestException:
+        return None
+
+
 def build_explorer_page() -> None:
+    # Image download (user-requested Oct 2026): fetched from the Dwarf by
+    # this backend and sent back as an attachment - the browser's own
+    # download attribute is ignored for another origin (the Dwarf), it
+    # would just open the image.
+    @app.get("/session/{dwarf_uid}/explorer/download")
+    async def explorer_download(dwarf_uid: str, path: str) -> Response:
+        try:
+            session = get_manager().get(dwarf_uid)
+        except KeyError:
+            raise HTTPException(status_code=404)
+        # Only the Dwarf's own media files
+        if not path.startswith("/") or ".." in path or not session.config.dwarf_ip:
+            raise HTTPException(status_code=400)
+        data = await run.io_bound(_fetch_image, session.config.dwarf_ip, path)
+        if data is None:
+            raise HTTPException(status_code=502)
+        return Response(
+            data,
+            media_type="image/jpeg",
+            headers={"Content-Disposition": _content_disposition(_download_name(path))},
+        )
+
     @ui.page("/session/{dwarf_uid}/explorer")
     def explorer_page(dwarf_uid: str) -> None:
         add_pwa_head_tags()
@@ -165,7 +215,11 @@ def build_explorer_page() -> None:
                 with ui.column().classes("w-full gap-1 p-3"):
                     with ui.row().classes("w-full justify-between items-center"):
                         dialog_target_label = ui.label("").classes("text-base font-medium")
-                        ui.button(icon="close", on_click=dialog.close).props("flat round dense")
+                        with ui.row().classes("gap-1"):
+                            ui.button(
+                                icon="download", on_click=lambda: _download_current()
+                            ).props("flat round dense").tooltip(t("explorer_download"))
+                            ui.button(icon="close", on_click=dialog.close).props("flat round dense")
                     # Date/Exposure/Gain (user-requested Sep 2026: "Date,
                     # Cible et details de prise de vue") - all read
                     # directly from the SAME listing entry already in
@@ -196,7 +250,17 @@ def build_explorer_page() -> None:
                     _shots_info_cache[thumb_path] = await run.io_bound(_fetch_shots_info, url)
                 return _shots_info_cache[thumb_path]
 
+            current_path: list[str] = [""]
+
+            def _download_current() -> None:
+                if current_path[0]:
+                    ui.download.from_url(
+                        f"/session/{dwarf_uid}/explorer/download?path={quote(current_path[0])}",
+                        filename=_download_name(current_path[0]),
+                    )
+
             async def open_dialog(entry: dict) -> None:
+                current_path[0] = entry["filePath"]
                 url = _thumbnail_url(session.config.dwarf_ip, entry["filePath"])
                 full_image.set_source(url)
                 dialog_target_label.set_text(_target_name(entry))

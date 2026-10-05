@@ -295,6 +295,7 @@ TRANSLATIONS: dict[str, str] = {
     "camera_stream_rtsp_hint":      "S'arr\u00eatent d\u00e8s qu'une session astro d\u00e9marre. Les navigateurs ne lisent pas le RTSP directement - ouvrez ces liens dans VLC/OBS.",
     "camera_stream_type_unknown":   "Inconnu",
     "logs_title":                   "Journaux",
+    "explorer_download":            "T\u00e9l\u00e9charger",
     "explorer_title":               "Sessions Astro",
     "explorer_empty":               "Aucune session astro trouv\u00e9e sur cet appareil.",
     "explorer_no_ip":               "Appareil pas encore appair\u00e9 - pas d'adresse IP.",

@@ -15,8 +15,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_calibration
 from dwarf_python_api.lib.dwarf_utils import perform_goto
 from dwarf_python_api.lib.dwarf_utils import perform_stop_goto
 from dwarf_python_api.lib.dwarf_utils import perform_goto_stellar
-from dwarf_python_api.lib.dwarf_utils import parse_ra_to_float
-from dwarf_python_api.lib.dwarf_utils import parse_dec_to_float
+from components.coords import parse_dec_degrees, parse_ra_hours
 from dwarf_python_api.lib.dwarf_utils import perform_takeAstroPhoto
 from dwarf_python_api.lib.dwarf_utils import perform_continue_shooting
 from dwarf_python_api.lib.dwarf_utils import perform_clear_needs_continue_shooting
@@ -648,15 +647,14 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
         if goto_manual:
             target_name = program.get('goto_manual', {}).get('target')
             log.notice(f"Processing Goto : {target_name}")
-            try:
-                decimal_RA = float(manual_RA)
-            except ValueError:
-                decimal_RA = parse_ra_to_float(manual_RA)
-
-            try:
-                decimal_Dec = float(manual_declination)
-            except ValueError:
-                decimal_Dec = parse_dec_to_float(manual_declination)
+            # Decimal or sexagesimal, any usual notation (components/coords.py:
+            # the library's parsers only knew "HH:MM:SS" and dropped the Dec
+            # sign on minutes / seconds)
+            decimal_RA = parse_ra_hours(manual_RA)
+            decimal_Dec = parse_dec_degrees(manual_declination)
+            if decimal_RA is None or decimal_Dec is None:
+                log.error(f"Goto {target_name}: unreadable coordinates RA={manual_RA!r} Dec={manual_declination!r}")
+                verify_action(False, "step_9", progress_callback=progress_callback)  # raises
 
             continue_action = perform_goto(decimal_RA, decimal_Dec, target_name, session=session)
             if interrupted(): return

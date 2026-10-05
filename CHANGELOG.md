@@ -2,6 +2,12 @@
 
 ## [Unreleased]
   ### BugFix
+    ### Manual goto: RA / Dec in hours-minutes-seconds
+    The program editor only read decimal RA / Dec: "18h 13m 40.3s" / "-17° 36' 06\"" was saved EMPTY, without a word,
+    and the goto had no coordinates. Both fields now take decimal values or the usual notations (18h 13m 40.3s,
+    18:13:40.3, 18 13 40.3, -17° 36' 06", -17:36:06, -17d36m06s; a decimal RA above 24 is read as degrees) and save
+    decimal hours / degrees; an unreadable value is shown in red and blocks the save. The runner reads the same
+    notations (programs written by other tools), with the Dec sign applied to the whole value.
     ### Session explorer: download in the native window
     The download did nothing in the .exe / python native window (pywebview), only in a browser. The app now writes
     the file itself there: the system Save dialog (or the Downloads folder if it can't open), then a notification

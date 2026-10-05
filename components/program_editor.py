@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 
 from nicegui import run, ui
 
+from components.coords import parse_dec_degrees, parse_ra_hours
 from components.camera_settings import (
     _exposure_names,
     _gain_range,
@@ -182,8 +183,16 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             with ui.row().classes("w-full gap-2 flex-wrap"):
                 manual_target = ui.input(t("prog_target_name"), value=cmd["goto_manual"]["target"]).classes("flex-1 min-w-[240px]")
                 with ui.row().classes("gap-2 no-wrap"):  # RA/Dec wrap together
-                    ra_input = ui.input(t("prog_ra"), value=str(cmd["goto_manual"]["ra_coord"] or "")).classes("w-24")
-                    dec_input = ui.input(t("prog_dec"), value=str(cmd["goto_manual"]["dec_coord"] or "")).classes("w-24")
+                    # Decimal or sexagesimal ("18h 13m 40.3s", "-17° 36' 06\"", "18:13:40"...),
+                    # saved as decimal hours / degrees (components/coords.py)
+                    ra_input = ui.input(
+                        t("prog_ra"), value=str(cmd["goto_manual"]["ra_coord"] or ""),
+                        validation={t("prog_ra_invalid"): lambda v: not v or parse_ra_hours(v) is not None},
+                    ).classes("w-36").tooltip(t("prog_ra_hint"))
+                    dec_input = ui.input(
+                        t("prog_dec"), value=str(cmd["goto_manual"]["dec_coord"] or ""),
+                        validation={t("prog_dec_invalid"): lambda v: not v or parse_dec_degrees(v) is not None},
+                    ).classes("w-36").tooltip(t("prog_dec_hint"))
 
             stellarium_status = ui.label("").classes("text-xs")
 
@@ -728,6 +737,11 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 missing.append(t("prog_solar_target"))
             if goto_mode.value == "manual" and not (manual_target.value and ra_input.value and dec_input.value):
                 missing.append(t("prog_goto_manual"))
+            elif goto_mode.value == "manual" and (
+                parse_ra_hours(ra_input.value) is None or parse_dec_degrees(dec_input.value) is None
+            ):
+                # Unreadable coordinates used to be saved empty, silently
+                missing.append(t("prog_goto_coords_invalid"))
             # Optional "end_time" (HH:MM, 24h) - blank is valid (no
             # scheduled early stop at all, the default), so this only
             # rejects a NON-blank value that isn't actually HH:MM -
@@ -779,11 +793,8 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 is_tele and mosaic_cb.value and not (framing_x_pct == 100 and framing_y_pct == 100)
             )
 
-            def _coord(value: str):
-                try:
-                    return float(value)
-                except (TypeError, ValueError):
-                    return ""
+            def _coord(value: float | None):
+                return round(value, 6) if value is not None else ""
 
             return {
                 "id_command": {
@@ -821,8 +832,8 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 "goto_manual": {
                     "do_action": goto_mode.value == "manual",
                     "target": manual_target.value if goto_mode.value == "manual" else "",
-                    "ra_coord": _coord(ra_input.value) if goto_mode.value == "manual" else "",
-                    "dec_coord": _coord(dec_input.value) if goto_mode.value == "manual" else "",
+                    "ra_coord": _coord(parse_ra_hours(ra_input.value)) if goto_mode.value == "manual" else "",
+                    "dec_coord": _coord(parse_dec_degrees(dec_input.value)) if goto_mode.value == "manual" else "",
                     "wait_after": int(wait_after_target_input.value or 0),
                 },
                 "setup_camera": {

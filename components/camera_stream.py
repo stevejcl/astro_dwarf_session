@@ -30,6 +30,8 @@ from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 
+import dwarf_python_api.lib.my_logger as log
+
 from components.i18n import t
 from components import rtsp_worker
 from components import scheduler_runner
@@ -310,24 +312,43 @@ def _build_display_source_toggle(session, previews: list) -> None:
 
     toggle.on_value_change(_on_change)
 
+    attempts = {"left": 3}
+
     async def _read_current() -> None:
-        """Current displaySource from the HTTP API, once. Skipped for a
-        Dwarf II during a program: HTTP polls during its capture crashed
-        it in the field (see pages/watch_device.py's skip_http_poll)."""
+        """Current displaySource from the HTTP API, once the Dwarf is
+        connected (user-reported Oct 2026: never selected when the page
+        opened before the connection - it was read only once, 0.5 s
+        after the page opened). Skipped for a Dwarf II during a program:
+        HTTP polls during its capture crashed it in the field (see
+        pages/watch_device.py's skip_http_poll). No value in the
+        response (the parameter never set): the Dwarf shows the stacked
+        image, its default."""
         from dwarf_python_api.get_config_data import config_to_dwarf_id_str
         from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
 
+        if previous["value"] is not None or attempts["left"] <= 0:
+            read_timer.deactivate()
+            return
         if not session.is_connected or (
             config_to_dwarf_id_str(session.config.dwarf_model_id) == "2" and scheduler_runner.is_running(uid)
         ):
-            return
+            return  # tried again at the next tick
+        attempts["left"] -= 1
         params = await run.io_bound(perform_read_camera_params_http_v3, 2, session=session)
-        shooting_mode = (params.get("shooting_mode") or {}) if isinstance(params, dict) else {}
-        value = shooting_mode.get("displaySource")
+        if not isinstance(params, dict):
+            return  # read failed: next attempt
+        attempts["left"] = 0
+        value = (params.get("shooting_mode") or {}).get("displaySource")
+        log.debug(f"[{uid}] displaySource read from the HTTP API: {value!r}")
+        try:
+            value = _DISPLAY_STACKED if value in (None, "") else int(value)
+        except (TypeError, ValueError):
+            return
         if value in (_DISPLAY_STACKED, _DISPLAY_LAST_FRAME) and previous["value"] is None:
             previous["value"] = value  # set first: the change handler then sends nothing
             toggle.set_value(value)
 
+    read_timer = ui.timer(2.0, _read_current)
     ui.timer(0.5, _read_current, once=True)
 
 

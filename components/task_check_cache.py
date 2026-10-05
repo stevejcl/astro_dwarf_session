@@ -15,6 +15,8 @@ import re
 import time
 from pathlib import Path
 
+import dwarf_python_api.lib.my_logger as log
+
 CACHE_FILE = Path("task_check_cache.json")
 
 # Entries not checked again for this long are dropped on write
@@ -35,6 +37,13 @@ def _read() -> dict:
 
 
 _store: dict = _read()
+# Bumped on each kept result: lists built once (the device page's native
+# schedules) refresh when it changes, whichever page ran the check
+_version = 0
+
+
+def version() -> int:
+    return _version
 
 
 def _epoch_s(value) -> int | None:
@@ -57,7 +66,10 @@ def _key(task: dict) -> str | None:
 def get(dwarf_uid: str, task: dict) -> dict | None:
     """The kept result for this task, or None."""
     key = _key(task)
-    return _store.get(dwarf_uid, {}).get(key) if key else None
+    found = _store.get(dwarf_uid, {}).get(key) if key else None
+    if found is None and _store.get(dwarf_uid):
+        log.debug(f"[{dwarf_uid}] no kept task check for {key}")
+    return found
 
 
 def remember(dwarf_uid: str, task: dict, result: dict, now: float | None = None) -> None:
@@ -66,17 +78,21 @@ def remember(dwarf_uid: str, task: dict, result: dict, now: float | None = None)
     key = _key(task)
     end = _epoch_s(task.get("endTime"))
     if key is None or end is None or end > now or result.get("status") not in _FINAL_STATUSES:
+        log.debug(f"[{dwarf_uid}] task check not kept ({key}, end {end}, status {result.get('status')})")
         return
     entry = {field: result.get(field) for field in _KEPT_FIELDS}
     entry["checkedAt"] = int(now)
     device = _store.setdefault(dwarf_uid, {})
     device[key] = entry
+    global _version
+    _version += 1
     for old_key in [k for k, v in device.items() if now - (v.get("checkedAt") or 0) > _KEEP_S]:
         device.pop(old_key, None)
+    log.debug(f"[{dwarf_uid}] task check kept: {key} -> {entry}")
     try:
         CACHE_FILE.write_text(json.dumps(_store, indent=2, ensure_ascii=False), encoding="utf-8")
-    except OSError:
-        pass
+    except OSError as e:
+        log.warning(f"Couldn't write {CACHE_FILE.resolve()}: {e}")
 
 
 def shots_text(cached: dict | None, stacked_word: str) -> str:

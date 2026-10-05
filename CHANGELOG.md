@@ -2,6 +2,14 @@
 
 ## [Unreleased]
   ### BugFix
+    ### Preview "Stacked / Last frame" never selected
+    The current value was read once, 0.5 s after the device page opened: a page opened before the Dwarf was connected
+    never got it. It is now read once the Dwarf is connected (up to 3 attempts), and a response without the value
+    (parameter never set) selects "Stacked", the Dwarf's default.
+    ### Device page: View / Check counts not shown
+    The native schedule list is built once, so a check run from the Program page (or another tab) only showed after a
+    reload; it now refreshes as soon as a new result is kept. The kept / not-kept decision is logged (debug) to
+    investigate any remaining case.
     ### Device page: clicks sometimes ignored
     The page rebuilds its main view every 2 s; a click landing during a rebuild hit a button just replaced and was
     lost. The view is no longer rebuilt right after a press on the page (1.5 s). The device page's dialogs also stay

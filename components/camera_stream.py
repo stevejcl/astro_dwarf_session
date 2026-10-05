@@ -262,8 +262,9 @@ def _build_display_source_toggle(session, previews: list) -> None:
     """Stacked image / last frame switch for the astro preview (user-
     requested Oct 2026, the official app's own toggle): CMD_PARAM_SET_
     GENERAL_INT_PARAM on the shared displaySource parameter. Control page
-    only. The current value isn't readable (no GET), so nothing is
-    selected until the user picks one.
+    only. The current value is read once from the Dwarf's HTTP API
+    (getParamAndSetting, astro mode's shootingModeParams - no WebSocket
+    command); nothing is selected when it can't be read.
 
     During a program the command slot is held for the whole run; while it
     captures, the run only reads the cached status (no command of its
@@ -308,6 +309,26 @@ def _build_display_source_toggle(session, previews: list) -> None:
             preview.image.set_source(f"{preview.url}?t={time.time()}")
 
     toggle.on_value_change(_on_change)
+
+    async def _read_current() -> None:
+        """Current displaySource from the HTTP API, once. Skipped for a
+        Dwarf II during a program: HTTP polls during its capture crashed
+        it in the field (see pages/watch_device.py's skip_http_poll)."""
+        from dwarf_python_api.get_config_data import config_to_dwarf_id_str
+        from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
+
+        if not session.is_connected or (
+            config_to_dwarf_id_str(session.config.dwarf_model_id) == "2" and scheduler_runner.is_running(uid)
+        ):
+            return
+        params = await run.io_bound(perform_read_camera_params_http_v3, 2, session=session)
+        shooting_mode = (params.get("shooting_mode") or {}) if isinstance(params, dict) else {}
+        value = shooting_mode.get("displaySource")
+        if value in (_DISPLAY_STACKED, _DISPLAY_LAST_FRAME) and previous["value"] is None:
+            previous["value"] = value  # set first: the change handler then sends nothing
+            toggle.set_value(value)
+
+    ui.timer(0.5, _read_current, once=True)
 
 
 def build_camera_stream_section(session, show_links: bool = True) -> None:

@@ -26,7 +26,8 @@
     ### Preview: stacked image / last frame
     The device page's camera previews get a "Stacked / Last frame" switch, the official app's own toggle
     (displaySource parameter, CMD_PARAM_SET_GENERAL_INT_PARAM - 1 stacked, 0 last frame, from a capture of the
-    official app). Usable during a program's capture, which sends no command of its own while it waits.
+    official app). The current choice is read from the Dwarf's HTTP API when the page opens. Usable during a
+    program's capture, which sends no command of its own while it waits.
     ### Force the resume of a program in error
     Programs page, Results: a failed run shows its error date, and a "Force resume" button when the Dwarf is still
     capturing that program's target and the error is less than 15 h old (e.g. a run ended in error after 3 failed

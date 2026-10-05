@@ -854,6 +854,74 @@ def orphan_matching_device_target(session) -> str | None:
     return newest if device_target_matches(session, program) else None
 
 
+def _error_time(id_command: dict, session) -> datetime | None:
+    for key in ("processed_date", "last_step_time"):
+        try:
+            return datetime.strptime(str(id_command.get(key) or ""), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+    return None
+
+
+def can_force_resume(dwarf_uid: str, session, program: dict) -> bool:
+    """Programs page's "Force resume" button for a program in Error/
+    (user-requested Oct 2026, e.g. a run ended in error after 3 failed
+    attempts while the Dwarf went on capturing): shown when no run is in
+    progress, the Dwarf is connected and capturing this program's target
+    (CurrentTargetName) and the error is at most _ORPHAN_CORRELATION_
+    MAX_AGE_S old. Cheap: no device command."""
+    if is_running(dwarf_uid) or not getattr(session, "is_connected", False):
+        return False
+    full_status = get_client_status(session).get("fullStatus") or {}
+    capturing = full_status.get("takePhotoStarted") or full_status.get("takeWidePhotoStarted") or full_status.get("AstroCapture")
+    if not capturing or not device_target_matches(session, program):
+        return False
+    when = _error_time(program.get("id_command") or {}, session)
+    return when is not None and (session_now(session) - when).total_seconds() <= _ORPHAN_CORRELATION_MAX_AGE_S
+
+
+def force_resume_from_error(dwarf_uid: str, session, filepath: str) -> bool:
+    """Moves an Error/ program back to Current/ as an interrupted run
+    (process "pending", last step = now; dwarf, shots_taken/stacked and
+    processed_date removed) and runs the normal resume check, which
+    confirms with a fresh device query that it is capturing this target.
+    Blocking (run.io_bound). True when the resume started."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            full_program = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        _warn_unreadable(filepath, e)
+        return False
+    program = full_program.get("command", full_program)
+    id_command = program.setdefault("id_command", {})
+    id_command["process"] = "pending"
+    id_command["result"] = False
+    id_command["message"] = "Resume forced after an error"
+    id_command["last_step"] = "Resume forced"
+    id_command["last_step_time"] = session_now(session).strftime("%Y-%m-%d %H:%M:%S")
+    for key in ("dwarf", "shots_taken", "shots_stacked", "processed_date"):
+        id_command.pop(key, None)
+
+    dirs = session_dirs_for(session)
+    os.makedirs(dirs["CURRENT_DIR"], exist_ok=True)
+    current_path = os.path.join(dirs["CURRENT_DIR"], os.path.basename(filepath))
+    try:
+        _write_json(current_path, {"command": program})
+        os.remove(filepath)
+    except OSError as e:
+        log.warning(f"[{dwarf_uid}] Could not move {filepath} back to Current/: {e}")
+        return False
+    log.notice(f"[{dwarf_uid}] Resume forced: {os.path.basename(filepath)} moved back to Current/.")
+
+    if not connection_health.try_acquire_command_slot(dwarf_uid, caller="scheduler_runner.force_resume"):
+        return False  # left in Current/: resumed by the next reconnect / target check
+    try:
+        reconcile_orphaned_current_files(dwarf_uid, session)
+    finally:
+        connection_health.release_command_slot(dwarf_uid)
+    return True
+
+
 def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
     if dwarf_uid in _runs and _runs[dwarf_uid].running:
         return

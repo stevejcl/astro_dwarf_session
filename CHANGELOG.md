@@ -23,6 +23,11 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### Force the resume of a program in error
+    Programs page, Results: a failed run shows its error date, and a "Force resume" button when the Dwarf is still
+    capturing that program's target and the error is less than 15 h old (e.g. a run ended in error after 3 failed
+    attempts while the Dwarf went on shooting). It moves the file back to Current/ (pending, last step now; dwarf,
+    shots and processed date removed) and runs the normal resume, end time included.
     ### Hide a Dwarf on the dashboard
     The eye button on a card hides a Dwarf not used for now: only its header (name, IP, status) stays, it moves after
     the others, and it isn't auto-connected (no more failed attempts for a Dwarf that is off). The same button shows

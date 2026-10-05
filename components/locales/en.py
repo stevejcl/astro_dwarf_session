@@ -228,6 +228,11 @@ TRANSLATIONS: dict[str, str] = {
     "scheduler_armed_hint":         "When on, due scripts in this queue start automatically at their scheduled time, one after another.",
     "results_started":              "Started",
     "results_finished":             "Finished",
+    "results_failed_at":            "Error",
+    "results_force_resume":         "Force resume",
+    "results_force_resume_hint":    "The Dwarf is still capturing this target: put the program back in progress and follow it again (end time included)",
+    "results_force_resume_done":    "Program back in progress - following the capture again.",
+    "results_force_resume_failed":  "Could not resume now - the program is back in Current/ and will be resumed on the next check.",
     "open_programs":                "Programs",
     "open_settings":                "Settings",
 

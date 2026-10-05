@@ -228,6 +228,11 @@ TRANSLATIONS: dict[str, str] = {
     "scheduler_armed_hint":         "Une fois activ\u00e9, les scripts dus dans cette file d\u00e9marrent automatiquement \u00e0 l'heure pr\u00e9vue, l'un apr\u00e8s l'autre.",
     "results_started":              "D\u00e9marr\u00e9",
     "results_finished":             "Termin\u00e9",
+    "results_failed_at":            "Erreur",
+    "results_force_resume":         "Forcer la reprise",
+    "results_force_resume_hint":    "Le Dwarf capture toujours cette cible : remettre le programme en cours et reprendre son suivi (heure de fin comprise)",
+    "results_force_resume_done":    "Programme remis en cours - suivi de la capture repris.",
+    "results_force_resume_failed":  "Reprise impossible maintenant - le programme est remis dans Current/ et sera repris \u00e0 la prochaine v\u00e9rification.",
     "open_programs":                "Programmes",
     "open_settings":                "R\u00e9glages",
 

@@ -257,6 +257,7 @@ async function openCheck(btn) {
   if (r.integration) bits.push(`${CHECK_TEXT.integration} ${escText(r.integration)}`);
   if (bits.length) html += `<div class="muted">${bits.join(" · ")}</div>`;
   if (r.thumbnailUrl) html += `<img src="${r.thumbnailUrl}" alt="">`;
+  if (r.archiveUrl) html += `<div style="margin-top:8px"><a href="${escText(r.archiveUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">&#128230; Archiver dans Dwarfium Scope Archive</a></div>`;
   body.innerHTML = html;
   const shotsSpan = btn.previousElementSibling;
   if (shotsSpan && shotsSpan.classList.contains("check-shots") && shotsText(r)) shotsSpan.textContent = shotsText(r);

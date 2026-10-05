@@ -61,6 +61,11 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### Archive a session with Dwarfium Scope Archive
+    The session explorer's large view, the View / Check dialog and the Program page's modal get an "Archive in
+    Dwarfium Scope Archive" link: Scope Archive's own Transfer page (Archive mode) with this Dwarf and this session
+    folder preselected, so the copy to the Backup runs there with its own checks. Shown when the Dwarfium URL and
+    DwarfId are set in Settings (same as the "Open in Dwarfium" links).
     ### Session explorer: download the PNG too
     The download button becomes a JPG / PNG menu. The session's PNG (the Dwarf's own
     "stacked-16_M 42 ..._60s40_Duo-Band_...png") is looked for in the session folder over the Dwarf's anonymous FTP

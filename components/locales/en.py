@@ -299,6 +299,7 @@ TRANSLATIONS: dict[str, str] = {
     "explorer_downloading":         "Downloading from the Dwarf...",
     "explorer_downloaded":          "Saved to {path}",
     "explorer_download_failed":     "Download failed",
+    "archive_in_scope_archive":     "Archive in Dwarfium Scope Archive",
     "explorer_download":            "Download",
     "explorer_title":               "Astro Sessions",
     "explorer_empty":               "No astro sessions found on this device.",

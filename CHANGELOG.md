@@ -47,6 +47,9 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### Native schedules: "View" on successful tasks
+    A successful native task gets a blue "View" button opening the same dialog as "Check" (stacked / taken images,
+    integration, stacked thumbnail). "Check" is now red on a failed task, orange on a warning (-1).
     ### Native schedules: check what the Dwarf saved for a failed task
     A failed or interrupted task (e.g. "error -1") gets a "Check" button on the device page: it finds the task's
     session in the Dwarf's album (target name + time window), reads its shotsInfo.json and shows the images

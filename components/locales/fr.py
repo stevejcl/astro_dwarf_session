@@ -56,6 +56,7 @@ TRANSLATIONS: dict[str, str] = {
     "sched_not_checked_yet":        "Pas encore v\u00e9rifi\u00e9 \u2014 cliquez sur Actualiser.",
     "sched_none_stored":            "Aucun planning de prise de vue actuellement stock\u00e9 sur cet appareil.",
     "sched_show_more":              "Voir plus ({count} de plus)",
+    "task_view":                    "Voir",
     "task_check":                   "V\u00e9rifier",
     "task_check_title":             "Ce que le Dwarf a enregistr\u00e9 : {name}",
     "task_check_album_error":       "Impossible de lire l'album du Dwarf.",

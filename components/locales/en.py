@@ -56,6 +56,7 @@ TRANSLATIONS: dict[str, str] = {
     "sched_not_checked_yet":        "Not checked yet — click Refresh.",
     "sched_none_stored":            "No shooting schedule currently stored on this device.",
     "sched_show_more":              "Show more ({count} more)",
+    "task_view":                    "View",
     "task_check":                   "Check",
     "task_check_title":             "What the Dwarf saved: {name}",
     "task_check_album_error":       "Couldn't read the Dwarf's album.",

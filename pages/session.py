@@ -1084,19 +1084,27 @@ def build_session_page() -> None:
                                         line += f" [{tsk['error_code']} {tsk.get('error_name') or ''}]".replace(" ]", "]")
                                     if detail:
                                         line += f" ({detail})"
-                                    if tsk.get("error_code") or tsk.get("state_code") in (3, 4):
-                                        # Failed / interrupted: what did the Dwarf save anyway?
+                                    failed = bool(tsk.get("error_code")) or tsk.get("state_code") in (3, 4)
+                                    if failed or tsk.get("state_code") == 2:
+                                        # What the Dwarf saved: "Check" on a failed / interrupted
+                                        # task (red, orange for a warning), "View" on a successful
+                                        # one (blue) - its data and stacked image at a glance
+                                        if not failed:
+                                            label, icon, color = t("task_view"), "image", "primary"
+                                        else:
+                                            label, icon = t("task_check"), "fact_check"
+                                            color = "warning" if warning else "negative"
                                         with ui.row().classes("w-full items-center gap-1 no-wrap"):
                                             ui.label(line).classes(
                                                 f"text-xs flex-1 {'text-warning' if warning else 'text-grey-7'}"
                                             )
                                             ui.button(
-                                                t("task_check"),
-                                                icon="fact_check",
+                                                label,
+                                                icon=icon,
                                                 on_click=lambda _, task=tsk: open_task_check(
                                                     actions_session, task, make_dialog=_page_dialog
                                                 ),
-                                            ).props("flat dense no-caps size=sm")
+                                            ).props(f"flat dense no-caps size=sm color={color}")
                                     else:
                                         ui.label(line).classes("text-xs text-grey-7")
                         if len(cached_scheds) > shown:

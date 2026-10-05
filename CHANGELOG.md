@@ -47,6 +47,9 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### Session explorer: download the stacked image
+    The explorer's large view gets a Download button: the session's stacked.jpg, fetched from the Dwarf by the app
+    and saved as "<session folder>_stacked.jpg". Downloads are now allowed in the native window (pywebview).
     ### Native schedules: check what the Dwarf saved for a failed task
     A failed or interrupted task (e.g. "error -1") gets a "Check" button on the device page: it finds the task's
     session in the Dwarf's album (target name + time window), reads its shotsInfo.json and shows the images

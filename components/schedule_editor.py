@@ -82,6 +82,28 @@ def _duration_min(start_hhmm: str, end_hhmm: str) -> int | None:
     return minutes if minutes > 0 else minutes + 24 * 60
 
 
+def next_free_start(
+    earliest: datetime, duration_min: int, busy: list[tuple[datetime, datetime]]
+) -> datetime:
+    """First start >= earliest (whole minute) where a task of duration_min
+    keeps TASK_GAP_MIN from every busy (start, end) window - i.e. after
+    the end of the task running then and of those chained right after
+    it (user-requested Oct 2026)."""
+    gap = timedelta(minutes=TASK_GAP_MIN)
+    candidate = earliest.replace(second=0, microsecond=0)
+    if candidate < earliest:
+        candidate += timedelta(minutes=1)
+    length = timedelta(minutes=duration_min)
+    moved = True
+    while moved:
+        moved = False
+        for start, end in sorted(busy):
+            if candidate < end + gap and start < candidate + length + gap:
+                candidate = end + gap
+                moved = True
+    return candidate
+
+
 def _task_window(tk: dict) -> tuple[datetime, datetime]:
     """Naive local start/end of an editor task (all tasks share one tz)."""
     start = datetime.strptime(f"{tk['date']} {tk['startTime']}", "%Y-%m-%d %H:%M")
@@ -205,6 +227,8 @@ def build_schedule_editor(session) -> None:
         native_schedule.set_cached(dwarf_uid, native_schedule.parse_native_schedule_info(info))
         _render_device_schedules.refresh()
         _refresh_altitude_chart()
+        if not tasks:
+            _set_next_free_slot()
 
     device_refresh_button.on_click(_refresh_device_schedules)
 
@@ -281,20 +305,20 @@ def build_schedule_editor(session) -> None:
         # failed although the stack was saved (DwarfLab's analysis).
         end_time_input = time_picker_input(t("prog_end_time"), draft["endTime"]).classes("flex-1")
 
-    def _set_start_now_plus_10() -> None:
-        """User-requested Sep 2026: quick \"Now + 10min\" button - the
-        date/time fields above don't reset themselves between targets
-        (deliberately: a second target usually starts later THE SAME
-        night, not \"now\" again), so re-basing them to the current time
-        is otherwise a fully manual re-type of both fields."""
+    def _set_next_free_slot(after: datetime | None = None) -> None:
+        """Start = now + 5 min (or `after`), pushed past the tasks already
+        on the Dwarf and in this editor's list (+ TASK_GAP_MIN), keeping
+        the task's current length (user-requested Oct 2026: by default,
+        right after the running task and the ones chained after it)."""
         duration = _duration_min(start_time_input.value or "", end_time_input.value or "") or 60
-        now_plus_10 = datetime.now(user_tz) + timedelta(minutes=10)
-        date_input.value = now_plus_10.strftime("%Y-%m-%d")
-        start_time_input.value = now_plus_10.strftime("%H:%M")
-        # Keeps the task's length
-        end_time_input.value = (now_plus_10 + timedelta(minutes=duration)).strftime("%H:%M")
+        earliest = after or (datetime.now(user_tz).replace(tzinfo=None) + timedelta(minutes=TASK_GAP_MIN))
+        busy = [(start, end) for start, end, _name in _busy_windows()]
+        start = next_free_start(earliest, duration, busy)
+        date_input.value = start.strftime("%Y-%m-%d")
+        start_time_input.value = start.strftime("%H:%M")
+        end_time_input.value = (start + timedelta(minutes=duration)).strftime("%H:%M")
 
-    ui.button(t("sched_now_plus_10"), icon="schedule", on_click=_set_start_now_plus_10).props("flat dense")
+    ui.button(t("sched_next_free_slot"), icon="schedule", on_click=lambda: _set_next_free_slot()).props("flat dense")
 
     # Altitude over the night + best slot, in the DEVICE's timezone like
     # every other time on this form. Targets already in the list are
@@ -429,17 +453,16 @@ def build_schedule_editor(session) -> None:
         tasks.sort(key=lambda tk: _task_window(tk)[0])
         # Pre-fill the next free slot: the next target usually follows
         # this one the same night.
-        next_start = _task_window(new_task)[1] + timedelta(minutes=TASK_GAP_MIN)
-        date_input.value = next_start.strftime("%Y-%m-%d")
-        start_time_input.value = next_start.strftime("%H:%M")
-        # Same length as the task just added, from the new start
-        end_time_input.value = (next_start + timedelta(minutes=duration)).strftime("%H:%M")
+        _set_next_free_slot(after=_task_window(new_task)[1])
         add_status_label.set_text("")
         target_name_input.value = ""
         ra_input.value = ""
         dec_input.value = ""
         stellarium_status.set_text("")
         _render_task_list()
+
+    # Default slot: now + 5 min, after the tasks already on the Dwarf
+    _set_next_free_slot()
 
     ui.button(t("sched_add_to_schedule"), icon="add", on_click=_add_task).props("flat")
 

@@ -196,7 +196,7 @@ TRANSLATIONS: dict[str, str] = {
     "sched_name":                   "Schedule name",
     "sched_add_target":             "Add a target",
     "sched_start_time":             "Start time (HH:MM)",
-    "sched_now_plus_10":            "Now + 10min",
+    "sched_next_free_slot":         "Next free slot",
     "sched_duration_min":           "Duration (min)",
     "sched_ra_dec":                 "RA/Dec",
     "sched_task_overlap":           "Too close to \u201c{name}\u201d: targets must not overlap and need at least {gap} min between them.",

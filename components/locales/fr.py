@@ -196,7 +196,7 @@ TRANSLATIONS: dict[str, str] = {
     "sched_name":                   "Nom du planning",
     "sched_add_target":             "Ajouter une cible",
     "sched_start_time":             "Heure de d\u00e9but (HH:MM)",
-    "sched_now_plus_10":            "Maintenant +10min",
+    "sched_next_free_slot":         "Prochain cr\u00e9neau libre",
     "sched_duration_min":           "Dur\u00e9e (min)",
     "sched_ra_dec":                 "AD/D\u00e9c",
     "sched_task_overlap":           "Trop proche de \u00ab\u00a0{name}\u00a0\u00bb\u00a0: les cibles ne doivent pas se chevaucher et doivent \u00eatre espac\u00e9es d'au moins {gap} min.",

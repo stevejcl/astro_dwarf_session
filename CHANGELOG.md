@@ -11,6 +11,9 @@
     The editor also shows the native schedule tasks already on the Dwarf that are upcoming or running (from the last
     read of its list, with a Refresh button, re-read after each sync), refuses a new target overlapping them (same
     5 min gap) and draws them on the altitude chart.
+    Default slot: now + 5 min, or right after the task running on the Dwarf and those chained after it (+ 5 min),
+    1 h long; re-placed after a Refresh while no target is added, and after each added target. "Now + 10min" becomes
+    "Next free slot", applying the same rule.
     ### Milky Way mosaic planner: tiles scheduled in daylight
     Tiles were scheduled on altitude alone, so at dawn and after sunrise too (e.g. 07:33-08:57 with sunrise at
     08:15). A slot must now be dark for the tile's whole duration (new "Darkness" setting: Sun below -18/-12/-6°,

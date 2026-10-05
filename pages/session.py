@@ -115,6 +115,18 @@ def _metric_card(label: str, value, unit: str, *, is_low: bool = False) -> None:
         )
 
 
+def _page_dialog() -> ui.dialog:
+    """A dialog attached to the page itself, not to the element that
+    opened it (user-reported Oct 2026: the Shut down confirmation vanished
+    after 2 s). Opened from session_view, a dialog was its child and the
+    2 s poll's session_view.refresh() deleted it. Deleted once closed, so
+    they don't pile up on the page."""
+    with ui.context.client.content:
+        dialog = ui.dialog()
+    dialog.on("hide", dialog.delete)
+    return dialog
+
+
 class _NullNotification:
     """No-op stand-in for ui.notification() when its own creation fails
     (user-reported Sep 2026, real hardware log: BLE pairing succeeded
@@ -201,7 +213,7 @@ async def _offer_pending_schedule_sync(session, dwarf_uid: str, pending: dict) -
     def _dismiss_only() -> None:
         dialog.close()
 
-    with ui.dialog() as dialog, ui.card():
+    with _page_dialog() as dialog, ui.card():
         ui.label(t("sched_pending_offer", name=name, count=n_tasks))
         with ui.row():
             ui.button(t("sched_sync_now"), on_click=_sync_now)
@@ -354,7 +366,7 @@ async def _handle_delete_schedule(
     ongoing_notification() fired, and apparently refresh_view() too.
     Simplified to match the other three handlers' working pattern.
     """
-    with ui.dialog() as dialog, ui.card():
+    with _page_dialog() as dialog, ui.card():
         ui.label(t("sched_delete_confirm", name=schedule_name)).classes("text-sm")
 
         async def _do_delete() -> None:
@@ -547,7 +559,7 @@ async def _handle_shutdown(session, dwarf_uid: str, refresh_view: Callable[[], N
     """Powers the Dwarf off after a confirmation (user-requested Oct 2026:
     next to Disconnect, the Reboot of the actions section was the only way
     and was clicked instead)."""
-    with ui.dialog() as dialog, ui.card():
+    with _page_dialog() as dialog, ui.card():
         ui.label(t("shutdown_confirm"))
         with ui.row().classes("w-full justify-end gap-2 mt-2"):
             ui.button(t("cancel"), on_click=dialog.close).props("flat")

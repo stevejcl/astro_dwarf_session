@@ -16,7 +16,7 @@ import os
 import uuid
 from datetime import datetime
 
-from nicegui import ui
+from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 
@@ -331,6 +331,19 @@ def build_programs_page() -> None:
                         ui.notify(t("program_running"), type="positive")
                         ui.navigate.to(f"/session/{dwarf_uid}")
 
+                    async def force_resume(filepath: str) -> None:
+                        """Error/ program whose capture the Dwarf is still
+                        running: back to Current/ and resumed (see
+                        scheduler_runner.force_resume_from_error())."""
+                        ok = await run.io_bound(
+                            scheduler_runner.force_resume_from_error, dwarf_uid, session, filepath
+                        )
+                        ui.notify(
+                            t("results_force_resume_done") if ok else t("results_force_resume_failed"),
+                            type="positive" if ok else "warning",
+                        )
+                        render_results()
+
                     def render_results() -> None:
                         results_container.clear()
                         dirs = session_dirs_for(session)
@@ -405,9 +418,11 @@ def build_programs_page() -> None:
                                             )
                                         ui.label(detail).classes("text-xs")
                                     if id_command.get("starting_date") or id_command.get("processed_date"):
+                                        # "Error" date for a failed run
+                                        end_label = t("results_failed_at") if kind == "error" else t("results_finished")
                                         ui.label(
                                             f"{t('results_started')}: {id_command.get('starting_date', '\u2013')}"
-                                            f"  \u2192  {t('results_finished')}: {id_command.get('processed_date', '\u2013')}"
+                                            f"  \u2192  {end_label}: {id_command.get('processed_date', '\u2013')}"
                                         ).classes("text-xs text-grey-5")
                                     with ui.row().classes("gap-1 mt-1"):
                                         ui.button(
@@ -418,6 +433,18 @@ def build_programs_page() -> None:
                                             icon="replay",
                                             on_click=lambda p=filepath: relaunch_result(p),
                                         ).props("flat dense round color=primary")
+                                        # The Dwarf is still capturing this
+                                        # program's target (error < 15 h)
+                                        if kind == "error" and scheduler_runner.can_force_resume(
+                                            dwarf_uid, session, program
+                                        ):
+                                            ui.button(
+                                                t("results_force_resume"),
+                                                icon="play_circle",
+                                                on_click=lambda p=filepath: force_resume(p),
+                                            ).props("flat dense no-caps color=positive").tooltip(
+                                                t("results_force_resume_hint")
+                                            )
 
                     render_results()
 

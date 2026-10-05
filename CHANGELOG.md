@@ -47,6 +47,16 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### View / Check on the Programs page and on this app's own program runs
+    The same dialog (stacked / taken images, integration, stacked thumbnail) is now reachable from the Programs
+    page's Results tab and from the Program HTML page, for native tasks and for this app's own finished programs
+    (their target and real start / end). New route /api/task-check/<dwarfUid>.
+    What a View / Check finds is kept (task_check_cache.json, per Dwarf and per task): the images stacked / taken
+    then show directly in the lists - device page, Program page, Results tab - without opening it again. Only final
+    results (task over, session found with its shotsInfo.json); entries not checked again for 120 days are dropped.
+    ### Native schedules: "View" on successful tasks
+    A successful native task gets a blue "View" button opening the same dialog as "Check" (stacked / taken images,
+    integration, stacked thumbnail). "Check" is now red on a failed task, orange on a warning (-1).
     ### Session explorer: download the stacked image
     The explorer's large view gets a Download button: the session's stacked.jpg, fetched from the Dwarf by the app
     and saved as "<session folder>_stacked.jpg". Downloads are now allowed in the native window (pywebview).

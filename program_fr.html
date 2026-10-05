@@ -47,6 +47,20 @@
   .task-error { color: var(--err); }
   .tag.state-warning { background: rgba(224,168,60,0.15); color: var(--warn); border-color: var(--warn); }
   .task-warning { color: var(--warn); }
+  .check-shots { margin-left: 4px; }
+  .check-btn { font-size: 0.72rem; padding: 1px 8px; border-radius: 6px; background: transparent; cursor: pointer; margin-left: 4px; border: 1px solid currentColor; }
+  .check-btn.view { color: var(--accent); }
+  .check-btn.failed { color: var(--err); }
+  .check-btn.warning { color: var(--warn); }
+  #checkModal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  #checkModal.open { display: flex; }
+  #checkCard { background: var(--card, #1b1f27); color: var(--text); border: 1px solid var(--border); border-radius: 10px; width: min(92vw, 480px); max-height: 90vh; overflow: auto; padding: 14px; }
+  #checkCard .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 8px; }
+  #checkCard .head button { background: none; border: none; color: var(--accent); font-size: 1.1rem; cursor: pointer; }
+  #checkCard .verdict-ok { color: var(--ok); font-weight: 600; }
+  #checkCard .verdict-bad { color: var(--err); font-weight: 600; }
+  #checkCard .muted { color: var(--muted); font-size: 0.85rem; }
+  #checkCard img { width: 100%; border-radius: 6px; margin-top: 8px; }
   .capture-summary-inline { font-size: 0.75rem; color: var(--muted); }
   #refreshBtn {
     background: var(--accent); color: #fff; border: none; border-radius: 6px;
@@ -188,6 +202,57 @@ function renderStatus(entry) {
   document.getElementById("stateBadges").innerHTML = badges.join(" ");
 }
 
+// View / Check (user-requested Oct 2026): what the Dwarf saved for a
+// native task or a local program run - /api/task-check (task_check.py)
+const CHECK_TEXT = {"view": "Voir", "check": "Vérifier", "title": "Ce que le Dwarf a enregistré : ", "loading": "Lecture de l'album du Dwarf...", "album_error": "Impossible de lire l'album du Dwarf.", "not_found": "Aucune session trouvée sur le Dwarf pour cette tâche (créneau horaire).", "ok": "Session enregistrée : l'empilement semble exploitable.", "empty": "Session trouvée, mais aucune image n'a été empilée.", "unknown": "Session trouvée, mais son shotsInfo.json n'a pas pu être lu.", "name_differs": "Trouvée par l'heure seulement : le nom de la cible diffère de celui de la tâche.", "shots": "images empilées", "integration": "intégration"};
+function epochS(v) { v = Number(v); return v > 1e10 ? Math.floor(v / 1000) : v; }
+function shotsText(c) {
+  return c && c.stacked != null && c.taken != null ? `${c.stacked}/${c.taken} ${CHECK_TEXT.shots}` : "";
+}
+// cached: what an earlier View / Check found (task_check_cache.py), shown
+// before the button and updated when it is opened again
+function checkButton(uid, name, start, end, kind, cached) {
+  if (!start || !end) return "";
+  const label = kind === "view" ? CHECK_TEXT.view : CHECK_TEXT.check;
+  const shots = shotsText(cached);
+  return `<span class="check-shots capture-summary-inline">${shots}</span><button class="check-btn ${kind}" data-uid="${encodeURIComponent(uid)}" data-name="${encodeURIComponent(name || "")}"`
+    + ` data-start="${epochS(start)}" data-end="${epochS(end)}">${label}</button>`;
+}
+function escText(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+async function openCheck(btn) {
+  const name = decodeURIComponent(btn.dataset.name);
+  document.getElementById("checkTitle").textContent = CHECK_TEXT.title + (name || "?");
+  const body = document.getElementById("checkBody");
+  body.innerHTML = `<div class="muted">${CHECK_TEXT.loading}</div>`;
+  document.getElementById("checkModal").classList.add("open");
+  let r;
+  try {
+    const q = new URLSearchParams({ name, start: btn.dataset.start, end: btn.dataset.end });
+    const resp = await fetch(`/api/task-check/${btn.dataset.uid}?${q}`);
+    r = await resp.json();
+  } catch (e) { r = { status: "album_error" }; }
+  if (r.status !== "ok" && r.status !== "empty" && r.status !== "unknown") {
+    body.innerHTML = `<div class="verdict-bad">${r.status === "not_found" ? CHECK_TEXT.not_found : CHECK_TEXT.album_error}</div>`;
+    return;
+  }
+  let html = `<div class="${r.status === "ok" ? "verdict-ok" : r.status === "empty" ? "verdict-bad" : "muted"}">${CHECK_TEXT[r.status]}</div>`;
+  html += `<div>${escText(r.target)} · ${escText(r.date)}</div>`;
+  if (!r.nameMatched) html += `<div class="task-warning" style="font-size:0.8rem">${CHECK_TEXT.name_differs}</div>`;
+  const bits = [];
+  if (r.stacked != null && r.taken != null) bits.push(`${r.stacked}/${r.taken} ${CHECK_TEXT.shots}`);
+  if (r.integration) bits.push(`${CHECK_TEXT.integration} ${escText(r.integration)}`);
+  if (bits.length) html += `<div class="muted">${bits.join(" · ")}</div>`;
+  if (r.thumbnailUrl) html += `<img src="${r.thumbnailUrl}" alt="">`;
+  body.innerHTML = html;
+  const shotsSpan = btn.previousElementSibling;
+  if (shotsSpan && shotsSpan.classList.contains("check-shots") && shotsText(r)) shotsSpan.textContent = shotsText(r);
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".check-btn");
+  if (btn) { openCheck(btn); return; }
+  if (e.target.id === "checkModal" || e.target.closest("#checkClose")) document.getElementById("checkModal").classList.remove("open");
+});
+
 function renderPrograms(entry) {
   const tbody = document.querySelector("#programsTable tbody");
   tbody.innerHTML = "";
@@ -221,6 +286,10 @@ function renderPrograms(entry) {
       bits.push(`${stacked}${taken} prises${total}`);
     }
     if (bits.length) detail += `<div class="capture-summary">${bits.join(" · ")}</div>`;
+    if (p.checkTask) {
+      detail += checkButton(entry.dwarfUid, p.checkTask.name, p.checkTask.startTime, p.checkTask.endTime,
+                            p.status === "done" ? "view" : "failed", p.shotsTaken != null ? null : p.check);
+    }
     rows.push({
       origin: "local",
       sortKey: sortKeyFromLocalStr(startVal),
@@ -255,7 +324,11 @@ function renderPrograms(entry) {
         : t.error_code
         ? `<span class="capture-summary-inline task-error">${t.error_code} ${t.error_name || ""}</span>`
         : "";
-      return `<div class="task-line"><span class="tag ${cls}">${t.name}</span>${err}${summary}</div>`;
+      const failed = !!t.error_code || t.state_code === 3 || t.state_code === 4;
+      const check = (failed || t.state_code === 2)
+        ? checkButton(entry.dwarfUid, t.name, t.startTime, t.endTime, !failed ? "view" : (warning ? "warning" : "failed"), t.check)
+        : "";
+      return `<div class="task-line"><span class="tag ${cls}">${t.name}</span>${err}${summary}${check}</div>`;
     }).join("");
     rows.push({
       origin: "native",
@@ -336,5 +409,9 @@ async function loadPrograms() {
 })();
 </script>
 
+<div id="checkModal"><div id="checkCard">
+  <div class="head"><span id="checkTitle"></span><button id="checkClose" aria-label="close">&#x2715;</button></div>
+  <div id="checkBody"></div>
+</div></div>
 </body>
 </html>

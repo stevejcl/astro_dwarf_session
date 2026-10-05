@@ -48,7 +48,7 @@ from datetime import datetime, timedelta, timezone
 from nicegui import run, ui
 
 import pending_schedules
-from components import connection_health
+from components import connection_health, native_schedule
 from components.camera_settings import _exposure_names, _gain_range, _GAIN_STEP, _ir_filter_names
 from components.datetime_picker import date_picker_input, time_picker_input
 from components.i18n import t
@@ -58,7 +58,7 @@ from components.stellarium import get_target_from_stellarium
 from components.target_planner import build_altitude_panel, earliest_start, night_of, open_catalog_dialog
 import dwarf_python_api.lib.my_logger as log
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
-from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
+from dwarf_python_api.lib.dwarf_utils import perform_get_all_shooting_schedule_full, perform_sync_shooting_schedule
 
 
 # Device-tested (Oct 2026): tasks must not overlap - two targets starting
@@ -141,6 +141,72 @@ def build_schedule_editor(session) -> None:
     # when this PC runs in another timezone than the device's site.
     user_tz = schedule_tz(session.config)
     draft = _new_task_defaults(dwarf_type, user_tz)
+
+    # Reminder of what is already planned ON THE DWARF (user-requested Oct
+    # 2026): its upcoming / running native schedule tasks, from the last
+    # read of its list - so a new target can be fitted around them, and
+    # _add_task() refuses one that would overlap them.
+    def _device_windows() -> list[tuple[datetime, datetime, str]]:
+        """Upcoming device tasks as naive device-tz (start, end, name)."""
+        windows = []
+        for tk in native_schedule.upcoming_tasks(dwarf_uid):
+            start = datetime.fromtimestamp(tk["start"], user_tz).replace(tzinfo=None)
+            end = datetime.fromtimestamp(tk["end"], user_tz).replace(tzinfo=None)
+            windows.append((start, end, tk["name"]))
+        return windows
+
+    with ui.card().classes("w-full p-2 gap-1"):
+        with ui.row().classes("w-full items-center justify-between"):
+            ui.label(t("sched_on_device")).classes("text-sm font-medium")
+            device_refresh_button = ui.button(t("sched_refresh"), icon="refresh").props("flat dense no-caps")
+
+        @ui.refreshable
+        def _render_device_schedules() -> None:
+            upcoming = native_schedule.upcoming_tasks(dwarf_uid)
+            fetched_at = native_schedule.get_cached_fetched_at(dwarf_uid)
+            if not upcoming:
+                ui.label(t("sched_on_device_none")).classes("text-xs text-grey-6")
+            for tk in upcoming:
+                start = datetime.fromtimestamp(tk["start"], user_tz)
+                end = datetime.fromtimestamp(tk["end"], user_tz)
+                running = tk["state_code"] == 1 or start.timestamp() <= time.time()
+                state = t("sched_state_shooting") if running else t("sched_state_pending")
+                with ui.row().classes("items-center gap-2 no-wrap"):
+                    ui.icon("play_circle" if running else "event").classes(
+                        "text-sm " + ("text-positive" if running else "text-grey-6")
+                    )
+                    ui.label(
+                        f"{tk['name']} \u2014 {start:%d/%m %H:%M}\u2013{end:%H:%M} \u00b7 {state}"
+                        + (f" \u00b7 {tk['schedule']}" if tk["schedule"] else "")
+                    ).classes("text-xs")
+            if fetched_at:
+                ui.label(t("sched_on_device_read_at", time=f"{datetime.fromtimestamp(fetched_at):%d/%m %H:%M}")).classes(
+                    "text-xs text-grey-5"
+                )
+
+        _render_device_schedules()
+
+    async def _refresh_device_schedules() -> None:
+        """Reads the Dwarf's schedule list (same command as the device
+        page's own Refresh) and updates the reminder and the chart."""
+        if not session.is_connected:
+            ui.notify(t("disconnected"), type="warning")
+            return
+        if not connection_health.try_acquire_command_slot(dwarf_uid, caller="schedule_editor.refresh"):
+            ui.notify(t("device_busy"), type="warning")
+            return
+        try:
+            info = await run.io_bound(perform_get_all_shooting_schedule_full, session=session)
+        finally:
+            connection_health.release_command_slot(dwarf_uid)
+        if info is None:
+            ui.notify(t("sched_read_error"), type="negative")
+            return
+        native_schedule.set_cached(dwarf_uid, native_schedule.parse_native_schedule_info(info))
+        _render_device_schedules.refresh()
+        _refresh_altitude_chart()
+
+    device_refresh_button.on_click(_refresh_device_schedules)
 
     # min-w on the name: on a phone it wraps onto its own full-width line
     # instead of being squeezed to a few characters; RA/Dec (~9 chars each)
@@ -265,7 +331,7 @@ def build_schedule_editor(session) -> None:
             except (KeyError, ValueError):
                 continue
             windows.append((start, end, tk["name"]))
-        return windows
+        return windows + _device_windows()
 
     altitude_panel, _refresh_altitude_chart = build_altitude_panel(
         session,
@@ -351,6 +417,14 @@ def build_schedule_editor(session) -> None:
         if conflict is not None:
             add_status_label.set_text(t("sched_task_overlap", name=conflict["name"], gap=TASK_GAP_MIN))
             return
+        new_start, new_end = _task_window(new_task)
+        gap = timedelta(minutes=TASK_GAP_MIN)
+        for start, end, name in _device_windows():
+            if new_start < end + gap and start < new_end + gap:
+                add_status_label.set_text(t(
+                    "sched_task_overlap_device", name=name, start=f"{start:%H:%M}", end=f"{end:%H:%M}", gap=TASK_GAP_MIN
+                ))
+                return
         tasks.append(new_task)
         tasks.sort(key=lambda tk: _task_window(tk)[0])
         # Pre-fill the next free slot: the next target usually follows
@@ -508,6 +582,8 @@ def build_schedule_editor(session) -> None:
             sync_status_label.classes(replace="text-sm text-green-700")
             tasks.clear()
             _render_task_list()
+            # Show it in the "already on the Dwarf" reminder right away
+            await _refresh_device_schedules()
         else:
             sync_status_label.set_text(t("sched_sync_failed"))
             sync_status_label.classes(replace="text-sm text-red-700")

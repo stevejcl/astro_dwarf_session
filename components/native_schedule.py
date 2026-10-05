@@ -144,3 +144,36 @@ def remove_from_cache(dwarf_uid: str, schedule_id: str) -> None:
         return
     entry["schedule"] = [s for s in entry["schedule"] if s.get("scheduleId") != schedule_id]
     _write_cache_file(_store)
+
+
+def _epoch_s(value) -> int | None:
+    """Epoch seconds from seconds or milliseconds."""
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return None
+    return value // 1000 if value > 10_000_000_000 else value
+
+
+def upcoming_tasks(dwarf_uid: str, now: float | None = None) -> list[dict]:
+    """Tasks of the cached on-device schedules still to come or running
+    (not ended, not done/failed), sorted by start: {"schedule", "name",
+    "start", "end" (epoch s), "state_code"}. For the schedule editor's
+    reminder of what is already planned on the Dwarf."""
+    now = now if now is not None else time.time()
+    out = []
+    for sched in get_cached(dwarf_uid) or []:
+        if sched.get("state_code") in (3, 4):  # completed, expired
+            continue
+        for task in sched.get("tasks") or []:
+            start, end = _epoch_s(task.get("startTime")), _epoch_s(task.get("endTime"))
+            if start is None or end is None or end <= now or task.get("state_code") in (2, 3, 4):
+                continue
+            out.append({
+                "schedule": sched.get("name") or "",
+                "name": task.get("name") or "",
+                "start": start,
+                "end": end,
+                "state_code": task.get("state_code"),
+            })
+    return sorted(out, key=lambda tk: tk["start"])

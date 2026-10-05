@@ -8,6 +8,9 @@
     saved (DwarfLab's analysis). Like the official app, the editor now takes a start and an END time (across midnight
     allowed) and no longer asks for a count; count is sent as 0 as before. "Use best slot" fills both times, and the
     next target is pre-filled right after the previous one with the same length.
+    The editor also shows the native schedule tasks already on the Dwarf that are upcoming or running (from the last
+    read of its list, with a Refresh button, re-read after each sync), refuses a new target overlapping them (same
+    5 min gap) and draws them on the altitude chart.
     ### Milky Way mosaic planner: tiles scheduled in daylight
     Tiles were scheduled on altitude alone, so at dawn and after sunrise too (e.g. 07:33-08:57 with sunrise at
     08:15). A slot must now be dark for the tile's whole duration (new "Darkness" setting: Sun below -18/-12/-6°,

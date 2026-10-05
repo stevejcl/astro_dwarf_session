@@ -79,14 +79,10 @@ def _build_eq_result_panel(session) -> Callable[[], None]:
     the azimuth/altitude knob to CORRECT the error, not which way the
     error itself points.
 
-    PER-MODEL (Sep 2026, field-tested): the sign convention is NOT the
-    same between Mini and Dwarf 3 - a real Mini test showed the
-    ORIGINAL (un-flipped) mapping already correct (turning the knob the
-    way that icon pointed reduced the error), while a real Dwarf 3 test
-    showed the OPPOSITE - the flipped mapping was needed there. Dwarf II
-    user-confirmed (Sep 2026) to share the same mechanism as D3, so it
-    gets the same flipped mapping - not independently tested on a real
-    D2 unit, but a direct statement about the hardware, not a guess.
+    Same sign convention on every model (user-reported Oct 2026: the
+    Sep 2026 per-model flip for Dwarf 3 / Dwarf II made the D3 indicator
+    point the wrong way - the Mini's mapping, already right, is right on
+    the D3 too, so D2, D3 and Mini share it).
     Absolute value still shown (sign is conveyed by the icon/colour, not
     by a +/- prefix), matching Dwarfium's own Math.abs(...).toFixed(2).
 
@@ -114,16 +110,7 @@ def _build_eq_result_panel(session) -> Callable[[], None]:
             return
         panel.set_visibility(True)
 
-        # See this function's own docstring - D3 needs the flipped
-        # (correction-direction) mapping; Mini (and, unconfirmed, D2)
-        # use the original error-direction mapping as-is.
-        # See this function's own docstring - D2 and D3 share the same
-        # mechanism (user-confirmed Sep 2026) and both need the flipped
-        # (correction-direction) mapping; Mini uses the original error-
-        # direction mapping as-is.
-        needs_flip = config_to_dwarf_id_int(session.config.dwarf_model_id) in (2, 3)
-
-        if (azi_err > 0) != needs_flip:
+        if azi_err > 0:
             azi_icon.name = "rotate_right"
             azi_icon.classes(replace="text-lg text-positive")
         else:
@@ -131,7 +118,7 @@ def _build_eq_result_panel(session) -> Callable[[], None]:
             azi_icon.classes(replace="text-lg text-negative")
         azi_label.set_text(f"{abs(azi_err):.2f}\u00b0 {t('action_eq_solving_azimuth')}")
 
-        if (alt_err > 0) != needs_flip:
+        if alt_err > 0:
             alt_icon.name = "arrow_upward"
             alt_icon.classes(replace="text-lg text-positive")
         else:

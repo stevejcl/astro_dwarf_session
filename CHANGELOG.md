@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+  ### BugFix
+    ### EQ Solving indicator inverted on the Dwarf 3
+    The EQ Solving result panel (which way to turn the azimuth / altitude knobs) used an inverted mapping on the
+    Dwarf 3 and Dwarf II. All models now share the Mini's convention, the right one on the D3 as well.
+
 ## [3.2.0] - 2026-10-05
   ### Add
     ### Archive a session with Dwarfium Scope Archive

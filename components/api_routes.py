@@ -101,7 +101,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from device_registry import list_device_entries
 from site_registry import list_site_entries
 from components import connection_health, scheduler_runner, scheduler_loop, native_schedule, catalog_add_on
-from components import task_check, task_check_cache
+from components import scope_archive, task_check, task_check_cache
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
 from components.session_dirs import ensure_dirs
@@ -434,6 +434,7 @@ def register_api_routes() -> None:
         result = await run.io_bound(task_check.summarize, session, task)
         if result.get("thumbnailPath"):
             result["thumbnailUrl"] = f"http://{session.config.dwarf_ip}{result['thumbnailPath']}"
+            result["archiveUrl"] = scope_archive.transfer_url(session.config, result["thumbnailPath"])
         return JSONResponse(result)
 
     @app.get("/api/sites")

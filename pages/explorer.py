@@ -35,7 +35,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_utils import perform_list_astro_sessions_http
 import dwarf_python_api.lib.my_logger as log
 
-from components import dwarf_media
+from components import dwarf_media, scope_archive
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
@@ -241,7 +241,16 @@ def build_explorer_page() -> None:
                 with ui.column().classes("w-full gap-1 p-3"):
                     with ui.row().classes("w-full justify-between items-center"):
                         dialog_target_label = ui.label("").classes("text-base font-medium")
-                        with ui.row().classes("gap-1"):
+                        with ui.row().classes("gap-1 items-center"):
+                            # Archive with Dwarfium Scope Archive: its own Transfer page,
+                            # this session preselected (see scope_archive.py). A real
+                            # link, opened like the other "Open in Dwarfium" links
+                            archive_link = ui.link(target="#", new_tab=True).classes(
+                                "text-primary flex items-center px-1"
+                            )
+                            with archive_link:
+                                ui.icon("inventory_2").classes("text-xl")
+                            archive_link.tooltip(t("archive_in_scope_archive"))
                             with ui.button(icon="download").props("flat round dense").tooltip(
                                 t("explorer_download")
                             ):
@@ -326,6 +335,10 @@ def build_explorer_page() -> None:
 
             async def open_dialog(entry: dict) -> None:
                 current_path[0] = entry["filePath"]
+                archive_url = scope_archive.transfer_url(session.config, entry["filePath"])
+                archive_link.set_visibility(archive_url is not None)
+                if archive_url:
+                    archive_link.props(f'href="{archive_url}"')
                 background_tasks.create(_look_for_png(entry["filePath"]))
                 url = _thumbnail_url(session.config.dwarf_ip, entry["filePath"])
                 full_image.set_source(url)

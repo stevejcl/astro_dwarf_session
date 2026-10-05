@@ -21,7 +21,7 @@ from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_utils import perform_list_astro_sessions_http
 
-from components import task_check_cache
+from components import scope_archive, task_check_cache
 from components.current_activity import program_target
 from components.i18n import t
 from components.site_time import site_tz
@@ -192,3 +192,9 @@ async def open_task_check(session, task: dict, make_dialog=ui.dialog, on_result=
             ui.image(_thumbnail_url(session.config.dwarf_ip, result["thumbnailPath"])).classes(
                 "w-full rounded"
             )
+        archive_url = scope_archive.transfer_url(session.config, result["thumbnailPath"] or "")
+        if archive_url:
+            # Archive with Dwarfium Scope Archive (its Transfer page, this session preselected)
+            with ui.link(target=archive_url, new_tab=True).classes("text-sm flex items-center gap-1"):
+                ui.icon("inventory_2")
+                ui.label(t("archive_in_scope_archive"))

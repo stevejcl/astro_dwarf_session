@@ -839,6 +839,7 @@ def build_session_page() -> None:
                                     session, dwarf_uid, refresh_view_and_camera_settings
                                 ),
                             ).props("flat color=negative")
+                            ui.space()
                             ui.button(
                                 t("shutdown"),
                                 icon="power_settings_new",

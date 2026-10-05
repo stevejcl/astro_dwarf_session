@@ -17,6 +17,7 @@ answering, the page opens in a browser as before.
 """
 from __future__ import annotations
 
+import configparser
 import posixpath
 from urllib.parse import urlencode, urlsplit
 
@@ -28,6 +29,27 @@ from components.i18n import t
 _OPEN_TIMEOUT_S = 5
 
 
+def scope_settings(config) -> tuple[str, str]:
+    """(URL, Dwarf Id) of Dwarfium Scope Archive for this Dwarf. From the
+    config when the library reads them (dwarf_python_api >= 3.1.7), else
+    straight from the device's config.ini, where the Settings page saves
+    them (user-reported Oct 2026: with an older library they were lost at
+    each start)."""
+    base = (getattr(config, "dwarfium_base_url", "") or "").strip()
+    dwarf_id = str(getattr(config, "dwarfium_id", "") or "").strip()
+    ini_path = getattr(config, "config_ini_path", "") or ""
+    if (not base or not dwarf_id) and ini_path:
+        ini = configparser.ConfigParser()
+        try:
+            ini.read(ini_path, encoding="utf-8")
+        except (configparser.Error, OSError, UnicodeDecodeError):
+            return base, dwarf_id
+        if ini.has_section("CONFIG"):
+            base = base or ini["CONFIG"].get("dwarfium_base_url", "").strip()
+            dwarf_id = dwarf_id or ini["CONFIG"].get("dwarfium_id", "").strip()
+    return base, dwarf_id
+
+
 def session_folder(media_path: str) -> str:
     """Session folder name of one of its files (the album's filePath or
     thumbnailPath: .../Astronomy/<session>/stacked.jpg)."""
@@ -37,10 +59,10 @@ def session_folder(media_path: str) -> str:
 def transfer_url(config, media_path: str) -> str | None:
     """Scope Archive's import page for this session (then its Transfer
     page), or None when the URL / DwarfId isn't set for this Dwarf."""
-    base = (getattr(config, "dwarfium_base_url", "") or "").rstrip("/")
-    dwarf_id = getattr(config, "dwarfium_id", "") or ""
+    base, dwarf_id = scope_settings(config)
+    base = base.rstrip("/")
     folder = session_folder(media_path)
-    if not base or not str(dwarf_id).strip() or not folder:
+    if not base or not dwarf_id or not folder:
         return None
     query = urlencode({"DwarfId": dwarf_id, "session": folder})
     return f"{base}/ImportSession?{query}"
@@ -71,8 +93,8 @@ _PAGES = {
 def page_url(config, page: str) -> str | None:
     """One of Scope Archive's own pages for this Dwarf (see _PAGES), or
     None when the URL / DwarfId isn't set."""
-    base = (getattr(config, "dwarfium_base_url", "") or "").rstrip("/")
-    dwarf_id = str(getattr(config, "dwarfium_id", "") or "").strip()
+    base, dwarf_id = scope_settings(config)
+    base = base.rstrip("/")
     if not base or not dwarf_id:
         return None
     path, extra = _PAGES[page]

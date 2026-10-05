@@ -5,6 +5,10 @@
     ### EQ Solving indicator inverted on the Dwarf 3
     The EQ Solving result panel (which way to turn the azimuth / altitude knobs) used an inverted mapping on the
     Dwarf 3 and Dwarf II. All models now share the Mini's convention, the right one on the D3 as well.
+    ### Dwarfium Scope Archive settings not kept
+    The Settings page saved the Dwarfium Scope Archive URL and Dwarf Id to the device's config.ini, but they weren't
+    read back at the next start (dwarf_python_api's DwarfConfig had no such fields): the links were gone after each
+    restart. They are now read from config.ini (dwarf_python_api 3.1.7 reads them itself).
 
 ## [3.2.0] - 2026-10-05
   ### Add

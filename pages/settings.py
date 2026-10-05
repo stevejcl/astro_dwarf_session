@@ -57,6 +57,7 @@ from device_registry import find_shared_config_value
 from device_provisioning import update_dwarf_ip
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
+from components import scope_archive
 from components import connection_health
 from components.ble_pairing import connect_ble, scan_dwarf_devices, write_ble_credentials
 from components.geolocation import fetch_current_location
@@ -275,11 +276,11 @@ def build_settings_page() -> None:
             # declare the field.
             ui.label(t("settings_dwarfium_hint")).classes("text-sm text-grey-6 mt-2")
             with ui.row().classes("w-full gap-2"):
+                _scope_url, _dwarfium_id_current = scope_archive.scope_settings(session.config)
                 dwarfium_url_input = ui.input(
                     t("settings_dwarfium_url"),
-                    value=getattr(session.config, "dwarfium_base_url", "") or "http://localhost:8080",
+                    value=_scope_url or "http://localhost:8080",
                 ).classes("flex-1")
-                _dwarfium_id_current = getattr(session.config, "dwarfium_id", "")
                 dwarfium_id_input = ui.number(
                     t("settings_dwarfium_id"),
                     value=int(_dwarfium_id_current) if _dwarfium_id_current else None,

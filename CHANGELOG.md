@@ -1,155 +1,103 @@
 # Changelog
 
-## [Unreleased]
+## [3.2.0] - 2026-10-05
+  ### Add
+    ### Archive a session with Dwarfium Scope Archive
+    The session explorer's large view, the View / Check dialog and the Program page get an "Archive in Dwarfium Scope
+    Archive" button: Scope Archive's import page reads and registers this session only from the Dwarf (after saying
+    if it is already backed up), then opens its Transfer page with it preselected, where the backup drive is chosen
+    and the copy started. When Scope Archive runs as an app the pages open in its own window, brought to front, with
+    its system folder dialogs; otherwise (browser / server mode, not running, older version) in a browser tab.
+    The device page's links become "Dwarfium Scope Archive: Config · Sessions on the Dwarf · Backed-up sessions",
+    opened the same way. Shown when the Dwarfium Scope Archive URL and Dwarf Id are set in Settings (labels renamed
+    from "Dwarfium"). Requires Dwarfium Scope Archive V3.4.0.
+    ### What the Dwarf saved: View / Check
+    Native schedule tasks get a "Check" button when failed or interrupted (red; orange for error -1) and a "View"
+    button when successful (blue): the task's session is found in the Dwarf's album (target name + time window) and
+    its shotsInfo.json read - images stacked / taken, integration time, stacked thumbnail. Error -1
+    (WS_PARSE_PROTOBUF_ERROR, the window ending while the stack is usually saved) is shown as an orange "Warning"
+    instead of a failure with its protobuf name. The same dialog is on the Programs page's Results tab and the Program
+    HTML page, also for this app's own finished programs (their target and real start / end). What it finds is kept
+    (task_check_cache.json) and the images stacked / taken then show directly in the lists, refreshed as soon as a
+    check is done from any page. One album listing and one small JSON over HTTP, on click only.
+    ### Session explorer: download the stacked image
+    The explorer's large view gets a JPG / PNG download menu: the session's stacked.jpg, and the Dwarf's own PNG
+    ("stacked-16_M 42 ..._Duo-Band_...png", looked for in the session folder over the Dwarf's anonymous FTP, offered
+    only when present). In the native window the app writes the file itself after the system Save dialog (Downloads
+    folder if it can't open) and shows the path; in a browser, the browser's download.
+    ### Device page: Shut down button
+    At the right of Disconnect, a "Shut down" button powers the Dwarf off after a confirmation
+    (CMD_RGB_POWER_POWER_DOWN), then closes the connection as a manual Disconnect so the app doesn't reconnect to it.
+    ### Preview: stacked image / last frame
+    The device page's camera previews get a "Stacked / Last frame" switch, the official app's own toggle
+    (displaySource parameter, 1 stacked, 0 last frame). The current choice is read from the Dwarf's HTTP API once it
+    is connected ("Stacked" when the parameter was never set). Usable during a program's capture.
+    ### Current target on the dashboard and the watch page
+    The dashboard card and the watch page (/watch/<device>) now show the target being shot: the goto target of
+    the program run by this app (also in the "program in progress" banner), or the native shooting schedule task
+    run by the Dwarf itself ("Schedule <name> · <target>", task n/total and its time window, in the device's
+    timezone), also before its capture starts (goto, calibration). The schedule list is read from the Dwarf only
+    when a capture starts outside a program of this app - never polled otherwise. Any other capture (another app, by
+    hand...) shows the target name the Dwarf itself sends in its notifications. Requires dwarf_python_api 3.1.5.
+    ### One instance per Dwarf on this PC
+    Two Astro Dwarf Session open together (e.g. the .exe and a source run) on the same Dwarf took it from each other
+    in turn. The first instance to connect now holds the Dwarf (lock file in the temp folder, released on
+    Disconnect, on exit or after a crash); the other one doesn't connect, its card says the Dwarf is used by another
+    instance with an "Open its view" link to that instance's watch page, and it connects by itself once the Dwarf is
+    free. A Dwarf that drops the connection right after each reconnection (3 times within a minute) is being used
+    by another client - a Dwarf Mini accepts only one connection: auto-reconnect then stops instead of taking it
+    back in a loop, and the card says so until the user connects again.
+    ### Hide a Dwarf on the dashboard
+    The eye button on a card hides a Dwarf not used for now: only its header (name, IP, status) stays, it moves after
+    the others, and it isn't auto-connected. The same button shows it again. Saved in device_prefs.json.
+    ### Dashboard order
+    The ⇅ button on a card moves it first, up, down or last (hidden Dwarfs stay after the others). Saved in
+    device_prefs.json; the watch dashboard (/watch) shows the same order and hidden Dwarfs.
+    ### Force the resume of a program in error
+    Programs page, Results: a failed run shows its error date, and a "Force resume" button when the Dwarf is still
+    capturing that program's target and the error is less than 15 h old. It moves the file back to Current/ and
+    runs the normal resume, end time included.
+    ### Program page: newest first and "Show more"
+    The "All" filter lists the newest rows first, 20 at a time, with a "Show more (n left)" button. "Future" is
+    unchanged.
   ### BugFix
     ### Manual goto: RA / Dec in hours-minutes-seconds
     The program editor only read decimal RA / Dec: "18h 13m 40.3s" / "-17° 36' 06\"" was saved EMPTY, without a word,
     and the goto had no coordinates. Both fields now take decimal values or the usual notations (18h 13m 40.3s,
     18:13:40.3, 18 13 40.3, -17° 36' 06", -17:36:06, -17d36m06s; a decimal RA above 24 is read as degrees) and save
     decimal hours / degrees; an unreadable value is shown in red and blocks the save. The runner reads the same
-    notations (programs written by other tools), with the Dec sign applied to the whole value.
-    ### Session explorer: download in the native window
-    The download did nothing in the .exe / python native window (pywebview), only in a browser. The app now writes
-    the file itself there: the system Save dialog (or the Downloads folder if it can't open), then a notification
-    with the path. In a browser, the browser's own download as before.
-    The Save dialog of NiceGUI's native window is asynchronous: it is now awaited (it was called in a thread and the
-    save failed with "not 'coroutine'").
-    ### Preview "Stacked / Last frame" never selected
-    The current value was read once, 0.5 s after the device page opened: a page opened before the Dwarf was connected
-    never got it. It is now read once the Dwarf is connected (up to 3 attempts), and a response without the value
-    (parameter never set) selects "Stacked", the Dwarf's default.
-    ### Device page: View / Check counts not shown
-    The native schedule list is built once, so a check run from the Program page (or another tab) only showed after a
-    reload; it now refreshes as soon as a new result is kept. The kept / not-kept decision is logged (debug) to
-    investigate any remaining case.
+    notations, with the Dec sign applied to the whole value.
     ### Device page: clicks sometimes ignored
     The page rebuilds its main view every 2 s; a click landing during a rebuild hit a button just replaced and was
-    lost. The view is no longer rebuilt right after a press on the page (1.5 s). The device page's dialogs also stay
-    open across that refresh, and their notifications (e.g. "Shutdown command sent") are shown again.
+    lost. The view is no longer rebuilt right after a press on the page (1.5 s); its dialogs stay open across that
+    refresh and their notifications are shown.
     ### Native schedule editor: end time instead of image count
     A task's window was count x exposure + 2 min: too short for the goto/calibration and per-frame overhead, so it
-    ended before the last frames (17 of 20 for an M42 task) and the Dwarf reported an error although the stack was
-    saved (DwarfLab's analysis). Like the official app, the editor now takes a start and an END time (across midnight
-    allowed) and no longer asks for a count; count is sent as 0 as before. "Use best slot" fills both times, and the
-    next target is pre-filled right after the previous one with the same length.
-    The editor also shows the native schedule tasks already on the Dwarf that are upcoming or running (from the last
-    read of its list, with a Refresh button, re-read after each sync), refuses a new target overlapping them (same
-    5 min gap) and draws them on the altitude chart.
-    Default slot: now + 5 min, or right after the task running on the Dwarf and those chained after it (+ 5 min),
-    1 h long; re-placed after a Refresh while no target is added, and after each added target. "Now + 10min" becomes
-    "Next free slot", applying the same rule.
-    When the editor opens with a cached list missing or older than 10 min, it is read from the Dwarf once
-    automatically (silently left as is if the Dwarf isn't connected or is busy).
+    ended before the last frames and the Dwarf reported an error although the stack was saved (DwarfLab's
+    analysis). Like the official app, the editor now takes a start and an END time (across midnight allowed); count
+    is sent as 0. It also shows the native tasks already on the Dwarf that are upcoming or running (read again
+    automatically when older than 10 min), refuses a new target overlapping them (5 min gap) and draws them on the
+    altitude chart. Default slot: now + 5 min, or right after the running and chained tasks (+ 5 min), 1 h long;
+    "Next free slot" applies the same rule.
     ### Milky Way mosaic planner: tiles scheduled in daylight
-    Tiles were scheduled on altitude alone, so at dawn and after sunrise too (e.g. 07:33-08:57 with sunrise at
-    08:15). A slot must now be dark for the tile's whole duration (new "Darkness" setting: Sun below -18/-12/-6°,
-    astronomical night by default), checked every 10 min along with the altitude; the search covers 24 h so a start
-    time in daylight reaches the coming night. The default start time ("now") no longer rolls the plan to the next
-    day.
+    Tiles were scheduled on altitude alone, so at dawn and after sunrise too. A slot must now be dark for the tile's
+    whole duration (new "Darkness" setting: Sun below -18/-12/-6°, astronomical night by default); the default start
+    time ("now") no longer rolls the plan to the next day.
     ### No more "slot busy" flood during a program
-    While a program (or a run resumed after a restart) holds the device, the connection health check is skipped
-    instead of being denied and logged on every poll tick of every open page (a resumed run logged it every second
-    all night); a check denied by a one-off command waits for the normal interval before retrying.
+    While a program holds the device, the connection health check is skipped instead of being denied and logged on
+    every poll tick of every open page.
     ### Target of a program run by this app
-    The dashboard card and the watch page showed no target for a program run by this app (started or resumed): its
-    goto target was read from the wrong part of the program. Fixed, with the target name the Dwarf sends as a
-    fallback for a program without goto.
+    The dashboard card and the watch page showed no target for a program run by this app: its goto target was read
+    from the wrong part of the program. Fixed, with the target name the Dwarf sends as a fallback.
     ### Program followed again after a restart
-    A program left in Current/ by an app restart during its capture was only resumed if its last step (the capture
-    start - nothing is recorded while it captures) was less than 5 min old: a restart at 01:00 for a capture started
-    at 22:39 left it unfollowed. It is now resumed when the Dwarf reports capturing the program's target, or, while
-    that name isn't known yet, when the last step is less than 15 h old - never when the Dwarf reports another
-    target. Retried as soon as the Dwarf's first progress notification brings the target name. The program's end
-    time is applied again while resumed (counted from the program's start date/time, across midnight).
+    A program left in Current/ by an app restart during its capture was only resumed if its last step was less than
+    5 min old. It is now resumed when the Dwarf reports capturing the program's target, or, while that name isn't
+    known yet, when the last step is less than 15 h old - never when the Dwarf reports another target. Its end time
+    is applied again while resumed.
     ### "Use best slot" (program editor)
-    A best slot whose start has already passed now starts 5 min from now (site time), also in the native schedule
-    editor and for a click on the curve; a slot already over is refused with a message.
-    The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
-    mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
-  ### Improvements
-    ### "Archive in Dwarfium Scope Archive" opens in Scope Archive's window
-    When Scope Archive runs as an app, the import and Transfer pages now open in its own window, brought to front (its
-    /api/open-in-app), with its system folder dialogs - in a web browser they aren't available. A notification says
-    so; without an app window, or with a Scope Archive not answering (not running, older version), the page opens in a
-    browser tab as before. The explorer, View / Check dialog and Program page use a button for it. The device page's
-    links become "Dwarfium Scope Archive: Config · Sessions on the Dwarf · Backed-up sessions" (Explore in dwarf mode
-    or its default backup mode), opened the same way.
-    ### Archive a session with Dwarfium Scope Archive
-    The session explorer's large view, the View / Check dialog and the Program page's modal get an "Archive in
-    Dwarfium Scope Archive" link to Scope Archive's ImportSession page: it reads and registers this session only from the
-    Dwarf, then opens its Transfer page with it preselected, where the backup drive is chosen and the copy started.
-    Shown when the Dwarfium Scope Archive URL and DwarfId are set in Settings. The Settings labels and the "Open in"
-    links now say "Dwarfium Scope Archive" instead of "Dwarfium".
-    ### Session explorer: download the PNG too
-    The download button becomes a JPG / PNG menu. The session's PNG (the Dwarf's own
-    "stacked-16_M 42 ..._60s40_Duo-Band_...png") is looked for in the session folder over the Dwarf's anonymous FTP
-    when the large view opens; PNG is offered only when it is there. Files are read over HTTP, then FTP if that
-    fails, and keep the Dwarf's own name when it says what the session is.
-    ### Program page: newest first and "Show more" in "All"
-    The "All" filter now lists the newest rows first, 20 at a time, with a "Show more (n left)" button. "Future" is
-    unchanged (upcoming rows, soonest first).
-    ### View / Check on the Programs page and on this app's own program runs
-    The same dialog (stacked / taken images, integration, stacked thumbnail) is now reachable from the Programs
-    page's Results tab and from the Program HTML page, for native tasks and for this app's own finished programs
-    (their target and real start / end). New route /api/task-check/<dwarfUid>.
-    What a View / Check finds is kept (task_check_cache.json, per Dwarf and per task): the images stacked / taken
-    then show directly in the lists - device page, Program page, Results tab - without opening it again. Only final
-    results (task over, session found with its shotsInfo.json); entries not checked again for 120 days are dropped.
-    ### Native schedules: "View" on successful tasks
-    A successful native task gets a blue "View" button opening the same dialog as "Check" (stacked / taken images,
-    integration, stacked thumbnail). "Check" is now red on a failed task, orange on a warning (-1).
-    ### Session explorer: download the stacked image
-    The explorer's large view gets a Download button: the session's stacked.jpg, fetched from the Dwarf by the app
-    and saved as "<session folder>_stacked.jpg". Downloads are now allowed in the native window (pywebview).
-    ### Native schedules: check what the Dwarf saved for a failed task
-    A failed or interrupted task (e.g. "error -1") gets a "Check" button on the device page: it finds the task's
-    session in the Dwarf's album (target name + time window), reads its shotsInfo.json and shows the images
-    stacked / taken, the integration time and the stacked thumbnail - the error alone doesn't say whether the
-    stack is usable. One album listing and one small JSON over HTTP, on click only.
-    Error -1 (WS_PARSE_PROTOBUF_ERROR, the task's window ending while the stack is usually saved) is now shown as an
-    orange "Warning" instead of a failure with its protobuf name, on the device page and the Programs page.
-    ### Device page: Shut down button
-    Next to Disconnect, a "Shut down" button powers the Dwarf off after a confirmation (CMD_RGB_POWER_POWER_DOWN).
-    On success the connection is closed as with a manual Disconnect, so the app doesn't try to reconnect to it.
-    ### Preview: stacked image / last frame
-    The device page's camera previews get a "Stacked / Last frame" switch, the official app's own toggle
-    (displaySource parameter, CMD_PARAM_SET_GENERAL_INT_PARAM - 1 stacked, 0 last frame, from a capture of the
-    official app). The current choice is read from the Dwarf's HTTP API when the page opens. Usable during a
-    program's capture, which sends no command of its own while it waits.
-    ### Force the resume of a program in error
-    Programs page, Results: a failed run shows its error date, and a "Force resume" button when the Dwarf is still
-    capturing that program's target and the error is less than 15 h old (e.g. a run ended in error after 3 failed
-    attempts while the Dwarf went on shooting). It moves the file back to Current/ (pending, last step now; dwarf,
-    shots and processed date removed) and runs the normal resume, end time included.
-    ### Hide a Dwarf on the dashboard
-    The eye button on a card hides a Dwarf not used for now: only its header (name, IP, status) stays, it moves after
-    the others, and it isn't auto-connected (no more failed attempts for a Dwarf that is off). The same button shows
-    it again. Saved in device_prefs.json in the working folder.
-    ### Dashboard order
-    The ⇅ button on a card moves it first, up, down or last (hidden Dwarfs stay after the others, ordered among
-    themselves the same way). Saved in device_prefs.json, also used by the watch dashboard.
-    The watch dashboard (/watch) shows the same order and hidden Dwarfs (display only, no hide button).
-    ### Current target on the dashboard and the watch page
-    The dashboard card and the watch page (/watch/<device>) now show the target being shot: the goto target of
-    the program run by this app (also added to the program name in the "program in progress" banner), or the
-    native shooting schedule task run by the Dwarf itself ("Schedule <name> · <target>", task n/total and its
-    time window, in the device's timezone), also before its capture starts (goto, calibration).
-    The schedule list is read from the Dwarf only when a capture starts outside a program of this app, once a
-    little after each task's start (so a task the Dwarf didn't run isn't shown for its whole window), and every
-    10 min while a capture stays unexplained - never polled otherwise.
-    Any other capture (started from another app, by hand...) shows the target name the Dwarf itself sends in its
-    tracking / capture progress notifications. Requires dwarf_python_api 3.1.5.
-    ### One instance per Dwarf on this PC
-    Two Astro Dwarf Session open together (e.g. the .exe and a source run) connected to the same Dwarf with the
-    same client_id: the Dwarf dropped one each time the other connected, and both reconnected in turn. The first
-    instance to connect now holds the Dwarf (lock file in the temp folder, released on Disconnect, on exit or after
-    a crash); the other one doesn't connect, its card says the Dwarf is used by another instance with an "Open its
-    view" link to that instance's watch page (target, program, progress), and it connects by itself once the Dwarf
-    is free. Only instances with this change take part: an older version still running isn't detected.
-    A Dwarf that drops the connection right after each reconnection (3 times within a minute of connecting) is
-    being used by another client - a Dwarf Mini accepts only one connection whatever the client_id (an older
-    version, another PC, the official app): auto-reconnect then stops instead of taking it back in a loop, and the
-    card says so until the user connects again.
+    A best slot whose start has already passed now starts 5 min from now (also in the native schedule editor); a
+    slot already over is refused. The image count is set to fill the slot (it stayed at its default, 20, so the
+    program stopped long before the chosen end time).
 
 ## [3.1.6] - 2026-10-04
   ### BugFix

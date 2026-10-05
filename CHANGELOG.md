@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+  ### BugFix
+    ### Dwarfium Scope Archive settings not kept
+    The Settings page saved the Dwarfium Scope Archive URL and Dwarf Id to the device's config.ini, but they weren't
+    read back at the next start (dwarf_python_api's DwarfConfig had no such fields): the links were gone after each
+    restart. They are now read from config.ini (dwarf_python_api 3.1.7 reads them itself).
+
 ## [3.2.0] - 2026-10-05
   ### Add
     ### Archive a session with Dwarfium Scope Archive

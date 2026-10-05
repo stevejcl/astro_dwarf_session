@@ -358,6 +358,7 @@ TRANSLATIONS: dict[str, str] = {
     "shutdown":                     "\u00c9teindre",
     "shutdown_confirm":             "Merci de confirmer l'arr\u00eat complet du Dwarf ?",
     "shutdown_confirm_button":      "\u00c9teindre",
+    "shutdown_in_progress":         "Extinction du Dwarf en cours...",
     "shutdown_sent":                "Commande d'extinction envoy\u00e9e",
     "shutdown_failed":              "\u00c9chec de l'extinction",
     "cancel":                       "Annuler",

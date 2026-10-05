@@ -115,15 +115,36 @@ def _metric_card(label: str, value, unit: str, *, is_low: bool = False) -> None:
         )
 
 
+# A closed page dialog is kept this long before being deleted: the
+# handler that closed it keeps running in its slot (command, then notify)
+_CLOSED_DIALOG_KEEP_S = 60.0
+# No view rebuild this long after a press on the page (see poll())
+_PRESS_QUIET_S = 1.5
+
+
 def _page_dialog() -> ui.dialog:
     """A dialog attached to the page itself, not to the element that
     opened it (user-reported Oct 2026: the Shut down confirmation vanished
     after 2 s). Opened from session_view, a dialog was its child and the
-    2 s poll's session_view.refresh() deleted it. Deleted once closed, so
-    they don't pile up on the page."""
-    with ui.context.client.content:
+    2 s poll's session_view.refresh() deleted it.
+
+    Not deleted on close (user-reported Oct 2026: no notification after
+    Shut down): the confirm handler runs in the dialog's slot, and its
+    ui.notify() after the command failed silently once the dialog was
+    gone. Closed dialogs are deleted when a later one opens, once old
+    enough, so they don't pile up on the page."""
+    client = ui.context.client
+    closed = getattr(client, "_closed_page_dialogs", [])
+    now = time.monotonic()
+    for old, closed_at in list(closed):
+        if now - closed_at >= _CLOSED_DIALOG_KEEP_S:
+            closed.remove((old, closed_at))
+            if not old.is_deleted:
+                old.delete()
+    client._closed_page_dialogs = closed
+    with client.content:
         dialog = ui.dialog()
-    dialog.on("hide", dialog.delete)
+    dialog.on("hide", lambda: closed.append((dialog, time.monotonic())))
     return dialog
 
 
@@ -585,6 +606,7 @@ async def _shutdown(session, dwarf_uid: str, refresh_view: Callable[[], None]) -
         _safe_notify(t("device_busy"), type="warning")
         return
     _busy_uids.add(dwarf_uid)
+    _safe_notify(t("shutdown_in_progress"))
     thread = getattr(session, "event_loop_thread", None)
     try:
         # perform_powerdown() returns True on success, None otherwise
@@ -1092,6 +1114,20 @@ def build_session_page() -> None:
                 session_view.refresh()
                 refresh_camera_settings()
 
+            # Clicks sometimes ignored (user-reported Oct 2026): the poll
+            # rebuilds session_view every 2 s, and a click landing during
+            # a rebuild hit a button just replaced (pressed on the old
+            # one, released on the new one, or its event reaching the
+            # server after the old one was deleted). The page reports
+            # each press, and the poll doesn't rebuild the view right
+            # after one.
+            last_press = [0.0]
+            ui.on("adss_press", lambda: last_press.__setitem__(0, time.monotonic()))
+            ui.add_body_html(
+                "<script>for (const name of ['pointerdown', 'pointerup']) "
+                "document.addEventListener(name, () => emitEvent('adss_press'), true);</script>"
+            )
+
             async def poll() -> None:
                 if dwarf_uid in _busy_uids:
                     return
@@ -1100,6 +1136,8 @@ def build_session_page() -> None:
                 except KeyError:
                     return
                 await connection_health.maybe_check(session)
+                if time.monotonic() - last_press[0] < _PRESS_QUIET_S:
+                    return
                 session_view.refresh()
 
                 # Hide Camera Settings while a program is actively

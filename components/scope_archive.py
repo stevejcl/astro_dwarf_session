@@ -60,16 +60,23 @@ def open_in_app(url: str) -> bool:
         return False
 
 
+# Scope Archive pages for one Dwarf: (path, extra query)
+_PAGES = {
+    "config": ("/Dwarf", {}),                        # Dwarf Configuration
+    "explore_dwarf": ("/Explore/", {"mode": "dwarf"}),  # sessions on the Dwarf
+    "explore_backup": ("/Explore/", {}),             # backed-up sessions (its default mode)
+}
+
+
 def page_url(config, page: str) -> str | None:
-    """One of Scope Archive's own pages for this Dwarf: "config" (Dwarf
-    Configuration) or "explore" (its sessions), or None when the URL /
-    DwarfId isn't set."""
+    """One of Scope Archive's own pages for this Dwarf (see _PAGES), or
+    None when the URL / DwarfId isn't set."""
     base = (getattr(config, "dwarfium_base_url", "") or "").rstrip("/")
     dwarf_id = str(getattr(config, "dwarfium_id", "") or "").strip()
     if not base or not dwarf_id:
         return None
-    path = {"config": "/Dwarf", "explore": "/Explore/"}[page]
-    return f"{base}{path}?{urlencode({'DwarfId': dwarf_id})}"
+    path, extra = _PAGES[page]
+    return f"{base}{path}?{urlencode({'DwarfId': dwarf_id, **extra})}"
 
 
 async def open_page(url: str | None) -> None:

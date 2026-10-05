@@ -704,16 +704,21 @@ def build_session_page() -> None:
             # In Scope Archive's own window when it runs as an app, else a
             # browser tab (user-requested Oct 2026 - see scope_archive.py)
             _header_config = _header_session.config if _header_session else None
-            config_url = scope_archive.page_url(_header_config, "config")
-            explore_url = scope_archive.page_url(_header_config, "explore")
-            if config_url and explore_url:
-                with ui.row().classes("items-center gap-3 -mt-1"):
-                    ui.button(
-                        t("open_in_dwarfium_config"), on_click=lambda: scope_archive.open_page(config_url)
-                    ).props("flat dense no-caps size=sm color=primary").classes("text-xs")
-                    ui.button(
-                        t("open_in_dwarfium_explore"), on_click=lambda: scope_archive.open_page(explore_url)
-                    ).props("flat dense no-caps size=sm color=primary").classes("text-xs")
+            scope_links = [
+                (t(key), scope_archive.page_url(_header_config, page))
+                for key, page in (
+                    ("open_scope_config", "config"),
+                    ("open_scope_explore_dwarf", "explore_dwarf"),
+                    ("open_scope_explore_backup", "explore_backup"),
+                )
+            ]
+            if all(url for _label, url in scope_links):
+                with ui.row().classes("items-center gap-1 -mt-1"):
+                    ui.label(t("open_scope_label")).classes("text-xs text-grey-7")
+                    for label, url in scope_links:
+                        ui.button(label, on_click=lambda _, u=url: scope_archive.open_page(u)).props(
+                            "flat dense no-caps size=sm color=primary"
+                        ).classes("text-xs")
 
             # Defined HERE, inside the page function, not at module
             # level - see the module docstring for why: this gives THIS

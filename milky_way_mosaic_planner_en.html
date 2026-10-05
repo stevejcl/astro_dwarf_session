@@ -230,8 +230,16 @@
         <label for="minAltitude">Minimum altitude (°)</label>
         <input type="number" id="minAltitude" value="25">
       </div>
+      <div>
+        <label for="sunLimit">Darkness (Sun below)</label>
+        <select id="sunLimit">
+          <option value="-18" selected>Astronomical night (−18°)</option>
+          <option value="-12">Nautical twilight (−12°)</option>
+          <option value="-6">Civil twilight (−6°)</option>
+        </select>
+      </div>
     </div>
-    <p class="hint">Each tile is scheduled sequentially, on its own slot where it's visible above this minimum altitude, starting from the start time. A tile that's never high enough tonight is marked "not schedulable" rather than being forced through.</p>
+    <p class="hint">Each tile is scheduled sequentially, on its own slot where it's visible above this minimum altitude, starting from the start time. A tile that's never high enough tonight is marked "not schedulable" rather than being forced through. Only dark slots are used (Sun below the chosen limit), for a tile's whole duration.</p>
   </fieldset>
 
   <div class="btn-row">
@@ -548,7 +556,9 @@ function drawSkyChart() {
   const now = new Date();
   const [hh, mm, ss] = timeStr.split(':').map(Number);
   const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, ss || 0);
-  if (startDate < now) startDate.setDate(startDate.getDate() + 1);
+  // 1 min tolerance: the time field has no milliseconds, so its default
+  // "now" read back a moment later would otherwise roll to tomorrow.
+  if (startDate.getTime() < now.getTime() - 60000) startDate.setDate(startDate.getDate() + 1);
 
   // Visibility shading - coarse grid, only if we have a usable position.
   if (!isNaN(lat) && !isNaN(lon)) {
@@ -923,9 +933,25 @@ function generateGrid(centerRa, centerDec, cols, rows, fov, overlapPct) {
    generated, each claiming the EARLIEST still-free slot that works for
    it, so two tiles never get scheduled on top of each other.
 ------------------------------------------------------------------- */
-function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIndex) {
+// A tile's slot must be dark AND keep the tile high enough for its whole
+// duration (user-reported Oct 2026: tiles were scheduled at dawn and
+// after sunrise - only the tile's altitude was checked). Sampled every
+// SLOT_CHECK_MINUTES from start to end, not just at both ends.
+const SLOT_CHECK_MINUTES = 10;
+function slotIsUsable(tile, lat, lon, start, end, minAltitude, sunLimit) {
+  for (let t = start.getTime(); ; t += SLOT_CHECK_MINUTES * 60000) {
+    const at = new Date(Math.min(t, end.getTime()));
+    if (altAz(tile.ra, tile.dec, lat, lon, at).alt < minAltitude) return false;
+    if (sunAltitude(at, lat, lon) > sunLimit) return false;
+    if (at.getTime() >= end.getTime()) return true;
+  }
+}
+
+function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIndex, sunLimit = -18) {
   const stepMinutes = 5;
-  const maxHorizonMinutes = 12 * 60;
+  // 24h, not 12h: a start time in daylight must still reach the coming
+  // night now that daylight slots are refused.
+  const maxHorizonMinutes = 24 * 60;
   let cursor = new Date(startDate);
   const results = [];
 
@@ -938,12 +964,11 @@ function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIn
 
     while (probe < deadline) {
       const { alt } = altAz(tile.ra, tile.dec, lat, lon, probe);
-      if (alt >= minAltitude) {
-        // Check the tile stays above minAltitude for its WHOLE duration,
-        // not just at the start - otherwise it could set mid-capture.
+      if (alt >= minAltitude && sunAltitude(probe, lat, lon) <= sunLimit) {
+        // Check the tile stays above minAltitude, in the dark, for its
+        // WHOLE duration - otherwise it could set or meet dawn mid-capture.
         const endProbe = new Date(probe.getTime() + durationSeconds * 1000);
-        const { alt: altAtEnd } = altAz(tile.ra, tile.dec, lat, lon, endProbe);
-        if (altAtEnd >= minAltitude) {
+        if (slotIsUsable(tile, lat, lon, probe, endProbe, minAltitude, sunLimit)) {
           found = { start: new Date(probe), end: endProbe, altAtStart: alt };
           break;
         }
@@ -1009,7 +1034,9 @@ document.getElementById('generateBtn').addEventListener('click', () => {
   const now = new Date();
   const [hh, mm, ss] = timeStr.split(':').map(Number);
   const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, ss || 0);
-  if (startDate < now) startDate.setDate(startDate.getDate() + 1);
+  // 1 min tolerance: the time field has no milliseconds, so its default
+  // "now" read back a moment later would otherwise roll to tomorrow.
+  if (startDate.getTime() < now.getTime() - 60000) startDate.setDate(startDate.getDate() + 1);
 
   // Base goto/settle buffer, plus an EXTRA buffer on whichever tiles
   // will actually run autofocus (user-asked Sep 2026: "on se base sur
@@ -1031,7 +1058,8 @@ document.getElementById('generateBtn').addEventListener('click', () => {
   }
 
   const tiles = generateGrid(centerRa, centerDec, cols, rows, currentFov, effectiveOverlapPct);
-  scheduledTiles = scheduleTiles(tiles, lat, lon, startDate, minAltitude, durationForIndex);
+  const sunLimit = parseFloat(document.getElementById('sunLimit').value);
+  scheduledTiles = scheduleTiles(tiles, lat, lon, startDate, minAltitude, durationForIndex, isNaN(sunLimit) ? -18 : sunLimit);
   // Stored so the Send button (a separate handler) uses the EXACT same
   // count/mode this schedule was actually computed with (user-reported
   // Sep 2026 concern: re-reading the hidden #count field directly at

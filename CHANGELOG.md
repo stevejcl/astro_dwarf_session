@@ -2,6 +2,10 @@
 
 ## [Unreleased]
   ### BugFix
+    ### No more "slot busy" flood during a program
+    While a program (or a run resumed after a restart) holds the device, the connection health check is skipped
+    instead of being denied and logged on every poll tick of every open page (a resumed run logged it every second
+    all night); a check denied by a one-off command waits for the normal interval before retrying.
     ### Target of a program run by this app
     The dashboard card and the watch page showed no target for a program run by this app (started or resumed): its
     goto target was read from the wrong part of the program. Fixed, with the target name the Dwarf sends as a

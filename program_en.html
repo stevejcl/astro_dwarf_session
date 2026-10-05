@@ -67,6 +67,7 @@
     padding: 8px 14px; font-size: 0.85rem; cursor: pointer;
   }
   #refreshBtn:disabled { opacity: 0.5; cursor: default; }
+  #showMoreBtn { margin: 10px auto 0; display: block; background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 5px 14px; cursor: pointer; }
   .error-note { color: var(--warn); font-size: 0.8rem; }
   .filter-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
   .filter-toggle button {
@@ -97,6 +98,7 @@
     <thead><tr><th>Origin</th><th>Name / Description</th><th>Start</th><th>End</th><th>Detail</th></tr></thead>
     <tbody></tbody>
   </table>
+  <button id="showMoreBtn" style="display:none" onclick="showMore()"></button>
   <div class="empty" id="programsEmpty" style="display:none">Nothing to show.</div>
   <div class="error-note" id="nativeError" style="display:none"></div>
   <div class="error-note" id="nativeStale" style="display:none"></div>
@@ -117,8 +119,20 @@ let devices = [];
 // visible in both modes rather than hidden, since "unknown" isn't "past".
 let filterMode = "future";
 
+// "Tous" (user-requested Oct 2026): newest first, PAGE_SIZE rows at a
+// time, "show more" adds PAGE_SIZE more. Back to one page on a filter /
+// device change; kept on a refresh.
+const PAGE_SIZE = 20;
+const SHOW_MORE_TEXT = "Show more ({n} left)";
+let shownCount = PAGE_SIZE;
+function showMore() {
+  shownCount += PAGE_SIZE;
+  renderSelected();
+}
+
 function setFilterMode(mode) {
   filterMode = mode;
+  shownCount = PAGE_SIZE;
   document.getElementById("filterFutureBtn").classList.toggle("active", mode === "future");
   document.getElementById("filterAllBtn").classList.toggle("active", mode === "all");
   renderSelected();
@@ -183,7 +197,7 @@ async function loadDevices() {
   if (wanted && devices.some(d => d.dwarfUid === wanted)) {
     sel.value = wanted;
   }
-  sel.onchange = renderSelected;
+  sel.onchange = () => { shownCount = PAGE_SIZE; renderSelected(); };
 }
 
 function badge(text, dotClass) {
@@ -340,10 +354,21 @@ function renderPrograms(entry) {
     });
   }
 
-  rows.sort((a, b) => a.sortKey - b.sortKey);
-
   const nowMs = Date.now();
-  const visibleRows = filterMode === "future" ? rows.filter(r => r.sortKey >= nowMs) : rows;
+  let visibleRows;
+  const moreBtn = document.getElementById("showMoreBtn");
+  if (filterMode === "future") {
+    rows.sort((a, b) => a.sortKey - b.sortKey);
+    visibleRows = rows.filter(r => r.sortKey >= nowMs);
+    moreBtn.style.display = "none";
+  } else {
+    // Newest first (undated rows, sortKey Infinity, on top), one page at a time
+    rows.sort((a, b) => b.sortKey - a.sortKey);
+    visibleRows = rows.slice(0, shownCount);
+    const left = rows.length - visibleRows.length;
+    moreBtn.textContent = SHOW_MORE_TEXT.replace("{n}", left);
+    moreBtn.style.display = left > 0 ? "block" : "none";
+  }
 
   document.getElementById("programsEmpty").style.display = visibleRows.length ? "none" : "block";
 

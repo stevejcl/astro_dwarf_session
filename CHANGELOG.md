@@ -47,6 +47,9 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### Program page: newest first and "Show more" in "All"
+    The "All" filter now lists the newest rows first, 20 at a time, with a "Show more (n left)" button. "Future" is
+    unchanged (upcoming rows, soonest first).
     ### View / Check on the Programs page and on this app's own program runs
     The same dialog (stacked / taken images, integration, stacked thumbnail) is now reachable from the Programs
     page's Results tab and from the Program HTML page, for native tasks and for this app's own finished programs

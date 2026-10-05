@@ -63,9 +63,10 @@
   ### Improvements
     ### Archive a session with Dwarfium Scope Archive
     The session explorer's large view, the View / Check dialog and the Program page's modal get an "Archive in
-    Dwarfium Scope Archive" link: Scope Archive's own Transfer page (Archive mode) with this Dwarf and this session
-    folder preselected, so the copy to the Backup runs there with its own checks. Shown when the Dwarfium URL and
-    DwarfId are set in Settings (same as the "Open in Dwarfium" links).
+    Dwarfium Scope Archive" link to Scope Archive's ImportSession page: it reads and registers this session only from the
+    Dwarf, then opens its Transfer page with it preselected, where the backup drive is chosen and the copy started.
+    Shown when the Dwarfium Scope Archive URL and DwarfId are set in Settings. The Settings labels and the "Open in"
+    links now say "Dwarfium Scope Archive" instead of "Dwarfium".
     ### Session explorer: download the PNG too
     The download button becomes a JPG / PNG menu. The session's PNG (the Dwarf's own
     "stacked-16_M 42 ..._60s40_Duo-Band_...png") is looked for in the session folder over the Dwarf's anonymous FTP

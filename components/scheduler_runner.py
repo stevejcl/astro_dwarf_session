@@ -814,6 +814,20 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
         connection_health.release_command_slot(dwarf_uid)
 
 
+# Current/ files already reported as unreadable (warned once, not every tick)
+_unreadable_warned: set[str] = set()
+
+
+def _warn_unreadable(path: str, error: Exception) -> None:
+    """A Current/ file that isn't valid JSON (e.g. hand-edited, user-
+    reported Oct 2026: a trailing comma) was skipped silently, so its
+    program was never resumed - now logged once per file and error."""
+    key = f"{path}|{error}"
+    if key not in _unreadable_warned:
+        _unreadable_warned.add(key)
+        log.warning(f"Program file not readable, skipped: {path} ({error})")
+
+
 def orphan_matching_device_target(session) -> str | None:
     """Cheap check for scheduler_loop's resume retry (no device command):
     the newest Current/ file of this device when its program's target is
@@ -833,7 +847,8 @@ def orphan_matching_device_target(session) -> str | None:
     try:
         with open(os.path.join(current_dir, newest), "r", encoding="utf-8") as f:
             full_program = json.load(f)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as e:
+        _warn_unreadable(os.path.join(current_dir, newest), e)
         return None
     program = full_program.get("command", full_program)
     return newest if device_target_matches(session, program) else None
@@ -857,7 +872,8 @@ def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
             with open(path, "r", encoding="utf-8") as f:
                 full_program = json.load(f)
             program = full_program.get("command", full_program)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError) as e:
+            _warn_unreadable(path, e)
             continue
         id_command = program.setdefault("id_command", {})
         last_step_time = id_command.get("last_step_time")

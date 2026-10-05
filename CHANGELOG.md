@@ -6,6 +6,8 @@
     The download did nothing in the .exe / python native window (pywebview), only in a browser. The app now writes
     the file itself there: the system Save dialog (or the Downloads folder if it can't open), then a notification
     with the path. In a browser, the browser's own download as before.
+    The Save dialog of NiceGUI's native window is asynchronous: it is now awaited (it was called in a thread and the
+    save failed with "not 'coroutine'").
     ### Preview "Stacked / Last frame" never selected
     The current value was read once, 0.5 s after the device page opened: a page opened before the Dwarf was connected
     never got it. It is now read once the Dwarf is connected (up to 3 attempts), and a response without the value

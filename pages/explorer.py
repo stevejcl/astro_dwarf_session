@@ -19,6 +19,7 @@ themselves, only the JSON listing call."""
 from __future__ import annotations
 
 import asyncio
+import inspect
 from datetime import datetime
 from pathlib import Path
 
@@ -147,15 +148,20 @@ def _write_file(target: Path, data: bytes) -> None:
     target.write_bytes(data)
 
 
-def _save_path(name: str) -> Path | None:
+async def _save_path(name: str) -> Path | None:
     """Where to save in the native window (pywebview): the user's own
     Save dialog, else the Downloads folder (user-reported Oct 2026: the
-    browser download does nothing there, unlike in a real browser)."""
+    browser download does nothing there, unlike in a real browser).
+    NiceGUI's window proxy is async: its create_file_dialog() is awaited
+    (user-reported Oct 2026: called in a thread, it returned a coroutine
+    and the save failed)."""
     window = getattr(app.native, "main_window", None)
     if window is not None:
         try:
             import webview  # only present with the native window
             chosen = window.create_file_dialog(webview.FileDialog.SAVE, save_filename=name)
+            if inspect.isawaitable(chosen):
+                chosen = await chosen
         except Exception as e:  # any pywebview/platform failure: the fallback below
             log.debug(f"Native save dialog unavailable ({e})")
         else:
@@ -163,6 +169,7 @@ def _save_path(name: str) -> Path | None:
                 return None  # cancelled
             return Path(chosen[0] if isinstance(chosen, (list, tuple)) else chosen)
     return Path.home() / "Downloads" / name
+
 
 def build_explorer_page() -> None:
     # Image download (user-requested Oct 2026): fetched from the Dwarf by
@@ -289,7 +296,7 @@ def build_explorer_page() -> None:
                         f"/session/{dwarf_uid}/explorer/download?path={quote(path)}", filename=name
                     )
                     return
-                target = await run.io_bound(_save_path, name)
+                target = await _save_path(name)
                 if target is None:
                     return  # cancelled
                 notification = ui.notification(t("explorer_downloading"), spinner=True, timeout=None)

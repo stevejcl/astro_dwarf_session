@@ -44,10 +44,13 @@ def _epoch_s(value) -> int | None:
 
 
 def program_target(program: dict | None) -> str:
-    """Target of an app program: the goto target, else its description."""
+    """Target of an app program: the goto target, else its description.
+    program: a program file's dict ({"command": {...}}) or its "command"
+    part alone - what RunState.program holds (start_run() and a resumed
+    run get the command dict)."""
     if not program:
         return ""
-    cmd = program.get("command", {})
+    cmd = program.get("command", program)
     goto_manual = cmd.get("goto_manual", {})
     goto_solar = cmd.get("goto_solar", {})
     if goto_manual.get("do_action") and goto_manual.get("target"):
@@ -108,12 +111,15 @@ def current_activity(session, full_status: dict | None = None) -> dict | None:
     (started from another app, by hand...), the target name the Dwarf
     itself sends ("CurrentTargetName", dwarf_python_api >= 3.1.5)."""
     uid = session.dwarf_uid
+    full_status = full_status or {}
+    device_target = full_status.get("CurrentTargetName") or ""
     if scheduler_runner.is_running(uid):
         run_state = scheduler_runner.get_run_state(uid)
         return {
             "source": "program",
             "title": run_state.program_name if run_state else "",
-            "target": program_target(run_state.program if run_state else None),
+            # The Dwarf's own name when the program has none (no goto)
+            "target": program_target(run_state.program if run_state else None) or device_target,
             "start": None,
             "end": None,
         }
@@ -128,8 +134,6 @@ def current_activity(session, full_status: dict | None = None) -> dict | None:
             "start": task["start"],
             "end": task["end"],
         }
-    full_status = full_status or {}
-    device_target = full_status.get("CurrentTargetName") or ""
     if device_target and _is_capturing(full_status):
         return {"source": "device", "title": "", "target": device_target, "start": None, "end": None}
     return None

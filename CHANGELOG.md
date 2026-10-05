@@ -2,6 +2,10 @@
 
 ## [Unreleased]
   ### BugFix
+    ### Target of a program run by this app
+    The dashboard card and the watch page showed no target for a program run by this app (started or resumed): its
+    goto target was read from the wrong part of the program. Fixed, with the target name the Dwarf sends as a
+    fallback for a program without goto.
     ### Program followed again after a restart
     A program left in Current/ by an app restart during its capture was only resumed if its last step (the capture
     start - nothing is recorded while it captures) was less than 5 min old: a restart at 01:00 for a capture started

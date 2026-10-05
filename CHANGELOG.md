@@ -52,6 +52,8 @@
     session in the Dwarf's album (target name + time window), reads its shotsInfo.json and shows the images
     stacked / taken, the integration time and the stacked thumbnail - the error alone doesn't say whether the
     stack is usable. One album listing and one small JSON over HTTP, on click only.
+    Error -1 (WS_PARSE_PROTOBUF_ERROR, the task's window ending while the stack is usually saved) is now shown as an
+    orange "Warning" instead of a failure with its protobuf name, on the device page and the Programs page.
     ### Device page: Shut down button
     Next to Disconnect, a "Shut down" button powers the Dwarf off after a confirmation (CMD_RGB_POWER_POWER_DOWN).
     On success the connection is closed as with a manual Disconnect, so the app doesn't try to reconnect to it.

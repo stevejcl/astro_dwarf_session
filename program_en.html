@@ -45,6 +45,8 @@
   .capture-summary { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
   .task-line { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
   .task-error { color: var(--err); }
+  .tag.state-warning { background: rgba(224,168,60,0.15); color: var(--warn); border-color: var(--warn); }
+  .task-warning { color: var(--warn); }
   .capture-summary-inline { font-size: 0.75rem; color: var(--muted); }
   #refreshBtn {
     background: var(--accent); color: #fff; border: none; border-radius: 6px;
@@ -231,7 +233,9 @@ function renderPrograms(entry) {
 
   for (const sched of (entry.nativeSchedule || [])) {
     const taskLines = (sched.tasks || []).map(t => {
-      const cls = TASK_STATE_CLASS[t.state_code] || "";
+      // Error -1: a warning, not a failure (native_schedule.py WARNING_ERROR_CODES)
+      const warning = t.warning || t.error_code === -1;
+      const cls = warning ? "state-warning" : (TASK_STATE_CLASS[t.state_code] || "");
       const bits = [];
       if (t.shutterName) bits.push(`${t.shutterName}s`);
       if (t.gainName) bits.push(`gain ${t.gainName}`);
@@ -246,7 +250,9 @@ function renderPrograms(entry) {
       // what has actually shot so far.
       const summary = bits.length ? `<span class="capture-summary-inline">${bits.join(" · ")}</span>` : "";
       // Device-recorded reason of a failed / interrupted task (native_schedule.py)
-      const err = t.error_code
+      const err = warning
+        ? `<span class="capture-summary-inline task-warning">⚠ Warning</span>`
+        : t.error_code
         ? `<span class="capture-summary-inline task-error">${t.error_code} ${t.error_name || ""}</span>`
         : "";
       return `<div class="task-line"><span class="tag ${cls}">${t.name}</span>${err}${summary}</div>`;

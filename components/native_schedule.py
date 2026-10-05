@@ -45,6 +45,17 @@ def error_code_name(code) -> str | None:
         return str(code)
 
 
+# Task error codes shown as a warning, not an error (user-requested Oct
+# 2026): -1 (WS_PARSE_PROTOBUF_ERROR) ends tasks whose stack was saved
+# anyway (DwarfLab's analysis), and "PROTOBUF error" looked alarming.
+WARNING_ERROR_CODES = {-1}
+
+
+def is_warning(task: dict) -> bool:
+    """True for a task whose error code is only a warning (see above)."""
+    return task.get("error_code") in WARNING_ERROR_CODES
+
+
 SCHEDULE_STATE_LABELS = {
     0: "initialized", 1: "pending", 2: "shooting", 3: "completed", 4: "expired",
 }
@@ -76,6 +87,7 @@ def parse_native_schedule_info(info) -> list[dict]:
                 # unavailable at start time, -11504 calibration failed).
                 "error_code": task.code or None,
                 "error_name": error_code_name(task.code),
+                "warning": task.code in WARNING_ERROR_CODES,
                 "startTime": p.get("startTime"),
                 "endTime": p.get("endTime"),
                 "shutterName": p.get("shutterName"),

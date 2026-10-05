@@ -1074,15 +1074,22 @@ def build_session_page() -> None:
                                     # as the combined /Program page's own
                                     # native task rendering).
                                     detail = " · ".join(str(b) for b in detail_bits if b)
-                                    line = f"• {tsk['name']}: {_task_state_label(tsk['state_code'])}"
-                                    if tsk.get("error_code"):
+                                    warning = native_schedule.is_warning(tsk)
+                                    if warning:
+                                        # Error -1: a warning, not a failure (stack usually saved)
+                                        line = f"• {tsk['name']}: \u26a0 {t('sched_task_warning')}"
+                                    else:
+                                        line = f"• {tsk['name']}: {_task_state_label(tsk['state_code'])}"
+                                    if tsk.get("error_code") and not warning:
                                         line += f" [{tsk['error_code']} {tsk.get('error_name') or ''}]".replace(" ]", "]")
                                     if detail:
                                         line += f" ({detail})"
                                     if tsk.get("error_code") or tsk.get("state_code") in (3, 4):
                                         # Failed / interrupted: what did the Dwarf save anyway?
                                         with ui.row().classes("w-full items-center gap-1 no-wrap"):
-                                            ui.label(line).classes("text-xs text-grey-7 flex-1")
+                                            ui.label(line).classes(
+                                                f"text-xs flex-1 {'text-warning' if warning else 'text-grey-7'}"
+                                            )
                                             ui.button(
                                                 t("task_check"),
                                                 icon="fact_check",

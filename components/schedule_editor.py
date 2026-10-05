@@ -41,7 +41,6 @@ editor.py is deliberately ABSENT here, not an oversight:
 """
 from __future__ import annotations
 
-import math
 import uuid
 import time
 from datetime import datetime, timedelta, timezone
@@ -62,28 +61,25 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_utils import perform_sync_shooting_schedule
 
 
-def _exposure_seconds(name: str) -> float | None:
-    """Parses an exposure name from _exposure_names() (e.g. "1/50",
-    "0.4", "60") into a plain float number of seconds. Returns None for
-    anything unparseable rather than raising, so a caller can fall back
-    to a safe default instead of crashing the UI on an unexpected name.
-    """
-    if not name:
-        return None
-    try:
-        if "/" in name:
-            numerator, denominator = name.split("/", 1)
-            return float(numerator) / float(denominator)
-        return float(name)
-    except (ValueError, ZeroDivisionError):
-        return None
-
-
 # Device-tested (Oct 2026): tasks must not overlap - two targets starting
 # the same minute were merged by the Dwarf into one uncontrollable run.
 # A few minutes apart is accepted; 5 min also leaves time to slew and
 # calibrate (same gap as js/dwarf-scheduler.js's _DWARF_TASK_GAP_MS).
 TASK_GAP_MIN = 5
+
+
+def _duration_min(start_hhmm: str, end_hhmm: str) -> int | None:
+    """Minutes from start to end time (an end at or before the start is
+    the next day, e.g. 22:00 -> 02:30), None if a time is unparseable."""
+    try:
+        start = datetime.strptime(start_hhmm.strip(), "%H:%M")
+        end = datetime.strptime(end_hhmm.strip(), "%H:%M")
+    except (ValueError, AttributeError):
+        return None
+    minutes = int((end - start).total_seconds() // 60)
+    if minutes == 0:
+        return None  # same time: no window
+    return minutes if minutes > 0 else minutes + 24 * 60
 
 
 def _task_window(tk: dict) -> tuple[datetime, datetime]:
@@ -115,13 +111,12 @@ def _new_task_defaults(dwarf_type: str, tz) -> dict:
         "shutterName": exposures[-3] if exposures else "",
         "gainName": str(gain_min),
         "filterModeName": filters[0] if filters else "",
-        "count": 20,
         "mosaic": False,
         "horizontalScale": 1.0,
         "verticalScale": 1.0,
         "date": (datetime.now(tz) + timedelta(minutes=10)).strftime("%Y-%m-%d"),
         "startTime": (datetime.now(tz) + timedelta(minutes=10)).strftime("%H:%M"),
-        "durationMin": 60,
+        "endTime": (datetime.now(tz) + timedelta(minutes=70)).strftime("%H:%M"),
     }
 
 
@@ -200,7 +195,6 @@ def build_schedule_editor(session) -> None:
         gain_min, gain_max = _gain_range("tele")
         gain_input = ui.number(t("prog_gain"), value=int(draft["gainName"]), min=gain_min, max=gain_max, step=_GAIN_STEP).classes("flex-1")
         filter_input = ui.select(_ir_filter_names(dwarf_type), value=draft["filterModeName"], label=t("ir_filter")).classes("flex-1")
-        count_input = ui.number(t("prog_count"), value=draft["count"], min=1).classes("w-24")
 
     mosaic_cb = ui.checkbox(t("prog_mosaic"), value=False)
     with ui.row().classes("w-full gap-2") as mosaic_fields:
@@ -212,18 +206,14 @@ def build_schedule_editor(session) -> None:
     with ui.row().classes("w-full gap-2 items-end"):
         date_input = date_picker_input(t("prog_date"), draft["date"]).classes("flex-1")
         start_time_input = time_picker_input(t("sched_start_time"), draft["startTime"]).classes("flex-1")
-        # Computed, not manually entered (user-reported Sep 2026: the
-        # schedule's end_time - which the device uses to know when to
-        # STOP - was a separate, independently-typed field, so it could
-        # silently disagree with what "count" images at "shutterName"
-        # exposure would actually take, ending the session early (cut
-        # off mid-sequence) or leaving it running well past the last
-        # planned exposure. Tying duration directly to count x exposure
-        # removes that gap - editing this number no longer does
-        # anything (see the on_value_change handlers on count_input/
-        # exposure_input below, which are the actual source of truth
-        # now), it only ever reflects them.
-        duration_input = ui.number(t("sched_duration_min"), value=draft["durationMin"], min=1).classes("w-32").props("readonly")
+        # End time typed directly, like the official app (user-requested
+        # Oct 2026): the device only gets start/end times (count is sent
+        # as 0, as the official app does) and shoots until the end time.
+        # The former count x exposure duration left no room for goto/
+        # calibration and per-frame overhead: the window ended before
+        # the last frame and the firmware then reported the task as
+        # failed although the stack was saved (DwarfLab's analysis).
+        end_time_input = time_picker_input(t("prog_end_time"), draft["endTime"]).classes("flex-1")
 
     def _set_start_now_plus_10() -> None:
         """User-requested Sep 2026: quick \"Now + 10min\" button - the
@@ -231,9 +221,12 @@ def build_schedule_editor(session) -> None:
         (deliberately: a second target usually starts later THE SAME
         night, not \"now\" again), so re-basing them to the current time
         is otherwise a fully manual re-type of both fields."""
+        duration = _duration_min(start_time_input.value or "", end_time_input.value or "") or 60
         now_plus_10 = datetime.now(user_tz) + timedelta(minutes=10)
         date_input.value = now_plus_10.strftime("%Y-%m-%d")
         start_time_input.value = now_plus_10.strftime("%H:%M")
+        # Keeps the task's length
+        end_time_input.value = (now_plus_10 + timedelta(minutes=duration)).strftime("%H:%M")
 
     ui.button(t("sched_now_plus_10"), icon="schedule", on_click=_set_start_now_plus_10).props("flat dense")
 
@@ -258,12 +251,9 @@ def build_schedule_editor(session) -> None:
             return
         date_input.value = start.strftime("%Y-%m-%d")
         start_time_input.value = start.strftime("%H:%M")
-        # Duration stays count x exposure (see duration_input above) - only
-        # warn when that runs past the end of the chosen slot.
-        planned_end = start + timedelta(minutes=int(duration_input.value or 0))
-        if end is not None and planned_end > end:
-            over = int((planned_end - end).total_seconds() // 60)
-            ui.notify(t("planner_sched_exceeds", start=f"{start:%H:%M}", end=f"{end:%H:%M}", over=over), type="warning")
+        if end is not None:
+            end_time_input.value = end.strftime("%H:%M")
+            ui.notify(t("planner_slot_applied", start=f"{start:%H:%M}", end=f"{end:%H:%M}"))
         else:
             ui.notify(t("planner_start_applied", start=f"{start:%Y-%m-%d %H:%M}"))
 
@@ -294,21 +284,6 @@ def build_schedule_editor(session) -> None:
     for field in (ra_input, dec_input, date_input, start_time_input):
         field.on_value_change(lambda _e: _refresh_altitude())
 
-    def _recompute_duration() -> None:
-        exposure_s = _exposure_seconds(exposure_input.value or "")
-        count = int(count_input.value or 0)
-        if exposure_s is None or count <= 0:
-            return
-        # Ceil, not floor/round: a device stopped by end_time mid-way
-        # through what would have been the last exposure of the
-        # sequence is worse than a session that runs a few seconds past
-        # its last completed exposure - rounding DOWN here would
-        # silently truncate the count the user actually asked for.
-        duration_input.value = math.ceil(2 + (count * exposure_s) / 60) or 0
-
-    count_input.on_value_change(lambda _e: _recompute_duration())
-    exposure_input.on_value_change(lambda _e: _recompute_duration())
-    _recompute_duration()
 
     task_list_container = ui.column().classes("w-full gap-1")
     add_status_label = ui.label("").classes("text-xs text-red-700")
@@ -340,6 +315,9 @@ def build_schedule_editor(session) -> None:
             missing.append(t("sched_ra_dec"))
         if not date_input.value.strip() or not start_time_input.value.strip():
             missing.append(t("sched_start_time"))
+        duration = _duration_min(start_time_input.value or "", end_time_input.value or "")
+        if duration is None:
+            missing.append(t("prog_end_time"))
         if missing:
             add_status_label.set_text(t("prog_missing_fields", fields=", ".join(missing)))
             return
@@ -357,13 +335,13 @@ def build_schedule_editor(session) -> None:
             "shutterName": exposure_input.value or "",
             "gainName": str(int(gain_input.value)),
             "filterModeName": filter_input.value or "",
-            "count": 0, #int(count_input.value or 0),
+            "count": 0,
             "mosaic": bool(mosaic_cb.value),
             "horizontalScale": float(h_scale_input.value or 1.0),
             "verticalScale": float(v_scale_input.value or 1.0),
             "date": date_input.value.strip(),
             "startTime": start_time_input.value.strip(),
-            "durationMin": int(duration_input.value or 30),
+            "durationMin": duration,
         }
         try:
             conflict = _find_conflict(new_task, tasks)
@@ -380,6 +358,8 @@ def build_schedule_editor(session) -> None:
         next_start = _task_window(new_task)[1] + timedelta(minutes=TASK_GAP_MIN)
         date_input.value = next_start.strftime("%Y-%m-%d")
         start_time_input.value = next_start.strftime("%H:%M")
+        # Same length as the task just added, from the new start
+        end_time_input.value = (next_start + timedelta(minutes=duration)).strftime("%H:%M")
         add_status_label.set_text("")
         target_name_input.value = ""
         ra_input.value = ""

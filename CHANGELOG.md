@@ -2,6 +2,12 @@
 
 ## [Unreleased]
   ### BugFix
+    ### Native schedule editor: end time instead of image count
+    A task's window was count x exposure + 2 min: too short for the goto/calibration and per-frame overhead, so it
+    ended before the last frames (17 of 20 for an M42 task) and the Dwarf reported an error although the stack was
+    saved (DwarfLab's analysis). Like the official app, the editor now takes a start and an END time (across midnight
+    allowed) and no longer asks for a count; count is sent as 0 as before. "Use best slot" fills both times, and the
+    next target is pre-filled right after the previous one with the same length.
     ### Milky Way mosaic planner: tiles scheduled in daylight
     Tiles were scheduled on altitude alone, so at dawn and after sunrise too (e.g. 07:33-08:57 with sunrise at
     08:15). A slot must now be dark for the tile's whole duration (new "Darkness" setting: Sun below -18/-12/-6°,

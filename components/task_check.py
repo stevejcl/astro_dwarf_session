@@ -192,9 +192,12 @@ async def open_task_check(session, task: dict, make_dialog=ui.dialog, on_result=
             ui.image(_thumbnail_url(session.config.dwarf_ip, result["thumbnailPath"])).classes(
                 "w-full rounded"
             )
-        archive_url = scope_archive.transfer_url(session.config, result["thumbnailPath"] or "")
-        if archive_url:
-            # Archive with Dwarfium Scope Archive (its Transfer page, this session preselected)
-            with ui.link(target=archive_url, new_tab=True).classes("text-sm flex items-center gap-1"):
-                ui.icon("inventory_2")
-                ui.label(t("archive_in_scope_archive"))
+        media = result["thumbnailPath"] or ""
+        if scope_archive.transfer_url(session.config, media):
+            # Archive with Dwarfium Scope Archive (its import then Transfer page,
+            # in its own window when it has one - scope_archive.py)
+            ui.button(
+                t("archive_in_scope_archive"),
+                icon="inventory_2",
+                on_click=lambda: scope_archive.archive_session(session.config, media),
+            ).props("flat dense no-caps")

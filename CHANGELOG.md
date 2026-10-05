@@ -61,6 +61,13 @@
     The image count is set to fill the slot (time between the start and the end time / exposure, per view for a
     mosaic): it stayed at its default (20), so the program stopped long before the chosen end time.
   ### Improvements
+    ### "Archive in Dwarfium Scope Archive" opens in Scope Archive's window
+    When Scope Archive runs as an app, the import and Transfer pages now open in its own window, brought to front (its
+    /api/open-in-app), with its system folder dialogs - in a web browser they aren't available. A notification says
+    so; without an app window, or with a Scope Archive not answering (not running, older version), the page opens in a
+    browser tab as before. The explorer, View / Check dialog and Program page use a button for it. The device page's
+    links become "Dwarfium Scope Archive: Config · Sessions on the Dwarf · Backed-up sessions" (Explore in dwarf mode
+    or its default backup mode), opened the same way.
     ### Archive a session with Dwarfium Scope Archive
     The session explorer's large view, the View / Check dialog and the Program page's modal get an "Archive in
     Dwarfium Scope Archive" link to Scope Archive's ImportSession page: it reads and registers this session only from the

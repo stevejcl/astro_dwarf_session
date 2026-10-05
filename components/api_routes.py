@@ -437,6 +437,22 @@ def register_api_routes() -> None:
             result["archiveUrl"] = scope_archive.transfer_url(session.config, result["thumbnailPath"])
         return JSONResponse(result)
 
+    @app.get("/api/scope-archive/open/{dwarf_uid}")
+    async def api_scope_archive_open(dwarf_uid: str, media: str):
+        """The Program page's "Archive" button: Scope Archive's window when it
+        has one (opened=true), else the URL for the page to open in a tab.
+        The URL is rebuilt here from the device's settings, never taken from
+        the request."""
+        try:
+            session = get_manager().get(dwarf_uid)
+        except KeyError:
+            return JSONResponse({"opened": False, "url": None}, status_code=404)
+        url = scope_archive.transfer_url(session.config, media)
+        if not url:
+            return JSONResponse({"opened": False, "url": None})
+        opened = await run.io_bound(scope_archive.open_in_app, url)
+        return JSONResponse({"opened": opened, "url": url})
+
     @app.get("/api/sites")
     def api_sites():
         """User-requested Sep 2026: browser geolocation

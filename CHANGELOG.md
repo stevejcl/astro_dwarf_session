@@ -2,6 +2,12 @@
 
 ## [Unreleased]
   ### BugFix
+    ### Milky Way mosaic planner: tiles scheduled in daylight
+    Tiles were scheduled on altitude alone, so at dawn and after sunrise too (e.g. 07:33-08:57 with sunrise at
+    08:15). A slot must now be dark for the tile's whole duration (new "Darkness" setting: Sun below -18/-12/-6°,
+    astronomical night by default), checked every 10 min along with the altitude; the search covers 24 h so a start
+    time in daylight reaches the coming night. The default start time ("now") no longer rolls the plan to the next
+    day.
     ### No more "slot busy" flood during a program
     While a program (or a run resumed after a restart) holds the device, the connection health check is skipped
     instead of being denied and logged on every poll tick of every open page (a resumed run logged it every second

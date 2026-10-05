@@ -519,7 +519,18 @@ async def maybe_check(session: DwarfSession) -> None:
     now = time.monotonic()
     if now - _last_check_at.get(uid, 0.0) < _CHECK_INTERVAL_S:
         return
+    from components import scheduler_runner  # local import - imports this module
+
+    if scheduler_runner.is_running(uid):
+        # A program (or a run resumed after a restart) holds the slot for
+        # its whole duration and follows the device itself: no check to
+        # send (user-reported Oct 2026: a resumed run logged a "slot busy"
+        # denial for the health check every second, all night).
+        return
     if not try_acquire_command_slot(uid, caller="health_check"):
+        # Busy with a one-off command: next try after the normal interval,
+        # not on every poll tick of every open page.
+        _last_check_at[uid] = now
         return
 
     _check_started_at[uid] = time.monotonic()

@@ -43,6 +43,10 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 
 <img width="1554" height="2357" alt="AstroDwarfUI_Milky_Way_Planner" src="https://github.com/user-attachments/assets/b978e0f9-eddf-4db5-80da-8fa7a4bb151b" />
 
+<img width="780" height="580" alt="AstroDwarfUI_Session_Link_Archive" src="https://github.com/user-attachments/assets/5e98b60f-2ca5-422c-baa3-065b6ddf835f" />
+
+<img width="1182" height="831" alt="Dwarfium_Scop_Archive_Auto_import_Session" src="https://github.com/user-attachments/assets/eac0cfb7-37df-42e9-aa9e-dff3ffac7166" />
+
 ## What it does
 
 - **Connects to your Dwarf(s)** over Wi-Fi (BLE pairing built in, plus a no-Bluetooth manual config path for when a BLE adapter isn't cooperating — see below) and talks to them live over the same WebSocket/protobuf protocol the official app uses.

@@ -4,7 +4,7 @@
   ### Add
     ### Lights during a program
     The two light buttons (light, power indicator) now work while a program captures, like the preview switch: the
-    run only reads the Dwarf's status then, so the command is sent without waiting for it. In the program's other
+    run only reads the Dwarf's status then, so the command no longer waits for the program to end. In the program's other
     steps (goto, calibration...) they still say the device is busy.
   ### BugFix
     ### EQ Solving indicator inverted on the Dwarf 3

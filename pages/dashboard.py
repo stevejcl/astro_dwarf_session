@@ -19,6 +19,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from components import connection_health, device_lock, device_prefs
 from components.device_card import DeviceCardView
 from components.network_info import watch_qr_svg, watch_url
+from components.app_version import get_app_version
 from components.i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme, theme_toggle_button
@@ -254,6 +255,12 @@ def build_dashboard_page() -> None:
                         ui.label(watch_url()).classes("text-xs text-grey-6")
                         ui.button(t("close"), on_click=dialog.close).props("flat")
                     dialog.open()
+
+                # Version, small, at the left of the logo's line
+                # (user-requested Oct 2026)
+                version = get_app_version()
+                if version:
+                    ui.label(f"v{version}").classes("text-xs text-grey-6 absolute left-0")
 
                 ui.button(icon="qr_code_2", on_click=_open_watch_qr).props("flat round")
 

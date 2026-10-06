@@ -91,13 +91,6 @@ def build_dashboard_page() -> None:
         apply_theme()
         manager = get_manager()
 
-        # Version, small, bottom left (user-requested Oct 2026)
-        version = get_app_version()
-        if version:
-            ui.label(f"v{version}").classes("fixed bottom-1 left-2 text-xs text-grey-6").style(
-                "z-index: 10; pointer-events: none"
-            )
-
         # Grid layout: side-by-side cards once there are 2+ devices (2
         # columns - naturally becomes a 2x2 grid for 4 devices), a
         # single column for 0-1. Decided once at page load from the
@@ -262,6 +255,12 @@ def build_dashboard_page() -> None:
                         ui.label(watch_url()).classes("text-xs text-grey-6")
                         ui.button(t("close"), on_click=dialog.close).props("flat")
                     dialog.open()
+
+                # Version, small, at the left of the logo's line
+                # (user-requested Oct 2026)
+                version = get_app_version()
+                if version:
+                    ui.label(f"v{version}").classes("text-xs text-grey-6 absolute left-0")
 
                 ui.button(icon="qr_code_2", on_click=_open_watch_qr).props("flat round")
 

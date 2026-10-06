@@ -61,7 +61,7 @@
     The "All" filter lists the newest rows first, 20 at a time, with a "Show more (n left)" button. "Future" is
     unchanged.
     ### Version on the home page
-    The app's version is shown small at the bottom left of the home page (from version.py when built, else from
+    The app's version is shown small on the home page, at the left of the "Dwarfium Lite" line (from version.py when built, else from
     CHANGELOG.md).
     ### Lights during a program
     The two light buttons (light, power indicator) now work while a program captures, like the preview switch: the

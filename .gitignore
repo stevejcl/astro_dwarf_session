@@ -17,3 +17,4 @@ config.lock
 /.vscode
 /__pycache__
 /assets/catalog_add_on.json
+version.py

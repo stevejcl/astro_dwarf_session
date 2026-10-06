@@ -19,6 +19,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from components import connection_health, device_lock, device_prefs
 from components.device_card import DeviceCardView
 from components.network_info import watch_qr_svg, watch_url
+from components.app_version import get_app_version
 from components.i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme, theme_toggle_button
@@ -89,6 +90,13 @@ def build_dashboard_page() -> None:
         add_pwa_head_tags()
         apply_theme()
         manager = get_manager()
+
+        # Version, small, bottom left (user-requested Oct 2026)
+        version = get_app_version()
+        if version:
+            ui.label(f"v{version}").classes("fixed bottom-1 left-2 text-xs text-grey-6").style(
+                "z-index: 10; pointer-events: none"
+            )
 
         # Grid layout: side-by-side cards once there are 2+ devices (2
         # columns - naturally becomes a 2x2 grid for 4 devices), a

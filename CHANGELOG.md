@@ -60,6 +60,9 @@
     ### Program page: newest first and "Show more"
     The "All" filter lists the newest rows first, 20 at a time, with a "Show more (n left)" button. "Future" is
     unchanged.
+    ### Version on the home page
+    The app's version is shown small at the bottom left of the home page (from version.py when built, else from
+    CHANGELOG.md).
     ### Lights during a program
     The two light buttons (light, power indicator) now work while a program captures, like the preview switch: the
     run only reads the Dwarf's status then, so the command no longer waits for the program to end. In the program's other

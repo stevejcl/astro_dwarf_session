@@ -130,6 +130,7 @@ TRANSLATIONS: dict[str, str] = {
     "no_program_loaded":            "No program loaded.",
     "program_upload":               "Upload a session JSON file",
     "program_invalid_json":         "Invalid JSON file: {error}",
+    "program_file_missing":         "Program {name} is no longer in the queue (already started, moved or deleted) - reload the list.",
     "program_loaded":               "Loaded: {name}",
     "program_none_loaded":          "Upload a program first.",
     "program_start":                "Start",

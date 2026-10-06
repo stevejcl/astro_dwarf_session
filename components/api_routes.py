@@ -102,6 +102,7 @@ from device_registry import list_device_entries
 from site_registry import list_site_entries
 from components import connection_health, scheduler_runner, scheduler_loop, native_schedule, catalog_add_on
 from components import scope_archive, task_check, task_check_cache
+from components.json_files import write_json_atomic
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
 from components.session_dirs import ensure_dirs
@@ -746,8 +747,7 @@ def register_api_routes() -> None:
         dirs = ensure_dirs(session)
         filename = _filename_for(program)
         filepath = os.path.join(dirs["TODO_DIR"], filename)
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(program, f, indent=4)
+        write_json_atomic(filepath, program)
         log.info(f"[{dwarf_uid}] Program saved: {filepath}")
 
         if not body.get("startNow"):

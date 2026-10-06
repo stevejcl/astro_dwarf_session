@@ -130,6 +130,7 @@ TRANSLATIONS: dict[str, str] = {
     "no_program_loaded":            "Aucun programme charg\u00e9.",
     "program_upload":               "Charger un fichier de session JSON",
     "program_invalid_json":         "Fichier JSON invalide : {error}",
+    "program_file_missing":         "Le programme {name} n'est plus dans la file (déjà lancé, déplacé ou supprimé) - rechargez la liste.",
     "program_loaded":               "Charg\u00e9 : {name}",
     "program_none_loaded":          "Chargez d'abord un programme.",
     "program_start":                "D\u00e9marrer",

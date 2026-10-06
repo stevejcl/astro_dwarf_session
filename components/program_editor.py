@@ -32,6 +32,7 @@ from components.camera_settings import (
 from components.datetime_picker import date_picker_input, time_picker_input
 from components.current_activity import program_target
 from components.i18n import t
+from components.json_files import write_json_atomic
 from components.session_dirs import ensure_dirs
 from components.site_time import site_now, site_tz
 from components.dso_catalog import (
@@ -871,8 +872,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             dirs = ensure_dirs(session)
             filename = _filename_for(new_program)
             filepath = os.path.join(dirs["TODO_DIR"], filename)
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(new_program, f, indent=4)
+            write_json_atomic(filepath, new_program)
 
             message = t("prog_saved", filename=filename)
             # Soft, non-blocking heads-up: mosaic was checked but both
@@ -943,8 +943,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             for program in programs:
                 filename = _filename_for(program)
                 filepath = os.path.join(dirs["TODO_DIR"], filename)
-                with open(filepath, "w", encoding="utf-8") as f:
-                    json.dump(program, f, indent=4)
+                write_json_atomic(filepath, program)
 
             telescopius_status.set_text(
                 t("prog_telescopius_generated", count=len(programs), format=fmt)

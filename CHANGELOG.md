@@ -7,6 +7,11 @@
     run only reads the Dwarf's status then, so the command no longer waits for the program to end. In the program's other
     steps (goto, calibration...) they still say the device is busy.
   ### BugFix
+    ### Program files: occasional "Invalid JSON file"
+    Program files (ToDo / Current / Done / Error) are now written to a temporary file then swapped in, so a read at
+    the same moment (Programs page, scheduler, a run updating its status) never finds one empty or half written.
+    When a file can't be read, the message now says why: no longer in the queue (already started, moved or deleted)
+    or the JSON error itself.
     ### EQ Solving indicator inverted on the Dwarf 3
     The EQ Solving result panel (which way to turn the azimuth / altitude knobs) used an inverted mapping on the
     Dwarf 3 and Dwarf II. All models now share the Mini's convention, the right one on the D3 as well.

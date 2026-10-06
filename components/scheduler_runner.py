@@ -96,6 +96,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_is_camera_actually_busy
 from dwarf_python_api.lib.dwarf_utils import perform_read_astro_stacking_status_v3
 
 from components import connection_health
+from components.json_files import write_json_atomic
 from components.session_dirs import session_dirs_for
 from components.site_time import session_now, site_from_timestamp
 
@@ -224,8 +225,7 @@ def _update_process_status(
 
 
 def _write_json(path: str, data: dict) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+    write_json_atomic(path, data)
 
 
 def _capture_actual_camera_settings(id_command: dict, session, is_wide: bool = False) -> None:

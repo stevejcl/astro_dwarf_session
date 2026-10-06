@@ -11,7 +11,6 @@ The Scripts tab also carries the per-device scheduler arm/disarm switch
 it's exactly the queue that switch controls."""
 from __future__ import annotations
 
-import json
 import os
 import uuid
 from datetime import datetime
@@ -22,6 +21,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 
 from components import scheduler_loop, scheduler_runner, task_check_cache
 from components.i18n import get_language, t
+from components.json_files import read_json, write_json_atomic
 from components.program_editor import build_program_editor
 from components.site_time import site_now
 from components.schedule_editor import build_schedule_editor
@@ -38,11 +38,19 @@ def _list_json_files(directory: str) -> list[str]:
 
 
 def _read_json(filepath: str) -> dict | None:
-    try:
-        with open(filepath, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return None
+    data, _reason = read_json(filepath)
+    return data
+
+
+def _notify_unreadable(filepath: str) -> None:
+    """Why a program file couldn't be read (user-reported Oct 2026: a
+    plain "Invalid JSON file" with no detail, also when the file had just
+    left ToDo)."""
+    _data, reason = read_json(filepath)
+    if reason == "missing":
+        ui.notify(t("program_file_missing", name=os.path.basename(filepath)), type="warning")
+    else:
+        ui.notify(t("program_invalid_json", error=f"{os.path.basename(filepath)}: {reason}"), type="negative")
 
 
 def _parse_datetime(date_str: str | None, time_str: str | None) -> datetime | None:
@@ -197,7 +205,7 @@ def build_programs_page() -> None:
                     def load_for_edit(filepath: str) -> None:
                         data = _read_json(filepath)
                         if data is None:
-                            ui.notify(t("program_invalid_json", error=""), type="negative")
+                            _notify_unreadable(filepath)
                             return
                         tabs.set_value(editor_tab)
                         render_editor(initial=data)
@@ -205,7 +213,7 @@ def build_programs_page() -> None:
                     def relaunch(filepath: str) -> None:
                         data = _read_json(filepath)
                         if data is None:
-                            ui.notify(t("program_invalid_json", error=""), type="negative")
+                            _notify_unreadable(filepath)
                             return
                         try:
                             scheduler_runner.start_run(
@@ -278,7 +286,7 @@ def build_programs_page() -> None:
                         entry is left untouched as history."""
                         data = _read_json(filepath)
                         if data is None:
-                            ui.notify(t("program_invalid_json", error=""), type="negative")
+                            _notify_unreadable(filepath)
                             return
                         tabs.set_value(editor_tab)
                         render_editor(initial=data)
@@ -305,7 +313,7 @@ def build_programs_page() -> None:
                         confusion with the original file's own identity."""
                         data = _read_json(filepath)
                         if data is None:
-                            ui.notify(t("program_invalid_json", error=""), type="negative")
+                            _notify_unreadable(filepath)
                             return
 
                         cmd = data.get("command", {})
@@ -319,8 +327,7 @@ def build_programs_page() -> None:
                         os.makedirs(dirs["TODO_DIR"], exist_ok=True)
                         new_filename = f"{id_command['date']}-{id_command['time'].replace(':', '-')}-relaunch.json"
                         new_filepath = os.path.join(dirs["TODO_DIR"], new_filename)
-                        with open(new_filepath, "w", encoding="utf-8") as f:
-                            json.dump({"command": cmd}, f, indent=4)
+                        write_json_atomic(new_filepath, {"command": cmd})
 
                         try:
                             scheduler_runner.start_run(

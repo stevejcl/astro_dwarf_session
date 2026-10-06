@@ -31,7 +31,7 @@ _OPEN_TIMEOUT_S = 5
 
 def scope_settings(config) -> tuple[str, str]:
     """(URL, Dwarf Id) of Dwarfium Scope Archive for this Dwarf. From the
-    config when the library reads them (dwarf_python_api >= 3.1.7), else
+    config when the library reads them (dwarf_python_api >= 3.1.5), else
     straight from the device's config.ini, where the Settings page saves
     them (user-reported Oct 2026: with an older library they were lost at
     each start)."""

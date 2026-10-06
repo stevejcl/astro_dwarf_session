@@ -1,28 +1,6 @@
 # Changelog
 
-## [Unreleased]
-  ### Add
-    ### Lights during a program
-    The two light buttons (light, power indicator) now work while a program captures, like the preview switch: the
-    run only reads the Dwarf's status then, so the command no longer waits for the program to end. In the program's other
-    steps (goto, calibration...) they still say the device is busy.
-  ### BugFix
-    ### Program files: occasional "Invalid JSON file"
-    Program files (ToDo / Current / Done / Error) are now written to a temporary file then swapped in, so a read at
-    the same moment (Programs page, scheduler, a run updating its status) never finds one empty or half written.
-    When a file can't be read, the message now says why: no longer in the queue (already started, moved or deleted)
-    or the JSON error itself.
-    ### EQ Solving indicator inverted on the Dwarf 3
-    The EQ Solving result panel (which way to turn the azimuth / altitude knobs) used an inverted mapping on the
-    Dwarf 3 and Dwarf II. All models now share the Mini's convention, the right one on the D3 as well.
-    ### Preview switch: occasional "device busy"
-    The Stacked / Last frame switch now takes priority over the periodic connection check, like the action buttons.
-    ### Dwarfium Scope Archive settings not kept
-    The Settings page saved the Dwarfium Scope Archive URL and Dwarf Id to the device's config.ini, but they weren't
-    read back at the next start (dwarf_python_api's DwarfConfig had no such fields): the links were gone after each
-    restart. They are now read from config.ini (dwarf_python_api 3.1.7 reads them itself).
-
-## [3.2.0] - 2026-10-05
+## [3.2.0] - 2026-10-06
   ### Add
     ### Archive a session with Dwarfium Scope Archive
     The session explorer's large view, the View / Check dialog and the Program page get an "Archive in Dwarfium Scope
@@ -82,6 +60,10 @@
     ### Program page: newest first and "Show more"
     The "All" filter lists the newest rows first, 20 at a time, with a "Show more (n left)" button. "Future" is
     unchanged.
+    ### Lights during a program
+    The two light buttons (light, power indicator) now work while a program captures, like the preview switch: the
+    run only reads the Dwarf's status then, so the command no longer waits for the program to end. In the program's other
+    steps (goto, calibration...) they still say the device is busy.
   ### BugFix
     ### Manual goto: RA / Dec in hours-minutes-seconds
     The program editor only read decimal RA / Dec: "18h 13m 40.3s" / "-17° 36' 06\"" was saved EMPTY, without a word,
@@ -120,6 +102,20 @@
     A best slot whose start has already passed now starts 5 min from now (also in the native schedule editor); a
     slot already over is refused. The image count is set to fill the slot (it stayed at its default, 20, so the
     program stopped long before the chosen end time).
+    ### Program files: occasional "Invalid JSON file"
+    Program files (ToDo / Current / Done / Error) are now written to a temporary file then swapped in, so a read at
+    the same moment (Programs page, scheduler, a run updating its status) never finds one empty or half written.
+    When a file can't be read, the message now says why: no longer in the queue (already started, moved or deleted)
+    or the JSON error itself.
+    ### EQ Solving indicator inverted on the Dwarf 3
+    The EQ Solving result panel (which way to turn the azimuth / altitude knobs) used an inverted mapping on the
+    Dwarf 3 and Dwarf II. All models now share the Mini's convention, the right one on the D3 as well.
+    ### Preview switch: occasional "device busy"
+    The Stacked / Last frame switch now takes priority over the periodic connection check, like the action buttons.
+    ### Dwarfium Scope Archive settings not kept
+    The Settings page saved the Dwarfium Scope Archive URL and Dwarf Id to the device's config.ini, but they weren't
+    read back at the next start (dwarf_python_api's DwarfConfig had no such fields): the links were gone after each
+    restart. They are now read from config.ini (dwarf_python_api 3.1.5 reads them itself).
 
 ## [3.1.6] - 2026-10-04
   ### BugFix

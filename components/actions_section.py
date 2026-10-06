@@ -48,7 +48,7 @@ from dwarf_python_api.lib.dwarf_utils import (
     start_polar_align,
 )
 
-from components import connection_health
+from components import connection_health, scheduler_runner
 from components.i18n import t
 
 # In-memory only - no field in get_client_status()'s fullStatus reports
@@ -233,25 +233,32 @@ def _polar_position_sequence(session) -> bool:
         return bool(motor_action(3, session=session))  # Pitch positioning
 
 
+async def _send_light(session, dwarf_uid, fn):
+    """Sends one light command: with the command slot, taking priority
+    over the periodic connection check, or without it while a program
+    captures (scheduler_runner.program_capturing() - user-requested Oct
+    2026: the lights stayed "device busy" for the whole program). None
+    when the device is busy (notified), else the command's result."""
+    acquired = connection_health.acquire_with_priority(dwarf_uid, caller="actions.lights")
+    if not acquired and not scheduler_runner.program_capturing(session):
+        ui.notify(t("device_busy"), type="warning")
+        return None
+    try:
+        return await run.io_bound(fn, session=session)
+    finally:
+        if acquired:
+            connection_health.release_command_slot(dwarf_uid)
+
+
 async def _handle_toggle_lights(session, dwarf_uid) -> None:
     is_on = _lights_on.get(dwarf_uid, False)
     fn = perform_powerCloseRGB if is_on else perform_powerOpenRGB
 
-    # Same priority-over-health_check reasoning as _run_and_notify()
-    # above - see that function's own comment.
-    connection_health.mark_priority_pending(dwarf_uid)
-    try:
-        acquired = connection_health.try_acquire_command_slot(dwarf_uid)
-    finally:
-        connection_health.clear_priority_pending(dwarf_uid)
-    if not acquired:
-        ui.notify(t("device_busy"), type="warning")
+    # Also during a program's capture, without the slot (user-requested
+    # Oct 2026) - see _send_light().
+    result = await _send_light(session, dwarf_uid, fn)
+    if result is None:
         return
-    try:
-        result = await run.io_bound(fn, session=session)
-    finally:
-        connection_health.release_command_slot(dwarf_uid)
-
     # is not False, not a plain truthy check - perform_powerOpenRGB/
     # perform_powerCloseRGB return the raw response value (>= 0) on
     # success via get_result_value(), and 0 is a valid success value
@@ -267,21 +274,11 @@ async def _handle_toggle_power_lights(session, dwarf_uid) -> None:
     is_on = _power_lights_on.get(dwarf_uid, False)
     fn = perform_powerIndOff if is_on else perform_powerIndOn
 
-    # Same priority-over-health_check reasoning as _run_and_notify()
-    # above - see that function's own comment.
-    connection_health.mark_priority_pending(dwarf_uid)
-    try:
-        acquired = connection_health.try_acquire_command_slot(dwarf_uid)
-    finally:
-        connection_health.clear_priority_pending(dwarf_uid)
-    if not acquired:
-        ui.notify(t("device_busy"), type="warning")
+    # Also during a program's capture, without the slot (user-requested
+    # Oct 2026) - see _send_light().
+    result = await _send_light(session, dwarf_uid, fn)
+    if result is None:
         return
-    try:
-        result = await run.io_bound(fn, session=session)
-    finally:
-        connection_health.release_command_slot(dwarf_uid)
-
     if result is not False:
         _power_lights_on[dwarf_uid] = not is_on
         ui.notify(

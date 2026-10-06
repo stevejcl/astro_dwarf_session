@@ -1,10 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+  ### Add
+    ### Lights during a program
+    The two light buttons (light, power indicator) now work while a program captures, like the preview switch: the
+    run only reads the Dwarf's status then, so the command is sent without waiting for it. In the program's other
+    steps (goto, calibration...) they still say the device is busy.
   ### BugFix
     ### EQ Solving indicator inverted on the Dwarf 3
     The EQ Solving result panel (which way to turn the azimuth / altitude knobs) used an inverted mapping on the
     Dwarf 3 and Dwarf II. All models now share the Mini's convention, the right one on the D3 as well.
+    ### Preview switch: occasional "device busy"
+    The Stacked / Last frame switch now takes priority over the periodic connection check, like the action buttons.
     ### Dwarfium Scope Archive settings not kept
     The Settings page saved the Dwarfium Scope Archive URL and Dwarf Id to the device's config.ini, but they weren't
     read back at the next start (dwarf_python_api's DwarfConfig had no such fields): the links were gone after each

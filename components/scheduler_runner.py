@@ -359,6 +359,19 @@ def is_running(dwarf_uid: str) -> bool:
     return bool(state and state.running)
 
 
+def program_capturing(session) -> bool:
+    """A program runs on this Dwarf and is in its capture step. The run
+    holds the command slot for its whole duration, but while it captures
+    it only reads the cached status (dwarf_session.py's
+    _wait_for_astro_end(), no command of its own until its end time or a
+    stop), so a light switch or the preview source can be sent then
+    without the slot instead of reporting the device busy all night."""
+    if not is_running(session.dwarf_uid) or not getattr(session, "is_connected", False):
+        return False
+    full_status = get_client_status(session).get("fullStatus") or {}
+    return bool(full_status.get("takePhotoStarted") or full_status.get("takeWidePhotoStarted"))
+
+
 # Generous safety ceiling (user-agreed Sep 2026, after a confirmed real
 # incident) - deliberately loose: a single program's capture step is
 # allowed to run essentially all night, since a long winter night in a

@@ -268,10 +268,10 @@ def _build_display_source_toggle(session, previews: list) -> None:
     (getParamAndSetting, astro mode's shootingModeParams - no WebSocket
     command); nothing is selected when it can't be read.
 
-    During a program the command slot is held for the whole run; while it
-    captures, the run only reads the cached status (no command of its
-    own until its end time), so the switch is sent then without the slot
-    instead of reporting the device busy all night."""
+    During a program it is sent while the run captures, without the
+    command slot (see scheduler_runner.program_capturing()); the click
+    takes priority over the periodic connection check (user-reported Oct
+    2026: an occasional "device busy" otherwise)."""
     from dwarf_python_api.lib.dwarf_utils import perform_set_astro_display_source_v3
     from components import connection_health
 
@@ -289,10 +289,8 @@ def _build_display_source_toggle(session, previews: list) -> None:
         value = e.value
         if value is None or value == previous["value"]:
             return
-        full_status = get_client_status(session).get("fullStatus") or {} if session.is_connected else {}
-        capturing = full_status.get("takePhotoStarted") or full_status.get("takeWidePhotoStarted")
-        acquired = connection_health.try_acquire_command_slot(uid, caller="camera_stream.display_source")
-        if not acquired and not (scheduler_runner.is_running(uid) and capturing):
+        acquired = connection_health.acquire_with_priority(uid, caller="camera_stream.display_source")
+        if not acquired and not scheduler_runner.program_capturing(session):
             ui.notify(t("device_busy"), type="warning")
             toggle.set_value(previous["value"])
             return

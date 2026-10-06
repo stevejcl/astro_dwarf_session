@@ -297,6 +297,17 @@ def try_acquire_command_slot(dwarf_uid: str, caller: str = "?") -> bool:
     return True
 
 
+def acquire_with_priority(dwarf_uid: str, caller: str = "?") -> bool:
+    """try_acquire_command_slot() for a user action: marked priority
+    pending around the attempt (see mark_priority_pending()), so it wins
+    the race against this module's own periodic check."""
+    mark_priority_pending(dwarf_uid)
+    try:
+        return try_acquire_command_slot(dwarf_uid, caller=caller)
+    finally:
+        clear_priority_pending(dwarf_uid)
+
+
 def release_command_slot(dwarf_uid: str) -> None:
     held_since = _command_in_flight_since.pop(dwarf_uid, None)
     caller = _command_in_flight_caller.pop(dwarf_uid, "?")

@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+  ### Add
+    ### Archive in Dwarfium Scope Archive from a remote site
+    The link now gives Scope Archive the Dwarf's IP as this app reaches it: its import and Transfer pages use it for
+    FTP instead of their configured IP, which stays the local site's (Scope Archive at home, this app on a remote
+    site with the Dwarf reached through Tailscale). Never saved there. Requires Dwarfium Scope Archive V3.4.0;
+    older versions ignore it.
+
 ## [3.2.0] - 2026-10-06
   ### Add
     ### Archive a session with Dwarfium Scope Archive

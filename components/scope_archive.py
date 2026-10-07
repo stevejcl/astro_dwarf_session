@@ -58,13 +58,22 @@ def session_folder(media_path: str) -> str:
 
 def transfer_url(config, media_path: str) -> str | None:
     """Scope Archive's import page for this session (then its Transfer
-    page), or None when the URL / DwarfId isn't set for this Dwarf."""
+    page), or None when the URL / DwarfId isn't set for this Dwarf.
+
+    With the Dwarf's IP as this app reaches it (DwarfIp, user-requested
+    Oct 2026): Scope Archive's FTP uses it instead of its configured one,
+    which stays the local site's when this app runs on a remote site
+    (Dwarf reached through Tailscale). Older Scope Archive versions ignore it."""
     base, dwarf_id = scope_settings(config)
     base = base.rstrip("/")
     folder = session_folder(media_path)
     if not base or not dwarf_id or not folder:
         return None
-    query = urlencode({"DwarfId": dwarf_id, "session": folder})
+    params = {"DwarfId": dwarf_id, "session": folder}
+    dwarf_ip = (getattr(config, "dwarf_ip", "") or "").strip()
+    if dwarf_ip:
+        params["DwarfIp"] = dwarf_ip
+    query = urlencode(params)
     return f"{base}/ImportSession?{query}"
 
 

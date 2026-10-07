@@ -56,24 +56,27 @@ def session_folder(media_path: str) -> str:
     return posixpath.basename(posixpath.dirname(media_path or ""))
 
 
+def _dwarf_ip_param(config) -> dict:
+    """{"DwarfIp": <the Dwarf's IP as this app reaches it>}, or {} (user-
+    requested Oct 2026). Scope Archive tries it first for FTP, before its
+    own configured IP - the local site's when this app runs on a remote
+    site, the Dwarf reached through Tailscale - and its Dwarf Configuration
+    page offers to save it, as FTP or session IP. Older Scope Archive
+    versions ignore it."""
+    dwarf_ip = (getattr(config, "dwarf_ip", "") or "").strip()
+    return {"DwarfIp": dwarf_ip} if dwarf_ip else {}
+
+
 def transfer_url(config, media_path: str) -> str | None:
     """Scope Archive's import page for this session (then its Transfer
-    page), or None when the URL / DwarfId isn't set for this Dwarf.
-
-    With the Dwarf's IP as this app reaches it (DwarfIp, user-requested
-    Oct 2026): Scope Archive's FTP uses it instead of its configured one,
-    which stays the local site's when this app runs on a remote site
-    (Dwarf reached through Tailscale). Older Scope Archive versions ignore it."""
+    page), or None when the URL / DwarfId isn't set for this Dwarf. With
+    the Dwarf's IP (_dwarf_ip_param)."""
     base, dwarf_id = scope_settings(config)
     base = base.rstrip("/")
     folder = session_folder(media_path)
     if not base or not dwarf_id or not folder:
         return None
-    params = {"DwarfId": dwarf_id, "session": folder}
-    dwarf_ip = (getattr(config, "dwarf_ip", "") or "").strip()
-    if dwarf_ip:
-        params["DwarfIp"] = dwarf_ip
-    query = urlencode(params)
+    query = urlencode({"DwarfId": dwarf_id, "session": folder, **_dwarf_ip_param(config)})
     return f"{base}/ImportSession?{query}"
 
 
@@ -101,13 +104,14 @@ _PAGES = {
 
 def page_url(config, page: str) -> str | None:
     """One of Scope Archive's own pages for this Dwarf (see _PAGES), or
-    None when the URL / DwarfId isn't set."""
+    None when the URL / DwarfId isn't set. With the Dwarf's IP
+    (_dwarf_ip_param), for the Dwarf Configuration page."""
     base, dwarf_id = scope_settings(config)
     base = base.rstrip("/")
     if not base or not dwarf_id:
         return None
     path, extra = _PAGES[page]
-    return f"{base}{path}?{urlencode({'DwarfId': dwarf_id, **extra})}"
+    return f"{base}{path}?{urlencode({'DwarfId': dwarf_id, **extra, **_dwarf_ip_param(config)})}"
 
 
 async def open_page(url: str | None) -> None:

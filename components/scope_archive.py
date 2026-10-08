@@ -26,7 +26,8 @@ from nicegui import run, ui
 
 from components.i18n import t
 
-_OPEN_TIMEOUT_S = 5
+# Scope Archive waits up to 4 s for its window's page to be ready
+_OPEN_TIMEOUT_S = 8
 
 
 def scope_settings(config) -> tuple[str, str]:
@@ -80,18 +81,23 @@ def transfer_url(config, media_path: str) -> str | None:
     return f"{base}/ImportSession?{query}"
 
 
-def open_in_app(url: str) -> bool:
+def open_in_app(url: str) -> str:
     """Asks Scope Archive to show this page of its own in its window
-    (blocking). True when it did; False without an app window, or when it
-    doesn't answer (not running, older version without the route)."""
+    (blocking). "opened" when it did; "busy" when its window is still
+    starting (user-requested Oct 2026: navigating it then froze it - try
+    again in a moment, no browser tab); "" without an app window, or when
+    it doesn't answer (not running, older version without the route)."""
     parts = urlsplit(url)
     base = f"{parts.scheme}://{parts.netloc}"
     path = parts.path + (f"?{parts.query}" if parts.query else "")
     try:
         response = requests.get(f"{base}/api/open-in-app", params={"path": path}, timeout=_OPEN_TIMEOUT_S)
-        return response.ok and response.json().get("opened") is True
+        data = response.json() if response.ok else {}
     except (requests.RequestException, ValueError):
-        return False
+        return ""
+    if data.get("opened") is True:
+        return "opened"
+    return "busy" if data.get("busy") is True else ""
 
 
 # Scope Archive pages for one Dwarf: (path, extra query)
@@ -119,8 +125,11 @@ async def open_page(url: str | None) -> None:
     (notified), else in a browser tab."""
     if not url:
         return
-    if await run.io_bound(open_in_app, url):
+    result = await run.io_bound(open_in_app, url)
+    if result == "opened":
         ui.notify(t("archive_opened_in_app"), type="positive")
+    elif result == "busy":
+        ui.notify(t("archive_app_busy"), type="warning")
     else:
         ui.navigate.to(url, new_tab=True)
 

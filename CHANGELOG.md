@@ -40,7 +40,8 @@
     its system folder dialogs; otherwise (browser / server mode, not running, older version) in a browser tab.
     The device page's links become "Dwarfium Scope Archive: Config · Sessions on the Dwarf · Backed-up sessions",
     opened the same way. Shown when the Dwarfium Scope Archive URL and Dwarf Id are set in Settings (labels renamed
-    from "Dwarfium"). Requires Dwarfium Scope Archive V3.4.0.
+    from "Dwarfium"). While Scope Archive's window is still starting, it answers "busy": a message asks to try again
+    in a moment, instead of a browser tab. Requires Dwarfium Scope Archive V3.4.0.
     ### What the Dwarf saved: View / Check
     Native schedule tasks get a "Check" button when failed or interrupted (red; orange for error -1) and a "View"
     button when successful (blue): the task's session is found in the Dwarf's album (target name + time window) and

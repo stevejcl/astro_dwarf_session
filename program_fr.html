@@ -271,6 +271,7 @@ async function openArchive(btn) {
     r = await resp.json();
   } catch (e) { /* tab below */ }
   if (r.opened) { if (status) status.textContent = "Ouvert dans Dwarfium Scope Archive"; }
+  else if (r.busy) { if (status) status.textContent = "Dwarfium Scope Archive démarre - réessayez dans un instant"; }
   else if (r.url) window.open(r.url, "_blank", "noopener");
 }
 document.addEventListener("click", (e) => {

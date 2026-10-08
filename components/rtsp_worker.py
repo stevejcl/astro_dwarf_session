@@ -94,7 +94,9 @@ _running: dict[str, object] = {}
 # and a phone browser all showing the live view, closing the phone
 # stopped the worker for everyone - the PC streams froze, and stayed
 # frozen even after the phone came back, until their page was reloaded).
-_holders: dict[str, set] = {}
+# Keyed by id(holder): a preview is a dataclass (camera_stream.py's
+# _PreviewHandles), which is not hashable.
+_holders: dict[str, set[int]] = {}
 
 _FFMPEG_INSTALL_URL = "https://www.gyan.dev/ffmpeg/builds/"
 
@@ -137,7 +139,7 @@ def start_worker(rtsp_url: str, holder: object = None) -> None:
     the shared worker for this URL if none runs yet. Idempotent per
     holder."""
     with _lock:
-        _holders.setdefault(rtsp_url, set()).add(holder)
+        _holders.setdefault(rtsp_url, set()).add(id(holder))
         if rtsp_url in _running:
             return
         token = object()
@@ -155,7 +157,7 @@ def stop_worker(rtsp_url: str, holder: object = None) -> None:
     with _lock:
         holders = _holders.get(rtsp_url)
         if holders is not None:
-            holders.discard(holder)
+            holders.discard(id(holder))
             if holders:
                 return
             del _holders[rtsp_url]

@@ -19,6 +19,12 @@
     era): a short freeze each time, and a new RTSP session that could take the stream back from the phone app or
     lose it. Now off; a stream that really stops is still reconnected after 8 s without images. For comparison the
     old behaviour can be turned back on with the environment variable ASTRO_DWARF_RTSP_RESPAWN_S=25.
+    ### Auto-connect at startup: astro mode entered
+    The automatic connection at app startup only set the time, timezone and location: the Dwarf never got the mode
+    switch / camera opening the Connect button sends, so no RTSP live view until a manual Disconnect / Connect. The
+    first automatic connection since startup now enters astro mode too, unless a program runs or the Dwarf reports
+    something in progress (capture, goto, tracking, calibration, autofocus), so as not to disturb it. Reconnects
+    after a drop stay light, as before.
 
 ## [3.2.0] - 2026-10-06
   ### Add

@@ -175,6 +175,9 @@ _command_in_flight_caller: dict[str, str] = {}
 # failed in a row - stop auto-retrying until the user manually
 # reconnects (which clears this, see mark_just_connected()).
 _auto_reconnect_exhausted: set[str] = set()
+# uids connected at least once since this app started (manual or
+# automatic) - see _startup_enter_astro_mode().
+_connected_once: set[str] = set()
 _auto_reconnect_in_progress: set[str] = set()
 
 # uids where a HIGHER-PRIORITY acquire attempt is currently in flight -
@@ -398,6 +401,60 @@ async def sync_device_clock(session) -> None:
             log.warning(f"[{session.dwarf_uid}] Device {label} not synced.")
 
 
+def _device_busy(session: DwarfSession) -> bool:
+    """True when the GET_DEVICE_STATE_INFO received on connect shows a
+    camera, motor or focus operation in progress (capture, goto,
+    tracking, calibration, autofocus...), or when there is no such
+    answer to look at - in doubt, busy."""
+    client = getattr(session, "client_instance", None)
+    info = getattr(client, "last_device_state_info", None)
+    if info is None:
+        return True
+    for holder in (
+        info.tele_camera_state_info.exclusive_state,
+        info.wide_camera_state_info.exclusive_state,
+        info.motion_motor_state_info.exclusive_state,
+        info.focus_motor_state_info.exclusive_state,
+    ):
+        which = holder.WhichOneof("current_state")
+        if which is None:
+            continue
+        # OperationState / AstroState: 0 IDLE, 3 STOPPED - anything else
+        # (RUNNING, STOPPING, PLATE_SOLVING) means something is going on.
+        if getattr(getattr(holder, which), "state", 0) not in (0, 3):
+            return True
+    return False
+
+
+def _startup_enter_astro_mode(session: DwarfSession) -> None:
+    """Blocking (run.io_bound); the caller holds the command slot.
+
+    The FIRST automatic connection to a Dwarf since this app started
+    enters astro mode like the manual Connect does (user-reported Oct
+    2026: after the auto-connect at startup the Dwarf never got
+    SWITCH_SHOOTING_MODE / ENTER_CAMERA, so no RTSP live view until a
+    manual Disconnect / Connect). Later auto-reconnects stay light (see
+    the module docstring's AUTO-RECONNECT section). Skipped when a
+    program runs here or the device reports an operation in progress
+    (e.g. a capture left running by a previous app instance, resumed by
+    reconcile_orphaned_current_files() right after): switching modes
+    then could disrupt it. Best effort: a failure is logged, the
+    connection itself is not failed."""
+    uid = session.dwarf_uid
+    from components import scheduler_runner  # local import - imports this module
+
+    if scheduler_runner.is_running(uid) or _device_busy(session):
+        log.notice(f"[{uid}] Startup connection: device busy, astro mode not entered.")
+        return
+    try:
+        ok = perform_enter_astro_mode(session=session)
+    except Exception as e:  # never break a connect over this
+        ok = False
+        log.warning(f"[{uid}] Startup connection: entering astro mode failed: {e}")
+    if ok is False:
+        log.warning(f"[{uid}] Startup connection: astro mode not entered.")
+
+
 async def _auto_reconnect(session: DwarfSession) -> None:
     """Runs as a detached background task (see maybe_check()) - never
     awaited by the poll loop, since a reconnect sequence can itself
@@ -406,7 +463,8 @@ async def _auto_reconnect(session: DwarfSession) -> None:
     Deliberately light: time / timezone / location only (no mode switch),
     NOT connect_and_enter_astro_mode() - see the module docstring's AUTO-
     RECONNECT section for why forcing a fresh mode switch on every
-    unattended retry is the wrong default."""
+    unattended retry is the wrong default. Except for the first
+    connection since the app started: see _startup_enter_astro_mode()."""
     uid = session.dwarf_uid
     if uid in _auto_reconnect_in_progress:
         return
@@ -439,6 +497,8 @@ async def _auto_reconnect(session: DwarfSession) -> None:
                     for label, func in (("timezone", perform_timezone), ("location", perform_set_location)):
                         if await run.io_bound(func, session=session) is False:
                             log.warning(f"[{uid}] Device {label} not synced.")
+                    if uid not in _connected_once:
+                        await run.io_bound(_startup_enter_astro_mode, session)
                     # Reconciliation runs here, still holding the slot -
                     # see reconcile_after_reconnect()'s own docstring
                     # (user-reported Sep 2026: a force-stopped run's
@@ -588,3 +648,4 @@ def mark_just_connected(dwarf_uid: str) -> None:
     _last_check_at[dwarf_uid] = time.monotonic()
     _connected_at[dwarf_uid] = time.monotonic()
     _auto_reconnect_exhausted.discard(dwarf_uid)
+    _connected_once.add(dwarf_uid)

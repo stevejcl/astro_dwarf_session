@@ -1,12 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [3.2.1] - 2026-10-08
   ### Add
     ### Archive in Dwarfium Scope Archive from a remote site
     The links to Scope Archive now give it the Dwarf's IP as this app reaches it (Scope Archive at home, this app on a
     remote site with the Dwarf reached through Tailscale): its import and Transfer pages try it first for FTP, and
     its Dwarf Configuration page ("Config" link) offers to save it as FTP IP or as session IP - a second IP it
     keeps for this Dwarf, using whichever answers. Requires Dwarfium Scope Archive V3.4.0; older versions ignore it.
+    ### Languages: add one without changing the code
+    Languages are now found at startup from components/locales/ (as in Dwarfium Scope Archive): each locale file
+    declares LANGUAGE_NAME and ENABLED, and a language is offered once ENABLED = True. With more than two, the home
+    page's EN / FR button opens a menu of the enabled languages. `python tools/check_i18n.py --new <code> "<name>"`
+    writes a template from English (values marked # TODO, ENABLED = False). With the packaged app, the locale files
+    next to the executable are read first, so a translator can test without Python. The Program page and the mosaic
+    planner fall back to English for other languages (they fell back to French).
   ### BugFix
     ### RTSP live preview: recent FFmpeg, recovery after another client
     With FFmpeg 5 or later the embedded RTSP preview never started: its -stimeout option no longer exists. The app now
@@ -29,6 +36,13 @@
     The live view of a camera is shared by every page showing it (app window, PC browser, phone browser), but closing
     any one of them stopped it for all: the other streams froze and stayed frozen, even after that page came back,
     until they were reloaded. The stream now stops only when the last page showing it closes or collapses it.
+    ### Dwarfium Scope Archive starting: "try again" instead of a browser tab
+    While Scope Archive's window is still starting, it answers "busy" (Scope Archive V3.4.0 with its home-page ready
+    signal): "Archive" and the device page links then show a message asking to try again in a moment, instead of
+    opening a browser tab.
+    ### Device page actions: label under its icon
+    On a wide screen "Toggle Power Light", a bit too long for its column, went under its icon; the action buttons now
+    keep the icon and label on one line (cut with "…" if needed).
 
 ## [3.2.0] - 2026-10-06
   ### Add
@@ -40,8 +54,7 @@
     its system folder dialogs; otherwise (browser / server mode, not running, older version) in a browser tab.
     The device page's links become "Dwarfium Scope Archive: Config · Sessions on the Dwarf · Backed-up sessions",
     opened the same way. Shown when the Dwarfium Scope Archive URL and Dwarf Id are set in Settings (labels renamed
-    from "Dwarfium"). While Scope Archive's window is still starting, it answers "busy": a message asks to try again
-    in a moment, instead of a browser tab. Requires Dwarfium Scope Archive V3.4.0.
+    from "Dwarfium"). Requires Dwarfium Scope Archive V3.4.0.
     ### What the Dwarf saved: View / Check
     Native schedule tasks get a "Check" button when failed or interrupted (red; orange for error -1) and a "View"
     button when successful (blue): the task's session is found in the Dwarf's album (target name + time window) and
@@ -94,13 +107,6 @@
     ### Version on the home page
     The app's version is shown small on the home page, at the left of the "Dwarfium Lite" line (from version.py
     when built, else from CHANGELOG.md).
-    ### Languages: add one without changing the code
-    Languages are now found at startup from components/locales/ (as in Dwarfium Scope Archive): each locale file
-    declares LANGUAGE_NAME and ENABLED, and a language is offered once ENABLED = True. With more than two, the home
-    page's EN / FR button opens a menu of the enabled languages. `python tools/check_i18n.py --new <code> "<name>"`
-    writes a template from English (values marked # TODO, ENABLED = False). With the packaged app, the locale files
-    next to the executable are read first, so a translator can test without Python. The Program page and the mosaic
-    planner fall back to English for other languages (they fell back to French).
     ### Lights during a program
     The two light buttons (light, power indicator) now work while a program captures, like the preview switch: the
     run only reads the Dwarf's status then, so the command no longer waits for the program to end. In the program's other
@@ -143,9 +149,6 @@
     A best slot whose start has already passed now starts 5 min from now (also in the native schedule editor); a
     slot already over is refused. The image count is set to fill the slot (it stayed at its default, 20, so the
     program stopped long before the chosen end time).
-    ### Device page actions: label under its icon
-    On a wide screen "Toggle Power Light", a bit too long for its column, went under its icon; the action buttons now
-    keep the icon and label on one line (cut with "…" if needed).
     ### Program files: occasional "Invalid JSON file"
     Program files (ToDo / Current / Done / Error) are now written to a temporary file then swapped in, so a read at
     the same moment (Programs page, scheduler, a run updating its status) never finds one empty or half written.

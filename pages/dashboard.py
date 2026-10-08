@@ -20,7 +20,7 @@ from components import connection_health, device_lock, device_prefs
 from components.device_card import DeviceCardView
 from components.network_info import watch_qr_svg, watch_url
 from components.app_version import get_app_version
-from components.i18n import SUPPORTED_LANGUAGES, get_language, set_language, t
+from components.i18n import AVAILABLE_LANGUAGES, SUPPORTED_LANGUAGES, get_language, set_language, t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme, theme_toggle_button
 
@@ -140,18 +140,30 @@ def build_dashboard_page() -> None:
                     # buttons next to it, at "fr"'s expense on a narrow
                     # screen) - only 2 languages exist right now, so a
                     # toggle is both narrower AND matches the row's
-                    # existing icon-button sizing exactly. Would need to
-                    # go back to a real dropdown if a 3rd language is
-                    # ever added.
+                    # existing icon-button sizing exactly.
+                    # With a 3rd language (a locale file with ENABLED = True,
+                    # see components/i18n.py) the button opens a menu of the
+                    # enabled languages instead (user-requested Oct 2026).
+                    def _switch_language(lang: str) -> None:
+                        set_language(lang)
+                        ui.navigate.reload()
+
                     def _toggle_language() -> None:
                         current = get_language()
                         other = next(lang for lang in SUPPORTED_LANGUAGES if lang != current)
-                        set_language(other)
-                        ui.navigate.reload()
+                        _switch_language(other)
 
-                    ui.button(get_language().upper(), on_click=_toggle_language).props(
-                        "flat round dense"
-                    ).classes("text-xs")
+                    if len(SUPPORTED_LANGUAGES) > 2:
+                        with ui.button(get_language().upper()).props("flat round dense").classes("text-xs"):
+                            with ui.menu():
+                                for code, name in AVAILABLE_LANGUAGES.items():
+                                    ui.menu_item(
+                                        f"{name} ({code})", on_click=lambda _, c=code: _switch_language(c)
+                                    ).classes("font-bold" if code == get_language() else "")
+                    elif len(SUPPORTED_LANGUAGES) == 2:
+                        ui.button(get_language().upper(), on_click=_toggle_language).props(
+                            "flat round dense"
+                        ).classes("text-xs")
                     ui.button(
                         icon="add", on_click=lambda: ui.navigate.to("/pairing")
                     ).props("flat round")

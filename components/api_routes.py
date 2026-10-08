@@ -297,7 +297,7 @@ def register_api_routes() -> None:
         SOMETHING rather than a dead page.
         """
         if lang not in ("fr", "en"):
-            lang = "fr"
+            lang = "en"  # other languages: the English page
         planner_path = _bundled_path(f"milky_way_mosaic_planner_{lang}.html")
         if not planner_path.exists():
             return JSONResponse(
@@ -327,7 +327,7 @@ def register_api_routes() -> None:
         its combo) - this route itself always serves the same static
         file for a given {lang}."""
         if lang not in ("fr", "en"):
-            lang = "fr"
+            lang = "en"  # other languages: the English page
         program_path = _bundled_path(f"program_{lang}.html")
         if not program_path.exists():
             return JSONResponse(

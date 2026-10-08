@@ -63,6 +63,7 @@ Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 
 - **Keeps a live step-by-step trace** of what a running program is doing, and a full log viewer for anything that needs a closer look.
 - **Watch mode** (`/watch`) — a read-only dashboard and per-device view for spectators on the same network: live camera preview, battery/temperature, capture progress, exposure/gain/filter. No path in this mode can ever send a command to a device, by construction, so it's safe to hand someone the link without handing over control.
 - **Installs to your phone's home screen** as a standalone app (no browser address bar) via built-in PWA support.
+- **English and French**, and any other language added as a locale file (see [Adding a language](#adding-a-language)).
 
 ## Installation
 
@@ -146,6 +147,18 @@ A standalone planning page, separate from the main app's own pages — open `/mo
 
 ### Logs
 A dedicated `/logs` page tails the shared log file live, with a text filter — useful for anything the on-screen step trace doesn't cover in enough detail.
+
+### Adding a language
+The interface texts live in `components/locales/<code>.py` (`en.py` is the reference; a key missing elsewhere falls back to English). Languages are found at startup: no code change is needed to add one.
+
+1. Create the template from English: `python tools/check_i18n.py --new de "Deutsch"` writes `components/locales/de.py`, every value marked `# TODO`, with `ENABLED = False` (not offered yet).
+2. Translate the values (keep `{placeholders}` such as `{name}` as they are) and remove the `# TODO`s as you go.
+3. Set `ENABLED = True` and restart the app: the language button of the home page (EN / FR) becomes a menu listing every enabled language.
+4. `python tools/check_i18n.py --lang de` lists the keys still missing or identical to English.
+
+With the packaged app (no Python needed), the locale files are also next to the executable in `components/locales/`, and that folder is read first: copy `en.py` there as `de.py`, set `LANGUAGE_NAME = "Deutsch"` and `ENABLED = True`, translate, and restart. Send the finished file to have it included.
+
+The Program page and the Milky Way mosaic planner exist in English and French only; other languages show their English version.
 
 ## Architecture
 

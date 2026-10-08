@@ -6,6 +6,12 @@ Every key must be present here - missing keys in other locales fall
 back to this file at runtime (see components/i18n.py).
 """
 
+# Label shown in the language menu.
+LANGUAGE_NAME = "English"
+# The language is offered once this is True (restart the app); always
+# offered for English, the fallback language.
+ENABLED = True
+
 TRANSLATIONS: dict[str, str] = {
     "motor_pad_speed_hint":         "Nudge speed (lower = finer adjustment)",
     "motor_pad_moving":             "Moving\u2026",

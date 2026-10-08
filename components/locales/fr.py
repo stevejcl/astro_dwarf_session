@@ -6,6 +6,12 @@ Mirrors components/locales/en.py key-for-key. Missing keys fall back to
 English at runtime (see components/i18n.py).
 """
 
+# Label shown in the language menu.
+LANGUAGE_NAME = "Fran\u00e7ais"
+# The language is offered once this is True (restart the app); always
+# offered for English, the fallback language.
+ENABLED = True
+
 TRANSLATIONS: dict[str, str] = {
     "motor_pad_speed_hint":         "Vitesse de d\u00e9placement (plus bas = ajustement plus fin)",
     "motor_pad_moving":             "D\u00e9placement en cours\u2026",

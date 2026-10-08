@@ -6,6 +6,12 @@ paths updated to astro_dwarf_ui's layout). Run from the project root:
 
     python tools/check_i18n.py                 # checks all locales vs English
     python tools/check_i18n.py --lang fr        # checks only French
+    python tools/check_i18n.py --new de "Deutsch"   # new language template
+
+--new writes components/locales/<code>.py from English: every value is
+the English text marked # TODO, ENABLED = False (the language isn't
+offered yet). Translate the values, set ENABLED = True and restart the
+app: the language then shows in the home page's language button.
 
 Reports per locale:
   - Missing keys (need translation)
@@ -17,6 +23,7 @@ Global report:
 """
 
 import argparse
+import json
 import importlib.util
 import re
 import sys
@@ -98,10 +105,49 @@ def audit_locale(ref: dict[str, str], loc: dict[str, str], lang: str) -> int:
     return len(missing) + len(untrans)
 
 
+def write_template(code: str, name: str) -> None:
+    """components/locales/<code>.py from en.py, values marked # TODO."""
+    dest = LOCALE_DIR / f"{code}.py"
+    if dest.exists():
+        print(f"{dest} already exists - not overwritten.", file=sys.stderr)
+        sys.exit(1)
+    ref = load_locale(LOCALE_DIR / "en.py")
+    width = max(len(k) for k in ref) + 4
+    lines = [
+        f"# components/locales/{code}.py",
+        '"""',
+        f"Astro Dwarf UI - {name} translations.",
+        "",
+        "Generated from the English locale (tools/check_i18n.py --new): replace",
+        "each value with its translation and drop its # TODO. Keep the {name}",
+        "placeholders as they are. Missing keys fall back to English.",
+        '"""',
+        "",
+        "# Label shown in the language menu.",
+        f"LANGUAGE_NAME = {json.dumps(name, ensure_ascii=False)}",
+        "# Set to True to offer the language (restart the app).",
+        "ENABLED = False",
+        "",
+        "TRANSLATIONS: dict[str, str] = {",
+    ]
+    for key, value in ref.items():
+        quoted_key = json.dumps(key) + ":"
+        lines.append(f"    {quoted_key:<{width}}{json.dumps(value, ensure_ascii=False)},  # TODO")
+    lines += ["}", ""]
+    dest.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Written: {dest} ({len(ref)} keys, ENABLED = False)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Audit i18n locale files.")
     parser.add_argument("--lang", help="Only audit this language code, e.g. fr")
+    parser.add_argument("--new", nargs=2, metavar=("CODE", "NAME"),
+                        help='Write a new language template, e.g. --new de "Deutsch"')
     args = parser.parse_args()
+
+    if args.new:
+        write_template(*args.new)
+        return
 
     ref_path = LOCALE_DIR / "en.py"
     if not ref_path.exists():

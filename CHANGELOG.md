@@ -94,6 +94,13 @@
     ### Version on the home page
     The app's version is shown small on the home page, at the left of the "Dwarfium Lite" line (from version.py
     when built, else from CHANGELOG.md).
+    ### Languages: add one without changing the code
+    Languages are now found at startup from components/locales/ (as in Dwarfium Scope Archive): each locale file
+    declares LANGUAGE_NAME and ENABLED, and a language is offered once ENABLED = True. With more than two, the home
+    page's EN / FR button opens a menu of the enabled languages. `python tools/check_i18n.py --new <code> "<name>"`
+    writes a template from English (values marked # TODO, ENABLED = False). With the packaged app, the locale files
+    next to the executable are read first, so a translator can test without Python. The Program page and the mosaic
+    planner fall back to English for other languages (they fell back to French).
     ### Lights during a program
     The two light buttons (light, power indicator) now work while a program captures, like the preview switch: the
     run only reads the Dwarf's status then, so the command no longer waits for the program to end. In the program's other

@@ -332,7 +332,7 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("astro_capture_started"),
                     refresh_view=refresh_view,
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("stop_capture"),
                 icon="stop",
@@ -343,7 +343,7 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("astro_capture_stopped"),
                     refresh_view=refresh_view,
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("stop_goto"),
                 icon="gps_off",
@@ -354,7 +354,7 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("goto_stopped"),
                     refresh_view=refresh_view,
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("go_Live"),
                 icon="live_tv",
@@ -365,17 +365,17 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("goLive_ok"),
                     refresh_view=refresh_view,
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_toggle_lights"),
                 icon="lightbulb",
                 on_click=lambda: _handle_toggle_lights(session, dwarf_uid),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_toggle_power_lights"),
                 icon="battery_charging_full",
                 on_click=lambda: _handle_toggle_power_lights(session, dwarf_uid),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_focus"),
                 icon="center_focus_strong",
@@ -386,7 +386,7 @@ def build_actions_section(session, refresh_view) -> None:
                     infinite=False,
                     success_message=t("action_focus_done"),
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_focus_infinite"),
                 icon="all_inclusive",
@@ -397,7 +397,7 @@ def build_actions_section(session, refresh_view) -> None:
                     infinite=True,
                     success_message=t("action_focus_infinite_done"),
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_polar_position"),
                 icon="explore",
@@ -407,7 +407,7 @@ def build_actions_section(session, refresh_view) -> None:
                     _polar_position_sequence,
                     success_message=t("action_polar_position_done"),
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_eq_solving"),
                 icon="my_location",
@@ -418,7 +418,7 @@ def build_actions_section(session, refresh_view) -> None:
                     success_message=t("action_eq_solving_done"),
                     refresh_view=eq_result_update,
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_calibrate"),
                 icon="tune",
@@ -428,11 +428,11 @@ def build_actions_section(session, refresh_view) -> None:
                     perform_calibration,
                     success_message=t("action_calibrate_done"),
                 ),
-            ).props("flat align=left :stack=False").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_reboot"),
                 icon="restart_alt",
                 on_click=lambda: _handle_reboot(session, dwarf_uid),
-            ).props("flat align=left color=negative").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left color=negative no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
 
             eq_result_update = _build_eq_result_panel(session)

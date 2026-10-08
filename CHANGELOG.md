@@ -136,6 +136,9 @@
     A best slot whose start has already passed now starts 5 min from now (also in the native schedule editor); a
     slot already over is refused. The image count is set to fill the slot (it stayed at its default, 20, so the
     program stopped long before the chosen end time).
+    ### Device page actions: label under its icon
+    On a wide screen "Toggle Power Light", a bit too long for its column, went under its icon; the action buttons now
+    keep the icon and label on one line (cut with "…" if needed).
     ### Program files: occasional "Invalid JSON file"
     Program files (ToDo / Current / Done / Error) are now written to a temporary file then swapped in, so a read at
     the same moment (Programs page, scheduler, a run updating its status) never finds one empty or half written.

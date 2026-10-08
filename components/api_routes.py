@@ -451,8 +451,8 @@ def register_api_routes() -> None:
         url = scope_archive.transfer_url(session.config, media)
         if not url:
             return JSONResponse({"opened": False, "url": None})
-        opened = await run.io_bound(scope_archive.open_in_app, url)
-        return JSONResponse({"opened": opened, "url": url})
+        result = await run.io_bound(scope_archive.open_in_app, url)
+        return JSONResponse({"opened": result == "opened", "busy": result == "busy", "url": url})
 
     @app.get("/api/sites")
     def api_sites():

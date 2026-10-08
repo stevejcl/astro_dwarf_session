@@ -25,6 +25,10 @@
     first automatic connection since startup now enters astro mode too, unless a program runs or the Dwarf reports
     something in progress (capture, goto, tracking, calibration, autofocus), so as not to disturb it. Reconnects
     after a drop stay light, as before.
+    ### RTSP live preview shown on several pages / devices
+    The live view of a camera is shared by every page showing it (app window, PC browser, phone browser), but closing
+    any one of them stopped it for all: the other streams froze and stayed frozen, even after that page came back,
+    until they were reloaded. The stream now stops only when the last page showing it closes or collapses it.
 
 ## [3.2.0] - 2026-10-06
   ### Add

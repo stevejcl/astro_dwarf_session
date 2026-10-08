@@ -438,8 +438,9 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
         def _on_expansion_change(e, preview=preview) -> None:
             if not e.value and preview.rtsp_started:
                 print(f"Stop RTSP: {preview.rtsp_url}")
-                rtsp_worker.stop_worker(preview.rtsp_url)
+                rtsp_worker.stop_worker(preview.rtsp_url, preview)
                 preview.rtsp_started = False
+                preview.rtsp_image.set_source("")
 
         preview.expansion.on_value_change(_on_expansion_change)
 
@@ -472,7 +473,7 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
         for preview in previews:
             if preview.rtsp_started:
                 print(f"Stop RTSP: {preview.rtsp_url}")
-                rtsp_worker.stop_worker(preview.rtsp_url)
+                rtsp_worker.stop_worker(preview.rtsp_url, preview)
                 preview.rtsp_started = False
 
     ui.context.client.on_disconnect(_stop_all_rtsp_workers)
@@ -489,8 +490,9 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
             for preview in previews:
                 if preview.rtsp_started:
                     print(f"Stop RTSP: {preview.rtsp_url}")
-                    rtsp_worker.stop_worker(preview.rtsp_url)
+                    rtsp_worker.stop_worker(preview.rtsp_url, preview)
                     preview.rtsp_started = False
+                    preview.rtsp_image.set_source("")
                     preview.rtsp_container.set_visibility(False)
                     preview.container.set_visibility(True)
             return
@@ -506,8 +508,9 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
                 # (no point refreshing a preview nobody can see).
                 if preview.rtsp_started:
                     print(f"Stop RTSP: {preview.rtsp_url}")
-                    rtsp_worker.stop_worker(preview.rtsp_url)
+                    rtsp_worker.stop_worker(preview.rtsp_url, preview)
                     preview.rtsp_started = False
+                    preview.rtsp_image.set_source("")
                 continue
 
             # Confirmed RTSP (1) -> embedded live preview.
@@ -520,9 +523,14 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
             preview.not_available_label.set_visibility(False)
             preview.rtsp_container.set_visibility(is_rtsp)
 
+            # A stopped preview clears its <img> source (above): it
+            # closes this page's own stream connection while other pages
+            # keep the shared worker running (rtsp_worker.py's holders),
+            # and makes the next start a real source change, so the
+            # browser reconnects instead of keeping a dead stream.
             if is_rtsp and not preview.rtsp_started:
                 print(f"Start RTSP : {preview.rtsp_url}")
-                rtsp_worker.start_worker(preview.rtsp_url)
+                rtsp_worker.start_worker(preview.rtsp_url, preview)
                 # Set once - this is a continuous multipart stream, not
                 # a snapshot, so it never needs cache-busting re-fetches
                 # like the HTTP preview below does (see rtsp_worker.py's
@@ -532,8 +540,9 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
                 preview.rtsp_started = True
             elif not is_rtsp and preview.rtsp_started:
                 print(f"Stop RTSP: {preview.rtsp_url}")
-                rtsp_worker.stop_worker(preview.rtsp_url)
+                rtsp_worker.stop_worker(preview.rtsp_url, preview)
                 preview.rtsp_started = False
+                preview.rtsp_image.set_source("")
 
             if not is_rtsp and preview.stack_field in new_values:
                 preview.image.set_source(f"{preview.url}?t={time.monotonic()}")

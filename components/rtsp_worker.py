@@ -88,6 +88,13 @@ _latest_frames: dict[str, bytes] = {}
 # start_worker() (camera_stream.py does exactly this on reconnect) can't
 # be undone by the OLD worker's own cleanup removing the NEW one's entry.
 _running: dict[str, object] = {}
+# url -> the previews (one per open page / browser tab) currently showing
+# it. The worker is SHARED by all of them and only stops once the last
+# one lets go (user-reported Oct 2026: with the app window, a PC browser
+# and a phone browser all showing the live view, closing the phone
+# stopped the worker for everyone - the PC streams froze, and stayed
+# frozen even after the phone came back, until their page was reloaded).
+_holders: dict[str, set] = {}
 
 _FFMPEG_INSTALL_URL = "https://www.gyan.dev/ffmpeg/builds/"
 
@@ -125,10 +132,12 @@ def check_ffmpeg_available() -> bool:
     return False
 
 
-def start_worker(rtsp_url: str) -> None:
-    """Idempotent - safe to call every time a preview becomes visible,
-    even if a worker for this exact URL is already running."""
+def start_worker(rtsp_url: str, holder: object = None) -> None:
+    """Registers `holder` (the preview showing this stream) and starts
+    the shared worker for this URL if none runs yet. Idempotent per
+    holder."""
     with _lock:
+        _holders.setdefault(rtsp_url, set()).add(holder)
         if rtsp_url in _running:
             return
         token = object()
@@ -137,13 +146,19 @@ def start_worker(rtsp_url: str) -> None:
     thread.start()
 
 
-def stop_worker(rtsp_url: str) -> None:
-    """Signals the worker for this URL to stop and releases its cached
-    frame. The worker's own loop notices _running no longer contains
-    its url within one read cycle and exits, killing its FFmpeg
-    subprocess - see this module's own docstring for why this matters
-    on reconnect."""
+def stop_worker(rtsp_url: str, holder: object = None) -> None:
+    """Releases `holder`; once no holder is left, signals the worker for
+    this URL to stop and releases its cached frame. The worker's own
+    loop notices _running no longer holds its token within one poll
+    cycle and exits, killing its FFmpeg subprocess - see this module's
+    own docstring for why this matters on reconnect."""
     with _lock:
+        holders = _holders.get(rtsp_url)
+        if holders is not None:
+            holders.discard(holder)
+            if holders:
+                return
+            del _holders[rtsp_url]
         _running.pop(rtsp_url, None)
         _latest_frames.pop(rtsp_url, None)
 
@@ -152,6 +167,7 @@ def stop_all() -> None:
     """Call on app shutdown."""
     with _lock:
         _running.clear()
+        _holders.clear()
         _latest_frames.clear()
 
 
@@ -414,8 +430,11 @@ def register_routes() -> None:
 
     @app.get("/video/rtsp_stream/{ip}/{channel}")
     async def rtsp_stream(ip: str, channel: int):
+        # The worker is started by the page showing this stream
+        # (camera_stream.py, as its holder) before pointing the <img>
+        # here - not from this route, which would hold it with no one to
+        # ever release it.
         rtsp_url = f"rtsp://{ip}/ch{channel}/stream0"
-        start_worker(rtsp_url)
 
         async def frame_generator():
             try:

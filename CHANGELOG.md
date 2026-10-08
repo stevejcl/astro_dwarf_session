@@ -14,6 +14,11 @@
     reliably after another client (e.g. the phone app) takes the stream over: a stalled stream no longer blocks the
     worker, it reconnects with a growing pause (1 s to 10 s) while the Dwarf refuses it instead of retrying
     back-to-back, and a Stop immediately followed by a Start no longer leaves the preview stopped.
+    ### RTSP live preview: no more reconnect every 25 s
+    The RTSP preview reconnected to the Dwarf every 25 s even when everything worked (a leftover from the OpenCV
+    era): a short freeze each time, and a new RTSP session that could take the stream back from the phone app or
+    lose it. Now off; a stream that really stops is still reconnected after 8 s without images. For comparison the
+    old behaviour can be turned back on with the environment variable ASTRO_DWARF_RTSP_RESPAWN_S=25.
 
 ## [3.2.0] - 2026-10-06
   ### Add

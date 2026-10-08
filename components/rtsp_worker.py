@@ -286,15 +286,26 @@ def _extract_latest_jpeg(buffer: bytearray) -> bytes | None:
 # against a stalled process or connection.
 _MAX_STALL_S = 8.0
 
-# UNCONDITIONAL periodic respawn, separate from the stall watchdog
-# above. Forcing a fresh FFmpeg process (and therefore a fresh RTSP
-# session) on a fixed cadence guarantees a clean keyframe periodically
-# even if nothing LOOKS wrong - kept as a defensive measure carried
-# over from the pre-rewrite diagnosis, though the subprocess rewrite
-# (point 4 in the module docstring) may make this unnecessary in
-# practice now that the root cause looks fixed; re-evaluate against
-# real hardware over time.
-_FORCED_RESPAWN_S = 25.0
+# Periodic respawn while frames ARE arriving, separate from the stall
+# watchdog above: a fresh FFmpeg process (fresh RTSP session, fresh
+# keyframe) on a fixed cadence. Carried over from the cv2.VideoCapture
+# era (module docstring point 4), when a broken HEVC decode never
+# healed by itself. DISABLED by default since Oct 2026: with FFmpeg
+# driven directly the decode no longer degrades, and each respawn cost
+# a visible freeze (reconnect + wait for a keyframe) plus a new RTSP
+# session every 25 s - one that could take the stream back from the
+# phone app, or lose it to it. The stall watchdog still covers a stream
+# that really stops. Re-enable for comparison by setting the
+# environment variable ASTRO_DWARF_RTSP_RESPAWN_S to the period in
+# seconds (25 = previous behaviour); 0 or unset = disabled.
+def _forced_respawn_s() -> float:
+    try:
+        return max(0.0, float(os.environ.get("ASTRO_DWARF_RTSP_RESPAWN_S", "0")))
+    except ValueError:
+        return 0.0
+
+
+_FORCED_RESPAWN_S = _forced_respawn_s()
 
 _READ_CHUNK = 4096
 
@@ -364,7 +375,11 @@ def _worker_loop(rtsp_url: str, token: object) -> None:
                     now = time.monotonic()
                     if now - state["last_good"] > _MAX_STALL_S:
                         break
-                    if now - spawned_at > _FORCED_RESPAWN_S and state["got_frame"]:
+                    if (
+                        _FORCED_RESPAWN_S > 0
+                        and now - spawned_at > _FORCED_RESPAWN_S
+                        and state["got_frame"]
+                    ):
                         break
                     time.sleep(_POLL_S)
             finally:

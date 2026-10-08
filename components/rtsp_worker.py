@@ -83,7 +83,11 @@ _JPEG_EOI = b"\xff\xd9"
 
 _lock = threading.Lock()
 _latest_frames: dict[str, bytes] = {}
-_running: set[str] = set()
+# url -> generation token of the worker that currently owns it. A token
+# rather than a plain set so a stop_worker() immediately followed by a
+# start_worker() (camera_stream.py does exactly this on reconnect) can't
+# be undone by the OLD worker's own cleanup removing the NEW one's entry.
+_running: dict[str, object] = {}
 
 _FFMPEG_INSTALL_URL = "https://www.gyan.dev/ffmpeg/builds/"
 
@@ -127,8 +131,9 @@ def start_worker(rtsp_url: str) -> None:
     with _lock:
         if rtsp_url in _running:
             return
-        _running.add(rtsp_url)
-    thread = threading.Thread(target=_worker_loop, args=(rtsp_url,), daemon=True)
+        token = object()
+        _running[rtsp_url] = token
+    thread = threading.Thread(target=_worker_loop, args=(rtsp_url, token), daemon=True)
     thread.start()
 
 
@@ -139,7 +144,7 @@ def stop_worker(rtsp_url: str) -> None:
     subprocess - see this module's own docstring for why this matters
     on reconnect."""
     with _lock:
-        _running.discard(rtsp_url)
+        _running.pop(rtsp_url, None)
         _latest_frames.pop(rtsp_url, None)
 
 
@@ -148,6 +153,39 @@ def stop_all() -> None:
     with _lock:
         _running.clear()
         _latest_frames.clear()
+
+
+_timeout_option_cache: str | None = None
+
+
+def _timeout_option() -> str:
+    """Name of the RTSP socket I/O timeout option for the installed
+    FFmpeg (user-reported Oct 2026: the stream never started with a
+    recent FFmpeg until -stimeout was replaced by -timeout).
+    FFmpeg <= 4.x: -stimeout (microseconds); there -timeout means
+    something else entirely (seconds to wait for an INCOMING connection,
+    implying listen mode), so it can't simply be used everywhere.
+    FFmpeg >= 5.0: -stimeout removed, -timeout is the socket I/O
+    timeout in microseconds. Probed once from the RTSP demuxer's own
+    help and cached; falls back to -timeout (current FFmpeg) if the
+    probe fails."""
+    global _timeout_option_cache
+    if _timeout_option_cache is None:
+        option = "-timeout"
+        try:
+            kwargs = {}
+            if os.name == "nt":
+                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+            out = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-h", "demuxer=rtsp"],
+                capture_output=True, text=True, timeout=10, **kwargs,
+            )
+            if "-stimeout" in out.stdout + out.stderr:
+                option = "-stimeout"
+        except (OSError, subprocess.SubprocessError):
+            pass
+        _timeout_option_cache = option
+    return _timeout_option_cache
 
 
 def _ffmpeg_cmd(rtsp_url: str) -> list[str]:
@@ -161,7 +199,8 @@ def _ffmpeg_cmd(rtsp_url: str) -> list[str]:
     removed from the picture; re-add here individually, only if a
     specific symptom reappears against real hardware.
 
-    -stimeout (microseconds): bounds how long FFmpeg's own
+    -stimeout / -timeout (microseconds, name depends on the FFmpeg
+    version - see _timeout_option()): bounds how long FFmpeg's own
     connection/read attempt can block before giving up with an error,
     rather than hanging indefinitely against an address that never
     responds. Matches the value used throughout earlier diagnosis.
@@ -173,7 +212,7 @@ def _ffmpeg_cmd(rtsp_url: str) -> list[str]:
     return [
         "ffmpeg",
         "-rtsp_transport", "tcp",
-        "-stimeout", "5000000",
+        _timeout_option(), "5000000",
         "-i", rtsp_url,
         "-an",
         "-f", "mjpeg",
@@ -247,59 +286,126 @@ def _extract_latest_jpeg(buffer: bytearray) -> bytes | None:
 # against a stalled process or connection.
 _MAX_STALL_S = 8.0
 
-# UNCONDITIONAL periodic respawn, separate from the stall watchdog
-# above. Forcing a fresh FFmpeg process (and therefore a fresh RTSP
-# session) on a fixed cadence guarantees a clean keyframe periodically
-# even if nothing LOOKS wrong - kept as a defensive measure carried
-# over from the pre-rewrite diagnosis, though the subprocess rewrite
-# (point 4 in the module docstring) may make this unnecessary in
-# practice now that the root cause looks fixed; re-evaluate against
-# real hardware over time.
-_FORCED_RESPAWN_S = 25.0
+# Periodic respawn while frames ARE arriving, separate from the stall
+# watchdog above: a fresh FFmpeg process (fresh RTSP session, fresh
+# keyframe) on a fixed cadence. Carried over from the cv2.VideoCapture
+# era (module docstring point 4), when a broken HEVC decode never
+# healed by itself. DISABLED by default since Oct 2026: with FFmpeg
+# driven directly the decode no longer degrades, and each respawn cost
+# a visible freeze (reconnect + wait for a keyframe) plus a new RTSP
+# session every 25 s - one that could take the stream back from the
+# phone app, or lose it to it. The stall watchdog still covers a stream
+# that really stops. Re-enable for comparison by setting the
+# environment variable ASTRO_DWARF_RTSP_RESPAWN_S to the period in
+# seconds (25 = previous behaviour); 0 or unset = disabled.
+def _forced_respawn_s() -> float:
+    try:
+        return max(0.0, float(os.environ.get("ASTRO_DWARF_RTSP_RESPAWN_S", "0")))
+    except ValueError:
+        return 0.0
+
+
+_FORCED_RESPAWN_S = _forced_respawn_s()
 
 _READ_CHUNK = 4096
 
+# How often the worker checks its timers / stop flag while the reader
+# thread blocks on FFmpeg's stdout.
+_POLL_S = 0.25
 
-def _worker_loop(rtsp_url: str) -> None:
-    proc: subprocess.Popen | None = None
+# Retry delay when an FFmpeg run ends without delivering a single frame
+# (Dwarf refusing the session while another client - typically the
+# phone app - holds the stream, or the Dwarf unreachable): doubles on
+# each such failure up to the max, back to the min after a good frame.
+_RETRY_MIN_S = 1.0
+_RETRY_MAX_S = 10.0
+
+
+def _owns(rtsp_url: str, token: object) -> bool:
+    with _lock:
+        return _running.get(rtsp_url) is token
+
+
+def _pump(proc: subprocess.Popen, rtsp_url: str, token: object, state: dict) -> None:
+    """Reader thread for ONE FFmpeg process: blocks on its stdout and
+    publishes complete frames. Kept off the worker's own thread
+    (user-reported Oct 2026: the preview didn't always come back after
+    another client took over the stream) - a blocking read() there meant
+    the stall / forced-respawn timers were only checked BETWEEN reads,
+    so an FFmpeg still alive but receiving nothing (the Dwarf keeping
+    the old session open without sending data) blocked the worker
+    forever. Here the worker keeps its timers and simply terminates the
+    process, which ends this read with EOF."""
     buffer = bytearray()
-    last_good = time.monotonic()
-    spawned_at = time.monotonic()
     try:
         while True:
-            with _lock:
-                if rtsp_url not in _running:
-                    return
-            stalled = (time.monotonic() - last_good) > _MAX_STALL_S
-            due_for_respawn = (time.monotonic() - spawned_at) > _FORCED_RESPAWN_S
-            if proc is None or proc.poll() is not None or stalled or due_for_respawn:
-                if proc is not None:
-                    _terminate(proc)
-                proc = _spawn(rtsp_url)
-                buffer.clear()
-                last_good = time.monotonic()
-                spawned_at = time.monotonic()
-                continue
-
             chunk = proc.stdout.read(_READ_CHUNK)
             if not chunk:
-                time.sleep(0.05)
-                continue
+                return
             buffer.extend(chunk)
-
             frame = _extract_latest_jpeg(buffer)
             if frame is None:
                 continue
-
-            last_good = time.monotonic()
+            state["last_good"] = time.monotonic()
+            state["got_frame"] = True
             with _lock:
+                if _running.get(rtsp_url) is not token:
+                    return
                 _latest_frames[rtsp_url] = frame
+    except (OSError, ValueError):
+        # stdout closed under us by _terminate() - normal on respawn.
+        return
+
+
+def _worker_loop(rtsp_url: str, token: object) -> None:
+    retry_delay = _RETRY_MIN_S
+    try:
+        while _owns(rtsp_url, token):
+            proc = _spawn(rtsp_url)
+            spawned_at = time.monotonic()
+            state = {"last_good": spawned_at, "got_frame": False}
+            reader = threading.Thread(
+                target=_pump, args=(proc, rtsp_url, token, state), daemon=True
+            )
+            reader.start()
+            try:
+                while _owns(rtsp_url, token):
+                    if proc.poll() is not None or not reader.is_alive():
+                        break
+                    now = time.monotonic()
+                    if now - state["last_good"] > _MAX_STALL_S:
+                        break
+                    if (
+                        _FORCED_RESPAWN_S > 0
+                        and now - spawned_at > _FORCED_RESPAWN_S
+                        and state["got_frame"]
+                    ):
+                        break
+                    time.sleep(_POLL_S)
+            finally:
+                _terminate(proc)
+                reader.join(timeout=2.0)
+
+            if state["got_frame"]:
+                retry_delay = _RETRY_MIN_S
+                continue
+            # No frame at all from this run: don't hammer the Dwarf with
+            # back-to-back reconnects while another client holds the
+            # stream - wait (still reacting to stop_worker()) and retry.
+            # The last good frame is dropped so the preview doesn't sit
+            # on a frozen image meanwhile.
+            with _lock:
+                if _running.get(rtsp_url) is token:
+                    _latest_frames.pop(rtsp_url, None)
+            deadline = time.monotonic() + retry_delay
+            while time.monotonic() < deadline and _owns(rtsp_url, token):
+                time.sleep(_POLL_S)
+            retry_delay = min(retry_delay * 2, _RETRY_MAX_S)
     finally:
-        if proc is not None:
-            _terminate(proc)
         with _lock:
-            _running.discard(rtsp_url)
-            _latest_frames.pop(rtsp_url, None)
+            if _running.get(rtsp_url) is token:
+                del _running[rtsp_url]
+                _latest_frames.pop(rtsp_url, None)
 
 
 def register_routes() -> None:

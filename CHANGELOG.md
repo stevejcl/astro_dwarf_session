@@ -7,6 +7,18 @@
     remote site with the Dwarf reached through Tailscale): its import and Transfer pages try it first for FTP, and
     its Dwarf Configuration page ("Config" link) offers to save it as FTP IP or as session IP - a second IP it
     keeps for this Dwarf, using whichever answers. Requires Dwarfium Scope Archive V3.4.0; older versions ignore it.
+  ### BugFix
+    ### RTSP live preview: recent FFmpeg, recovery after another client
+    With FFmpeg 5 or later the embedded RTSP preview never started: its -stimeout option no longer exists. The app now
+    asks the installed FFmpeg once and uses -timeout (FFmpeg 5+) or -stimeout (FFmpeg 4). The preview also comes back
+    reliably after another client (e.g. the phone app) takes the stream over: a stalled stream no longer blocks the
+    worker, it reconnects with a growing pause (1 s to 10 s) while the Dwarf refuses it instead of retrying
+    back-to-back, and a Stop immediately followed by a Start no longer leaves the preview stopped.
+    ### RTSP live preview: no more reconnect every 25 s
+    The RTSP preview reconnected to the Dwarf every 25 s even when everything worked (a leftover from the OpenCV
+    era): a short freeze each time, and a new RTSP session that could take the stream back from the phone app or
+    lose it. Now off; a stream that really stops is still reconnected after 8 s without images. For comparison the
+    old behaviour can be turned back on with the environment variable ASTRO_DWARF_RTSP_RESPAWN_S=25.
 
 ## [3.2.0] - 2026-10-06
   ### Add

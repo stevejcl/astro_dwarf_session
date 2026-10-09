@@ -6,11 +6,16 @@
               rotation / pane angle -> removed (the Dwarf has no camera rotator)
               added: EQ mode (+10 pts overlap in Alt-Az), capture settings, site, start time
 
-   Reused as-is from your existing code (must already exist in the app):
-     _mosaicTarget(), _loadMosaicPlan(), _fmtRAsp(), _fmtDecsp(), _mosaicDrawPreview(),
-     altAz(raHours, decDeg, latDeg, lonDeg, date) -> { alt, az }   (from milky_way_mosaic_planner)
+   Reused as-is from catalog.html:
+     _mosaicTarget(), _fmtRAsp(), _fmtDecsp(), _mosaicDrawPreview(), getActiveLocation(),
      window._lastImagingRec  (K-Photon default exposure)
    Globals expected: var mosaicPlan, var _mosaicBigGridWarn (as before)
+
+   Integration (Oct 2026): catalog.html keeps its ASIAIR planner. The rail's
+   "Planner" choice (ASIAIR rigs / Dwarf) is remembered in localStorage
+   (dso_mosaic_mode); catalog.html's renderMosaic() hands over to
+   renderMosaicDwarf() in Dwarf mode. Both share mosaicPlan (rows, cols,
+   overlap, exposure); the Dwarf-only fields are also kept in mosaicPlan_dwarf.
    ===================================================================== */
 
 var DWARF_FOV = {
@@ -33,6 +38,43 @@ var DW_AUTOFOCUS_BUFFER_S = 90;               // extra time for tiles that run a
 var DW_MOSAIC_IN_SETUP_CAMERA = true;         // doMosaic/framing*/mosaic_count live ONLY in payload.setup_camera (confirmed)
 var DW_TILE_BUFFER_S = 60;                    // goto / settle per tile
 var _DW_DEG = Math.PI / 180;
+
+/* Planner mode: 'asiair' (catalog.html's own planner) or 'dwarf' */
+function _mosaicMode() {
+  try { return localStorage.getItem('dso_mosaic_mode') === 'dwarf' ? 'dwarf' : 'asiair'; } catch (e) { return 'asiair'; }
+}
+function _setMosaicMode(mode) {
+  try { localStorage.setItem('dso_mosaic_mode', mode === 'dwarf' ? 'dwarf' : 'asiair'); } catch (e) {}
+}
+// "Planner" card shown at the top of both rails
+function _mosaicModeCard() {
+  var m = _mosaicMode();
+  return '<div class="mcard"><h4>Planner</h4><select id="m-mode">' +
+    '<option value="asiair"' + (m === 'asiair' ? ' selected' : '') + '>ASIAIR rigs (plan export)</option>' +
+    '<option value="dwarf"' + (m === 'dwarf' ? ' selected' : '') + '>Dwarf 3 / Dwarf Mini (Astro Dwarf Session)</option>' +
+    '</select></div>';
+}
+
+/* Altitude / azimuth (degrees) of RA (hours) / Dec at lat / lon (E+) and date */
+function _dwAltAz(raH, decDeg, latDeg, lonDeg, date) {
+  var d = date.getTime() / 86400000 + 2440587.5 - 2451545.0;
+  var lst = ((280.46061837 + 360.98564736629 * d + lonDeg) % 360 + 360) % 360;
+  var ha = (lst - raH * 15) * _DW_DEG, dec = decDeg * _DW_DEG, lat = latDeg * _DW_DEG;
+  var sinAlt = Math.sin(dec) * Math.sin(lat) + Math.cos(dec) * Math.cos(lat) * Math.cos(ha);
+  var alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+  var az = Math.atan2(-Math.sin(ha) * Math.cos(dec), Math.sin(dec) * Math.cos(lat) - Math.cos(dec) * Math.sin(lat) * Math.cos(ha));
+  return { alt: alt / _DW_DEG, az: ((az / _DW_DEG) % 360 + 360) % 360 };
+}
+
+/* Tangent-plane offsets (degrees, E / N) of a pane from the target, as
+   catalog.html's _mosaicDrawPreview() expects them (xi / eta) */
+function _dwOffsets(panes, tgt) {
+  var cosD = Math.max(0.05, Math.cos(tgt.dec * _DW_DEG));
+  return panes.map(function (p) {
+    var dRa = (p.raH - tgt.raH) * 15; if (dRa > 180) dRa -= 360; if (dRa < -180) dRa += 360;
+    return Object.assign({}, p, { xi: dRa * cosD, eta: p.dec - tgt.dec });
+  });
+}
 
 var _dwAll = null;          // all devices from the server (null = not loaded yet)
 var _dwDevices = null;      // usable for the selected camera
@@ -74,7 +116,7 @@ function _dwLoadDevices() {
     .then(function () { _dwLoading = false; renderMosaic(); });
 }
 
-function _mosaicRig() {           // same name/shape as before: { fovW, fovH, model, uid }
+function _dwRig() {               // { fovW, fovH, model, uid }
   if (!_dwDevices) return null;
   var d = _dwDevices.filter(function (x) { return x.dwarfUid === mosaicPlan.dwarfUid; })[0];
   if (!d) return null;
@@ -98,7 +140,7 @@ function _dwImgCount(P, exp, nat) {
 }
 // sub-panel centres of a native tile, for the preview (2 panels along an axis sit at +/-(framing-100)/200 of one frame)
 function _dwPanels(t, fov, nat) {
-  var out = [], dy = fov.v * (nat.fy - 100) / 200, dx = fov.h * (nat.fx - 100) / 200, cosD = Math.max(0.05, Math.cos(t.dec * _DEG));
+  var out = [], dy = fov.v * (nat.fy - 100) / 200, dx = fov.h * (nat.fx - 100) / 200, cosD = Math.max(0.05, Math.cos(t.dec * _DW_DEG));
   for (var iy = 0; iy < nat.ny; iy++) for (var ix = 0; ix < nat.nx; ix++) {
     out.push(Object.assign({}, t, { dec: t.dec + (nat.ny === 2 ? (iy ? dy : -dy) : 0),
       raH: (((t.raH + (nat.nx === 2 ? (ix ? dx : -dx) / cosD / 15 : 0)) % 24) + 24) % 24, angle: 0 }));
@@ -111,10 +153,10 @@ function _dwGrid(tgt, fov, rows, cols, overlapPct) {
   var ov = overlapPct / 100, stepH = fov.h * (1 - ov), stepV = fov.v * (1 - ov), out = [], n = 0;
   for (var r = 0; r < rows; r++) {
     var dec = tgt.dec + (r - (rows - 1) / 2) * stepV;
-    var cosDec = Math.max(0.05, Math.cos(dec * _DEG));
+    var cosDec = Math.max(0.05, Math.cos(dec * _DW_DEG));
     for (var c = 0; c < cols; c++) {
       var ra = tgt.raH + ((c - (cols - 1) / 2) * stepH / cosDec) / 15;
-      out.push({ i: ++n, name: tgt.name + ' R' + (r + 1) + 'C' + (c + 1),
+      out.push({ i: ++n, name: (rows * cols > 1 ? tgt.name + ' R' + (r + 1) + 'C' + (c + 1) : tgt.name),
         raH: ((ra % 24) + 24) % 24, dec: dec, angle: 0, row: r, col: c });
     }
   }
@@ -128,10 +170,10 @@ function _dwSchedule(tiles, lat, lon, startDate, minAlt, durFn) {
   tiles.forEach(function (t, i) {
     var dur = durFn(t), found = null, probe = new Date(cursor);
     while (probe.getTime() < deadline) {
-      var a = altAz(t.raH, t.dec, lat, lon, probe).alt;
+      var a = _dwAltAz(t.raH, t.dec, lat, lon, probe).alt;
       if (a >= minAlt) {
         var end = new Date(probe.getTime() + dur * 1000);
-        if (altAz(t.raH, t.dec, lat, lon, end).alt >= minAlt) { found = { start: new Date(probe), end: end, alt: a }; break; }
+        if (_dwAltAz(t.raH, t.dec, lat, lon, end).alt >= minAlt) { found = { start: new Date(probe), end: end, alt: a }; break; }
       }
       probe = new Date(probe.getTime() + stepMs);
     }
@@ -146,18 +188,23 @@ function _dwPad(n) { return String(n).padStart(2, '0'); }
 function _dwFmtT(d) { return _dwPad(d.getDate()) + '/' + _dwPad(d.getMonth() + 1) + ' ' + _dwPad(d.getHours()) + ':' + _dwPad(d.getMinutes()); }
 
 /* ---------- main render ---------- */
-function renderMosaic() {
+function renderMosaicDwarf() {
   var rail = document.getElementById('mosaic-rail'), stage = document.getElementById('mosaic-stage');
   if (!rail || !stage) return;
   var tgt = _mosaicTarget();
   var chip = document.getElementById('mosaic-target-chip');
   if (chip) chip.innerHTML = tgt ? ('&#127919; ' + tgt.name) : 'No target selected';
 
-  if (!mosaicPlan) { try { mosaicPlan = JSON.parse(localStorage.getItem('mosaicPlan_dwarf')); } catch (e) {} }
+  var _saved = null; try { _saved = JSON.parse(localStorage.getItem('mosaicPlan_dwarf')); } catch (e) {}
   var D = { camera: 'wide', dwarfUid: '', rows: 2, cols: 3, overlapPct: 15, eqMode: false, expSec: null, expTarget: null, gain: 80,
     durationMode: 'count', count: 60, tileMin: 60, autofocusFirstOnly: true, lat: '', lon: '', startTime: '21:00:00',
     minAlt: 25, serverUrl: '', bigAck: false, native: false, framingX: 180, framingY: 180 };
-  mosaicPlan = Object.assign({}, D, mosaicPlan || {});   // fills anything missing (also from an old ASIAIR plan)
+  // Dwarf fields kept from the last Dwarf plan; rows / cols / overlap / exposure shared with the ASIAIR planner
+  mosaicPlan = Object.assign({}, D, _saved || {}, mosaicPlan || {});
+  if (mosaicPlan.lat === '' || mosaicPlan.lon === '') {   // site: the catalogue's active location by default
+    var _loc = (typeof getActiveLocation === 'function') ? getActiveLocation() : null;
+    if (_loc && !_loc.needsSetup && isFinite(_loc.lat) && isFinite(_loc.lon)) { mosaicPlan.lat = String(_loc.lat); mosaicPlan.lon = String(_loc.lon); }
+  }
   if (_dwAll === null && !_dwLoading) _dwLoadDevices();
   _dwRefreshList();
 
@@ -168,9 +215,10 @@ function renderMosaic() {
       (d.name || d.dwarfUid) + ' (' + [d.model, d.ip, d.connected ? 'connected' : 'disconnected'].filter(Boolean).join(' · ') + ')</option>';
   });
   if (!devOpts) devOpts = '<option value="">' + (_dwDevices === null ? 'Loading…' : 'No compatible device') + '</option>';
-  var rig = _mosaicRig();
+  var rig = _dwRig();
   var P = mosaicPlan, rh = '';
 
+  rh += _mosaicModeCard();
   rh += '<div class="mcard"><h4>Target</h4>';
   if (tgt) rh += '<div class="m-tgt-name">' + tgt.name + '</div><div class="m-tgt-sub">' + (tgt.id || '') + '</div>' +
     '<div class="m-tgt-coords"><span>RA ' + _fmtRAsp(tgt.raH) + '</span><span>Dec ' + _fmtDecsp(tgt.dec) + '</span></div>';
@@ -270,7 +318,7 @@ function renderMosaic() {
 
   var rows = '';
   _dwSched.forEach(function (t) {
-    rows += '<tr' + (t.ok || t.pending ? '' : ' class="unschedulable"') + '><td class="lbl">' + t.name.replace(tgt.name + ' ', '') + '</td>' +
+    rows += '<tr' + (t.ok || t.pending ? '' : ' class="unschedulable"') + '><td class="lbl">' + (t.name === tgt.name ? '1' : t.name.replace(tgt.name + ' ', '')) + '</td>' +
       '<td class="num">' + _fmtRAsp(t.raH) + '</td><td class="num">' + _fmtDecsp(t.dec) + '</td>' +
       '<td class="num">' + (t.ok ? t.alt.toFixed(0) + '&deg;' : '&mdash;') + '</td>' +
       '<td class="num">' + (t.ok ? _dwFmtT(t.start) : (t.pending ? '&mdash;' : 'Not schedulable')) + (t.nearZenith ? ' &#9888;' : '') + '</td></tr>';
@@ -284,7 +332,8 @@ function renderMosaic() {
     '<div class="m-foot-note" id="m-status">' + (_dwStatus || '<b>How to use:</b> set your site, generate, then <span class="step">Send</span>. Arm the device on the Programs page so the schedule starts automatically.') + '</div></div>' +
     '<div class="m-plan-col"><div class="m-plan-wrap"><table class="m-plan"><thead><tr><th>' + (nat.on ? 'Mosaic' : 'Tile') + '</th><th>RA</th><th>DEC</th><th>Alt</th><th>Start</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div></div>';
   var prevPanes = nat.on ? [].concat.apply([], _dwSched.map(function (t) { return _dwPanels(t, fov, nat); })) : _dwSched;
-  _mosaicDrawPreview(tgt, { fovW: fov.h, fovH: fov.v }, prevPanes);
+  var _rot = mosaicPlan.rotDeg; mosaicPlan.rotDeg = 0;   // the Dwarf has no camera rotation
+  try { _mosaicDrawPreview(tgt, { fovW: fov.h, fovH: fov.v }, _dwOffsets(prevPanes, tgt)); } finally { mosaicPlan.rotDeg = _rot; }
   _dwBind();
 }
 
@@ -296,6 +345,7 @@ function _dwBind() {
   _dwBound = true;
   var num = function (v, d) { var n = parseFloat(v); return isFinite(n) ? n : d; };
   rail.addEventListener('change', function (e) {
+    if (_mosaicMode() !== 'dwarf') return;   // the ASIAIR planner handles its own controls
     var id = e.target.id, v = e.target.value, P = mosaicPlan;
     if (id === 'm-server') { P.serverUrl = v.trim().replace(/\/+$/, ''); _dwAll = null; }
     else if (id === 'm-cam') P.camera = v;
@@ -321,9 +371,10 @@ function _dwBind() {
     _dwStatus = ''; _dwSavePlan(); renderMosaic();
   });
   rail.addEventListener('click', function (e) {
+    if (_mosaicMode() !== 'dwarf') return;
     if (e.target.id === 'm-allowbig') { mosaicPlan.bigAck = true; _dwSavePlan(); renderMosaic(); }
   });
-  stage.addEventListener('click', function (e) { if (e.target.id === 'm-send') _dwSend(e.target); });
+  stage.addEventListener('click', function (e) { if (_mosaicMode() === 'dwarf' && e.target.id === 'm-send') _dwSend(e.target); });
 }
 
 /* ---------- send to astro_dwarf_session (sequential, same payload as the Milky Way planner) ---------- */

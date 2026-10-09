@@ -9600,11 +9600,14 @@ const INSTRUMENT_LIMITS = {
            // Dwarflab Mini app's quantized exposure list. The recommender
            // snaps Glover-optimal values to whichever entry is closest so
            // the recommendation is directly selectable on the device.
-           subSecChoices: [4, 5, 6, 8, 10, 13, 15, 30, 45, 60, 80, 90, 120, 180] },
+           // No 80 s (Oct 2026): not in the Dwarf's own exposure list
+           // (dwarf_python_api / Astro Dwarf Session) - an 80 s pick could
+           // not be set on the device.
+           subSecChoices: [4, 5, 6, 8, 10, 13, 15, 30, 45, 60, 90, 120, 180] },
   // DEF-048a (2026-05-10): D3 Dwarflab app exposure picker = same Mini
   // list, but caps at 120s instead of 180s.
   D3:    { mode: 'user-gain',  defaultGain: 80, maxGain: 240, maxSubSec: 120, mount: 'EQ',
-           subSecChoices: [4, 5, 6, 8, 10, 13, 15, 30, 45, 60, 80, 90, 120] },
+           subSecChoices: [4, 5, 6, 8, 10, 13, 15, 30, 45, 60, 90, 120] },
   // DEF-048a (2026-05-10): Seestar Stargazing-mode app picker = [2, 5,
   // 10, 20, 30, 60]s. Same list across S50, S30, S30P.
   S50:   { mode: 'fixed-gain', fixedGain: 80, maxSubSec: 60, recommendedSubSec: 30, mount: 'EQ',
@@ -13332,6 +13335,8 @@ function _mosaicRig() { if (!mosaicPlan || !mosaicPlan.rigKey || !RIGS[mosaicPla
 function _mosaicToast(msg) { var t = document.getElementById('mosaic-toast'); if (!t) return; t.textContent = msg; t.classList.add('show'); setTimeout(function () { t.classList.remove('show'); }, 1700); }
 
 function renderMosaic() {
+  // Dwarf planner (js/renderMosaic_dwarf.js, served by Astro Dwarf Session)
+  if (typeof renderMosaicDwarf === 'function' && _mosaicMode() === 'dwarf') return renderMosaicDwarf();
   var rail = document.getElementById('mosaic-rail'), stage = document.getElementById('mosaic-stage');
   if (!rail || !stage) return;
   var tgt = _mosaicTarget();
@@ -13348,6 +13353,7 @@ function renderMosaic() {
     rigOpts += '<optgroup label="' + g.scope + '">' + o + '</optgroup>'; });
   var rig = _mosaicRig();
   var rh = '';
+  if (typeof _mosaicModeCard === 'function') rh += _mosaicModeCard();   // ASIAIR / Dwarf choice
   rh += '<div class="mcard"><h4>Target</h4>';
   if (tgt) { rh += '<div class="m-tgt-name">' + tgt.name + '</div><div class="m-tgt-sub">' + (tgt.id || '') + '</div>' +
     '<div class="m-tgt-coords"><span>RA ' + _fmtRAsp(tgt.raH) + '</span><span>Dec ' + _fmtDecsp(tgt.dec) + '</span></div>'; }
@@ -13474,6 +13480,8 @@ function _setAxis(key, e) {
 }
 function _onMosaicControl(e) {
   var id = e.target && e.target.id; if (!id) return;
+  if (id === 'm-mode') { if (typeof _setMosaicMode === 'function') _setMosaicMode(e.target.value); renderMosaic(); return; }
+  if (typeof _mosaicMode === 'function' && _mosaicMode() === 'dwarf') return;   // Dwarf planner's own handlers
   if (id === 'm-rig') _setMosaicPlan({ rigKey: e.target.value });
   else if (id === 'm-cols') _setAxis('cols', e);
   else if (id === 'm-rows') _setAxis('rows', e);
@@ -13483,6 +13491,7 @@ function _onMosaicControl(e) {
   else if (id === 'm-exp') { var v = parseInt(e.target.value, 10); _setMosaicPlan({ expSec: (v && v > 0) ? v : null }); }
 }
 function _onMosaicRailClick(e) {
+  if (typeof _mosaicMode === 'function' && _mosaicMode() === 'dwarf') return;
   var t = e.target && e.target.closest ? e.target.closest('#m-allowbig') : null;
   if (t) { _mosaicBigGridWarn = false; var patch = { bigAck: true }; if (_mosaicBigPending) { patch[_mosaicBigPending.key] = _mosaicBigPending.value; _mosaicBigPending = null; } _setMosaicPlan(patch); }
 }
@@ -25168,6 +25177,7 @@ initStarfield();
 })();
 </script>
 <!-- Import Dwarf JS function -->
+<script src="js/renderMosaic_dwarf.js"></script>
 <script type="module" src="js/app.js"></script>
 <script type="module">
   // Importation directe depuis dwarf-scheduler.js

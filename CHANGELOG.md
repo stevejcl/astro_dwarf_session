@@ -14,6 +14,12 @@
     writes a template from English (values marked # TODO, ENABLED = False). With the packaged app, the locale files
     next to the executable are read first, so a translator can test without Python. The Program page and the mosaic
     planner fall back to English for other languages (they fell back to French).
+    ### Catalog: mosaic planner for the Dwarf 3 / Dwarf Mini
+    The catalog's Mosaic Planner (/catalog) only offered ASIAIR rigs. A "Planner" choice at its top now switches to
+    the Dwarf planner (js/renderMosaic_dwarf.js, now loaded): a paired Dwarf, Wide or Tele field, a grid of tiles
+    and/or the Dwarf's own mosaic (framing 1.0-1.8 per axis, up to 2x2 panels), exposure / gain / images per panel,
+    the night's schedule from the site (the catalog's active location by default), and "Send to Dwarf", which creates
+    the programs here. The ASIAIR planner is unchanged; the choice is remembered.
   ### BugFix
     ### RTSP live preview: recent FFmpeg, recovery after another client
     With FFmpeg 5 or later the embedded RTSP preview never started: its -stimeout option no longer exists. The app now
@@ -47,6 +53,9 @@
     Without FFmpeg the RTSP live view can't work. The message saying so went to the console only: not in
     astro_session.log, and nowhere with the .exe. FFmpeg is now checked at startup, the message is written to
     astro_session.log, and the device page shows it (with the download link) where the RTSP live view would be.
+    ### Catalog: 80 s exposure suggested for a Dwarf
+    "Best of Tonight" / Imaging Settings could suggest 80 s for a Dwarf 3 or Dwarf Mini, a value the Dwarf doesn't
+    offer (its list goes 60, 90, 120...). The catalog's exposure lists for both now match the Dwarf's.
 
 ## [3.2.0] - 2026-10-06
   ### Add

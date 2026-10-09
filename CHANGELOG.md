@@ -8,6 +8,11 @@
     and/or the Dwarf's own mosaic (framing 1.0-1.8 per axis, up to 2x2 panels), exposure / gain / images per panel,
     the night's schedule from the site (the catalog's active location by default), and "Send to Dwarf", which creates
     the programs here. The ASIAIR planner is unchanged; the choice is remembered.
+    ### Catalog: my own Dwarf list (up to 5 objects)
+    Each object's detail pane in the catalog gets a "+ Dwarf list" button. A "Dwarf list (n/5)" chip opens the list
+    (remove an object, clear) and "Program to the Dwarf": the objects are planned for tonight at the active site like
+    the Best-of-Tonight plan (usable window, filter, exposure / gain for the Dwarf rig) and sent through the same
+    "Program session to the Dwarf" panel. Objects not usable tonight are named and left out.
   ### BugFix
     ### FFmpeg missing: said in the log file and on the device page
     Without FFmpeg the RTSP live view can't work. The message saying so went to the console only: not in

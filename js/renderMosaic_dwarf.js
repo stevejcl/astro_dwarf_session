@@ -83,6 +83,7 @@ var _dwLoading = false;
 var _dwStatus = '';         // send status line
 var _dwSched = [];          // last computed schedule
 var _dwBound = false;
+var _dwNight = null;        // dark window used by the last schedule
 
 /* ---------- helpers ---------- */
 function _dwFov(model, cam) { var t = DWARF_FOV[cam] || DWARF_FOV.wide; return t[model] || t['default']; }
@@ -163,16 +164,34 @@ function _dwGrid(tgt, fov, rows, cols, overlapPct) {
   return out;
 }
 
-/* Greedy scheduler (same logic as scheduleTiles in the Milky Way planner) */
-function _dwSchedule(tiles, lat, lon, startDate, minAlt, durFn) {
-  var stepMs = 5 * 60000, deadline = startDate.getTime() + 12 * 3600000;
-  var cursor = new Date(startDate), res = [];
+/* The night to plan: the site's dark window (catalog.html's astroNightWindow,
+   astronomical darkness, else the darkest level available) of the night the
+   start time belongs to - a start before noon is still the previous night.
+   Anchored at local noon, as the Best-of-Tonight plan does. null: no dark
+   window at all (polar day) or the function is missing. */
+function _dwNightWindow(startDate, lat, lon) {
+  if (typeof astroNightWindow !== 'function') return null;
+  var d = new Date(startDate);
+  if (d.getHours() < 12) d.setDate(d.getDate() - 1);
+  var anchor = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+  try { return astroNightWindow(anchor, lat, lon); } catch (e) { return null; }
+}
+
+/* Greedy scheduler (same logic as scheduleTiles in the Milky Way planner),
+   kept inside the night (user-reported Oct 2026: with altitude as the only
+   test, a target only high in daytime got a tile at 08:45 the next morning) */
+function _dwSchedule(tiles, lat, lon, startDate, minAlt, durFn, night) {
+  var stepMs = 5 * 60000;
+  var from = night ? Math.max(startDate.getTime(), night.startUTC.getTime()) : startDate.getTime();
+  var deadline = night ? night.endUTC.getTime() : startDate.getTime() + 12 * 3600000;
+  var cursor = new Date(from), res = [];
   tiles.forEach(function (t, i) {
     var dur = durFn(t), found = null, probe = new Date(cursor);
     while (probe.getTime() < deadline) {
       var a = _dwAltAz(t.raH, t.dec, lat, lon, probe).alt;
+      var end = new Date(probe.getTime() + dur * 1000);
+      if (end.getTime() > deadline) break;   // would end after dawn
       if (a >= minAlt) {
-        var end = new Date(probe.getTime() + dur * 1000);
         if (_dwAltAz(t.raH, t.dec, lat, lon, end).alt >= minAlt) { found = { start: new Date(probe), end: end, alt: a }; break; }
       }
       probe = new Date(probe.getTime() + stepMs);
@@ -303,7 +322,10 @@ function renderMosaicDwarf() {
     var ts = (P.startTime || '00:00:00').split(':').map(Number), now = new Date();
     startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), ts[0], ts[1], ts[2] || 0);
     if (startDate < now) startDate.setDate(startDate.getDate() + 1);   // rolls to tomorrow - shown in the header
-    _dwSched = _dwSchedule(tiles, lat, lon, startDate, +P.minAlt, durFn);
+    var night = _dwNightWindow(startDate, lat, lon);
+    _dwNight = night;
+    _dwSched = night ? _dwSchedule(tiles, lat, lon, startDate, +P.minAlt, durFn, night)
+                     : tiles.map(function (t) { return Object.assign({}, t, { ok: false }); });
     if (!P.eqMode) _dwSched.forEach(function (t) { if (t.ok && t.alt > 80) t.nearZenith = true; });
   } else { _dwSched = tiles.map(function (t) { return Object.assign({}, t, { ok: false, pending: true }); }); }
 
@@ -321,9 +343,10 @@ function renderMosaicDwarf() {
     rows += '<tr' + (t.ok || t.pending ? '' : ' class="unschedulable"') + '><td class="lbl">' + (t.name === tgt.name ? '1' : t.name.replace(tgt.name + ' ', '')) + '</td>' +
       '<td class="num">' + _fmtRAsp(t.raH) + '</td><td class="num">' + _fmtDecsp(t.dec) + '</td>' +
       '<td class="num">' + (t.ok ? t.alt.toFixed(0) + '&deg;' : '&mdash;') + '</td>' +
-      '<td class="num">' + (t.ok ? _dwFmtT(t.start) : (t.pending ? '&mdash;' : 'Not schedulable')) + (t.nearZenith ? ' &#9888;' : '') + '</td></tr>';
+      '<td class="num">' + (t.ok ? _dwFmtT(t.start) : (t.pending ? '&mdash;' : 'No slot tonight')) + (t.nearZenith ? ' &#9888;' : '') + '</td></tr>';
   });
-  var head = startDate ? 'Night targeted: ' + _dwFmtT(startDate) + ' &middot; ' : '';
+  var head = startDate ? (_dwNight ? 'Night: ' + _dwFmtT(new Date(Math.max(startDate.getTime(), _dwNight.startUTC.getTime()))) + ' &rarr; ' +
+    _dwPad(_dwNight.endUTC.getHours()) + ':' + _dwPad(_dwNight.endUTC.getMinutes()) + ' &middot; ' : 'No dark window tonight &middot; ') : '';
   stage.innerHTML = '<div class="m-export"><div class="m-export-head"><h3><span class="ic">&#11015;</span> Dwarf Mosaic Program</h3>' +
     '<span class="m-cnt">' + head + P.cols + '&times;' + P.rows + '</span>' +
     '<div class="m-actions"><button class="mbtn primary" id="m-send"' + (okN ? '' : ' disabled') + '>Send ' + okN + (nat.on ? ' mosaic(s)' : ' tile(s)') + ' to Dwarf</button></div></div>' +

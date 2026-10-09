@@ -21,6 +21,10 @@
     ### Catalog: 80 s exposure suggested for a Dwarf
     "Best of Tonight" / Imaging Settings could suggest 80 s for a Dwarf 3 or Dwarf Mini, a value the Dwarf doesn't
     offer (its list goes 60, 90, 120...). The catalog's exposure lists for both now match the Dwarf's.
+    ### Catalog Dwarf mosaic: tiles scheduled in daylight
+    The Dwarf mosaic planner only checked the target's altitude, so a target high only in daytime got a tile the next
+    morning (e.g. 08:45). Tiles are now placed inside the site's dark window of that night (as Best of Tonight
+    computes it), each ending before dawn; the header shows that window, and a tile with no room is "No slot tonight".
 
 ## [3.2.1] - 2026-10-08
   ### Add

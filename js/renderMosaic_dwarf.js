@@ -164,6 +164,28 @@ function _dwGrid(tgt, fov, rows, cols, overlapPct) {
   return out;
 }
 
+/* Target extent in degrees {w (E-W), h (N-S)} from the catalogue shape (arcmin), null when unknown.
+   Ellipses use their bounding box at the catalogue PA (N through E). */
+function _dwTargetSize(tgt) {
+  if (typeof _shapeForId !== 'function') return null;
+  var sh = null; try { sh = _shapeForId(tgt.id, tgt.sz); } catch (e) { return null; }
+  if (!sh) return null;
+  if (sh.kind === 'outline') { var x = 0, y = 0;
+    sh.pts.forEach(function (p) { x = Math.max(x, Math.abs(p[0])); y = Math.max(y, Math.abs(p[1])); });
+    return { w: 2 * x / 60, h: 2 * y / 60 }; }
+  if (sh.kind === 'ellipse') { var a = sh.maj / 120, b = (sh.min || sh.maj) / 120, pa = (sh.pa || 0) * _DW_DEG;
+    return { w: 2 * Math.hypot(a * Math.sin(pa), b * Math.cos(pa)), h: 2 * Math.hypot(a * Math.cos(pa), b * Math.sin(pa)) }; }
+  if (sh.kind === 'circle') return { w: sh.r / 30, h: sh.r / 30 };
+  return null;
+}
+
+/* Smallest grid covering the target + 10% margin: n tiles span f + (n-1)*f*(1-ov). */
+function _dwFitGrid(size, tileFov, overlapPct) {
+  var n = function (t, f) { var step = f * (1 - overlapPct / 100);
+    return t * 1.1 <= f || step <= 0 ? 1 : 1 + Math.ceil((t * 1.1 - f) / step); };
+  return { cols: n(size.w, tileFov.h), rows: n(size.h, tileFov.v) };
+}
+
 /* The night to plan: the site's dark window (catalog.html's astroNightWindow,
    astronomical darkness, else the darkest level available) of the night the
    start time belongs to - a start before noon is still the previous night.
@@ -236,6 +258,14 @@ function renderMosaicDwarf() {
   if (!devOpts) devOpts = '<option value="">' + (_dwDevices === null ? 'Loading…' : 'No compatible device') + '</option>';
   var rig = _dwRig();
   var P = mosaicPlan, rh = '';
+  // grid fitted to the target size: applied once per new target, then on "Fit to target"
+  var _tSize = tgt ? _dwTargetSize(tgt) : null, _fit = null;
+  if (_tSize && rig) {
+    var _n = _dwNative(P);
+    _fit = _dwFitGrid(_tSize, _n.on ? { h: rig.fovW * _n.fx / 100, v: rig.fovH * _n.fy / 100 } : { h: rig.fovW, v: rig.fovH },
+      P.eqMode ? P.overlapPct : P.overlapPct + 10);
+    if (P.gridTarget !== tgt.id) { P.cols = _fit.cols; P.rows = _fit.rows; P.gridTarget = tgt.id; _dwSavePlan(); }
+  }
 
   rh += _mosaicModeCard();
   rh += '<div class="mcard"><h4>Target</h4>';
@@ -255,6 +285,9 @@ function renderMosaicDwarf() {
   rh += '<div class="mcard"><h4>Mosaic grid</h4>' +
     '<div class="m-grid-row"><div><label class="fld">Columns (E&ndash;W)</label><input type="number" id="m-cols" min="1" max="999" value="' + P.cols + '"></div>' +
     '<div><label class="fld">Rows (N&ndash;S)</label><input type="number" id="m-rows" min="1" max="999" value="' + P.rows + '"></div></div>' +
+    (_fit ? '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;font-family:var(--mono,monospace)">Target ~' +
+      _tSize.w.toFixed(2) + '&deg; &times; ' + _tSize.h.toFixed(2) + '&deg; &middot; fits in <b>' + _fit.cols + '&times;' + _fit.rows + '</b>' +
+      ((_fit.cols !== P.cols || _fit.rows !== P.rows) ? ' <button id="m-fit" class="m-allowbig-btn">Fit to target</button>' : '') + '</div>' : '') +
     ((_mosaicBigGridWarn && !P.bigAck) ? '<div class="m-bigwarn">&#9888; Grids over 50&times;50 make a very long plan and can be slow. <button id="m-allowbig" class="m-allowbig-btn">Allow large grids</button></div>' : '') +
     '<div style="height:10px"></div>' +
     '<label class="fld">Overlap %</label><input type="number" id="m-overlap" min="0" max="60" step="5" value="' + P.overlapPct + '">' +
@@ -396,6 +429,7 @@ function _dwBind() {
   rail.addEventListener('click', function (e) {
     if (_mosaicMode() !== 'dwarf') return;
     if (e.target.id === 'm-allowbig') { mosaicPlan.bigAck = true; _dwSavePlan(); renderMosaic(); }
+    if (e.target.id === 'm-fit') { mosaicPlan.gridTarget = null; _dwStatus = ''; renderMosaic(); }
   });
   stage.addEventListener('click', function (e) { if (_mosaicMode() === 'dwarf' && e.target.id === 'm-send') _dwSend(e.target); });
 }

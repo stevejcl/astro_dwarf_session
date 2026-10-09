@@ -25,6 +25,10 @@
     The Dwarf mosaic planner only checked the target's altitude, so a target high only in daytime got a tile the next
     morning (e.g. 08:45). Tiles are now placed inside the site's dark window of that night (as Best of Tonight
     computes it), each ending before dawn; the header shows that window, and a tile with no room is "No slot tonight".
+    ### Catalog Dwarf mosaic: grid sized to the target
+    The grid kept the last columns x rows (e.g. 3x5 for any object). For a new target the grid is now the smallest
+    one covering the object's catalogue shape (+10% margin) with the chosen field, native mosaic and overlap; the
+    Mosaic grid card shows the target size, the fitting grid, and a "Fit to target" button after a manual change.
 
 ## [3.2.1] - 2026-10-08
   ### Add

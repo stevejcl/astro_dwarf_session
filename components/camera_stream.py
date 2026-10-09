@@ -123,6 +123,13 @@ def _build_preview(cam_config: dict, url: str, rtsp_url: str, show_links: bool) 
             # URL directly, since browsers can't play RTSP natively at all.
             with ui.column().classes("w-full gap-1") as rtsp_container:
                 rtsp_image = ui.image("").classes(_size_classes)
+                if not rtsp_worker.ffmpeg_available():
+                    # Shown where the live view would be (user-reported Oct
+                    # 2026: with the .exe nothing told FFmpeg was missing)
+                    rtsp_image.set_visibility(False)
+                    with ui.row().classes("w-full items-start gap-2 p-2 rounded bg-orange-1 text-orange-10"):
+                        ui.icon("warning").classes("text-orange-8")
+                        ui.label(t("ffmpeg_missing", url=rtsp_worker.FFMPEG_INSTALL_URL)).classes("text-sm flex-1")
             rtsp_container.set_visibility(False)
 
             if show_links:
@@ -528,7 +535,7 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
             # keep the shared worker running (rtsp_worker.py's holders),
             # and makes the next start a real source change, so the
             # browser reconnects instead of keeping a dead stream.
-            if is_rtsp and not preview.rtsp_started:
+            if is_rtsp and not preview.rtsp_started and rtsp_worker.ffmpeg_available():
                 print(f"Start RTSP : {preview.rtsp_url}")
                 rtsp_worker.start_worker(preview.rtsp_url, preview)
                 # Set once - this is a continuous multipart stream, not

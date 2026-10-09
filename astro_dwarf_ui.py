@@ -259,6 +259,10 @@ def main() -> None:
     # components/camera_stream.py's own <img> tags point at. stop_all()
     # on shutdown releases every camera's OpenCV/FFmpeg worker thread
     # cleanly rather than leaving them running past the app's own exit.
+    # FFmpeg checked once at startup (logged to astro_session.log when
+    # missing; the device page says it too) - the routes stay registered:
+    # without FFmpeg the preview just shows that message.
+    rtsp_worker.check_ffmpeg_available()
     rtsp_worker.register_routes()
     app.on_shutdown(rtsp_worker.stop_all)
 

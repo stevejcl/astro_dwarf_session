@@ -43,6 +43,10 @@
     ### Device page actions: label under its icon
     On a wide screen "Toggle Power Light", a bit too long for its column, went under its icon; the action buttons now
     keep the icon and label on one line (cut with "…" if needed).
+    ### FFmpeg missing: said in the log file and on the device page
+    Without FFmpeg the RTSP live view can't work. The message saying so went to the console only: not in
+    astro_session.log, and nowhere with the .exe. FFmpeg is now checked at startup, the message is written to
+    astro_session.log, and the device page shows it (with the download link) where the RTSP live view would be.
 
 ## [3.2.0] - 2026-10-06
   ### Add

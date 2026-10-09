@@ -67,6 +67,8 @@ import threading
 import time
 
 from fastapi import Response
+
+import dwarf_python_api.lib.my_logger as my_logger
 from fastapi.responses import StreamingResponse
 from nicegui import app
 
@@ -99,6 +101,16 @@ _running: dict[str, object] = {}
 _holders: dict[str, set[int]] = {}
 
 _FFMPEG_INSTALL_URL = "https://www.gyan.dev/ffmpeg/builds/"
+FFMPEG_INSTALL_URL = _FFMPEG_INSTALL_URL
+# Result of check_ffmpeg_available() (None: not checked yet)
+_ffmpeg_ok: bool | None = None
+
+
+def ffmpeg_available() -> bool:
+    """Whether FFmpeg was found (checked once, see check_ffmpeg_available)."""
+    if _ffmpeg_ok is None:
+        return check_ffmpeg_available()
+    return _ffmpeg_ok
 
 
 def check_ffmpeg_available() -> bool:
@@ -128,10 +140,15 @@ def check_ffmpeg_available() -> bool:
     falls back safely to the default language if storage isn't ready
     yet at that point.
     """
-    if shutil.which("ffmpeg") is not None:
-        return True
-    logging.getLogger(__name__).error(t("ffmpeg_missing", url=_FFMPEG_INSTALL_URL))
-    return False
+    global _ffmpeg_ok
+    _ffmpeg_ok = shutil.which("ffmpeg") is not None
+    if not _ffmpeg_ok:
+        # Through dwarf_python_api's logger (user-reported Oct 2026): a
+        # plain logging.getLogger() message showed on the console only -
+        # not in astro_session.log, and nowhere with the .exe (no console).
+        # The device page also says it where the RTSP preview would be.
+        my_logger.error(t("ffmpeg_missing", url=_FFMPEG_INSTALL_URL))
+    return _ffmpeg_ok
 
 
 def start_worker(rtsp_url: str, holder: object = None) -> None:

@@ -139,6 +139,8 @@ With [Dwarfium Scope Archive](https://github.com/stevejcl/dwarfium-scope-archive
 
 When Scope Archive runs as an app, the pages open in its own window (brought to front on Windows), with its system folder dialogs; otherwise in a browser tab.
 
+This app says hello to Scope Archive every 30 s: its buttons above are greyed while Scope Archive isn't running, and Scope Archive (V3.4.2 or later) knows where this app is. Its **Recommended tonight** page then has a 📅 button on each target: it opens this app's **Plan a target** page (`/plan-target`) with the target and its best slot tonight — pick the Dwarf, a **program** (saved on the Programs page, run when the Dwarf is armed) or a **native schedule** sent to the Dwarf, the exposure, gain and filter, then send.
+
 ### Milky Way mosaic planner
 A standalone planning page, separate from the main app's own pages — open `/mosaic-planner-en` or `/mosaic-planner-fr` (served straight from the app, no separate install) from a phone or a desktop browser. Pick a Site from the dropdown or use the browser's own geolocation, and it draws a twilight-aware sky chart with the galactic plane, lets you center a mosaic grid sized to a chosen Dwarf's own Wide field of view (EQ or Alt-Az framing), and schedules each tile's exposure/count/duration across the night. Each tile also has a one-tap Moon check — position, altitude, and phase (illumination %) at that tile's own scheduled time — so you can see how much moonlight a given frame will pick up before committing a whole night to it. Once you're happy with the plan, sending it queues every tile straight into this app's own scheduler, one program per tile, with no need to build each one by hand in the program editor.
 

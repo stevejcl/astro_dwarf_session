@@ -65,6 +65,9 @@ _project_htmls = [
     for lang in ("fr", "en")
 ]
 
+# Single-file pages (texts in both languages inside)
+_project_htmls.append(Path("plan_target.html"))
+
 for _html in _project_htmls:
     if _html.exists():
         extra_data.append(f"{_html}{sep}.")

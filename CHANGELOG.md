@@ -7,6 +7,11 @@
     (every 10 s while it doesn't answer). Scope Archive thus knows this app's address, to offer actions done here, and
     this app knows whether Scope Archive is running: its "Open in" / "Archive" buttons are greyed when it isn't, and a
     click then says so at once instead of waiting for a timeout and opening a dead browser tab. Logged when it changes.
+    ### Plan a target page, opened from Scope Archive's Recommended tonight
+    New page /plan-target (plan_target.html, English / French with the app's language): one target with its best slot
+    tonight, given in the address by Dwarfium Scope Archive's "Recommended tonight" page (its button on each target).
+    Pick the Dwarf, send as a program of this app (Programs page, run when the Dwarf is armed) or as a native schedule
+    on the Dwarf, the slot, camera, exposure, gain, filter and autofocus, then send. The choices are remembered.
 
 ## [3.2.2] - 2026-10-09
   ### Add

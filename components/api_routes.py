@@ -87,7 +87,7 @@ from pathlib import Path
 
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from nicegui import app, run
 
@@ -102,6 +102,7 @@ from device_registry import list_device_entries
 from site_registry import list_site_entries
 from components import connection_health, scheduler_runner, scheduler_loop, native_schedule, catalog_add_on
 from components import scope_archive, task_check, task_check_cache
+from components.i18n import get_language
 from components.json_files import write_json_atomic
 from components.device_card import _DEVICE_TYPE_ICONS
 from components.program_editor import _blank_program, _filename_for
@@ -335,6 +336,22 @@ def register_api_routes() -> None:
                 status_code=404,
             )
         return FileResponse(program_path, media_type="text/html")
+
+    @app.get("/plan-target")
+    def plan_target_page():
+        """One target to plan on a Dwarf - a program of this app or a
+        native schedule (plan_target.html), opened by Dwarfium Scope
+        Archive's "Recommended tonight" page with the target and its
+        window tonight in the query (user-requested Oct 2026). One file,
+        its texts in English and French: the app's language is set here."""
+        page_path = _bundled_path("plan_target.html")
+        if not page_path.exists():
+            return JSONResponse({"error": f"plan_target.html not found at {page_path}"}, status_code=404)
+        lang = "fr" if get_language() == "fr" else "en"
+        html = page_path.read_text(encoding="utf-8").replace(
+            "<head>", f"<head>\n<script>window.PT_LANG = {json.dumps(lang)};</script>", 1
+        )
+        return HTMLResponse(html)
 
     def _fill_native_from_cache(device_entry: dict, dwarf_uid: str, error_code: str) -> None:
         """Falls back to the last successfully-read native schedule

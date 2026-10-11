@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dwarf - Plan a target</title>
+<!-- Opened by Dwarfium Scope Archive's "Recommended tonight" page (user-
+     requested Oct 2026): /plan-target?name=&id=&ra=<hours>&dec=<deg>&start=&end=
+     (ISO UTC, the target's window tonight)&site=&lat=&lon=. Pick a Dwarf, a
+     program of this app (/api/program) or a native schedule on the Dwarf
+     (/api/schedule), the settings, then send. Served by components/
+     api_routes.py's /plan-target route, which sets the page language. -->
+<style>
+  :root {
+    --bg: #0f1115; --card: #1a1d24; --border: #2a2e38; --text: #e6e8ec;
+    --muted: #9aa1ad; --accent: #4da3ff; --ok: #35c46a; --warn: #e0a83c; --err: #e05c5c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 16px; }
+  .wrap { max-width: 620px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 0.85rem; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin: 10px 0 4px; }
+  select, input[type=number], input[type=datetime-local] {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 0.95rem;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1 1 140px; min-width: 0; }
+  .modes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .modes label { flex: 1 1 200px; margin: 0; display: flex; gap: 8px; align-items: flex-start; padding: 10px;
+    border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text); font-size: 0.9rem; }
+  .modes label.on { border-color: var(--accent); background: rgba(77,163,255,0.08); }
+  .modes small { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: 0.9rem; margin-top: 12px; }
+  .warn { color: var(--warn); font-size: 0.85rem; margin-top: 8px; }
+  button.send { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 1rem; cursor: pointer; }
+  button.send:disabled { opacity: 0.5; cursor: default; }
+  #status { margin-top: 12px; font-size: 0.9rem; min-height: 1.4em; }
+  #status.ok { color: var(--ok); } #status.err { color: var(--err); }
+  #status a { color: var(--accent); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="t-name"></h1>
+  <div class="sub" id="t-sub"></div>
+
+  <div class="card">
+    <h2 data-i="dwarf"></h2>
+    <select id="dwarf"></select>
+    <label data-i="send_as"></label>
+    <div class="modes">
+      <label id="lab-program"><input type="radio" name="mode" value="program"><span><span data-i="mode_program"></span><small data-i="mode_program_hint"></small></span></label>
+      <label id="lab-schedule"><input type="radio" name="mode" value="schedule"><span><span data-i="mode_schedule"></span><small data-i="mode_schedule_hint"></small></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i="slot"></h2>
+    <div class="row">
+      <div><label data-i="start"></label><input type="datetime-local" id="start"></div>
+      <div><label data-i="end"></label><input type="datetime-local" id="end"></div>
+    </div>
+    <div class="warn hidden" id="no-window" data-i="no_window"></div>
+  </div>
+
+  <div class="card">
+    <h2 data-i="capture"></h2>
+    <div class="row">
+      <div id="cam-box"><label data-i="camera"></label>
+        <select id="camera"><option value="tele">Tele</option><option value="wide">Wide</option></select></div>
+      <div><label data-i="exposure"></label><select id="exposure"></select></div>
+      <div><label data-i="gain"></label><input type="number" id="gain" min="0" step="1" value="80"></div>
+    </div>
+    <div class="row">
+      <div id="filter-box"><label data-i="filter"></label>
+        <select id="filter">
+          <option value="Astro Filter">Astro</option>
+          <option value="Duo-Band Filter">Duo-Band</option>
+          <option value="VIS Filter">VIS (Dwarf 3)</option>
+        </select></div>
+    </div>
+    <label class="check" id="af-box"><input type="checkbox" id="autofocus" checked> <span data-i="autofocus"></span></label>
+  </div>
+
+  <button class="send" id="send"></button>
+  <div id="status"></div>
+</div>
+
+<script>
+const LANG = window.PT_LANG === 'fr' ? 'fr' : 'en';
+const TXT = {
+  en: {
+    dwarf: 'Dwarf', send_as: 'Send as', slot: 'Time slot', capture: 'Capture',
+    mode_program: 'Program (Astro Dwarf Session)', mode_program_hint: 'Saved on the Programs page, run by this app when the Dwarf is armed.',
+    mode_schedule: 'Native schedule (on the Dwarf)', mode_schedule_hint: 'Sent to the Dwarf, which runs it on its own (Tele camera).',
+    start: 'Start', end: 'End', camera: 'Camera', exposure: 'Exposure (s)', gain: 'Gain', filter: 'Filter',
+    autofocus: 'Autofocus before shooting', send: 'Send', sending: 'Sending…',
+    no_window: 'This target is not above 25° in the dark window tonight: check the slot.',
+    window: 'Best slot tonight', site: 'Site', loading: 'Loading devices…', none: 'No Dwarf known (pair one first)',
+    offline: 'offline', connected: 'connected', busy: 'busy',
+    bad_slot: 'The end must be after the start.', no_dwarf: 'Pick a Dwarf.',
+    prog_ok: 'Program saved. Arm the Dwarf on its page so it starts at {t}.', open_programs: 'Programs page',
+    deferred: 'Saved: the Dwarf only accepts a schedule within 12 h of its start, it will be synced automatically from {t} (app running, Dwarf connected).',
+    pending: 'The Dwarf is offline: schedule queued, offered on next connection.',
+    busy_pending: 'The Dwarf is busy: schedule queued, offered once it is free.',
+    sched_ok: 'Schedule sent to the Dwarf.', rejected: 'The Dwarf rejected the schedule: {r}', failed: 'Failed: {r}',
+  },
+  fr: {
+    dwarf: 'Dwarf', send_as: 'Envoyer comme', slot: 'Créneau', capture: 'Prise de vue',
+    mode_program: 'Programme (Astro Dwarf Session)', mode_program_hint: 'Enregistré dans la page Programmes, lancé par cette application quand le Dwarf est armé.',
+    mode_schedule: 'Planning natif (sur le Dwarf)', mode_schedule_hint: 'Envoyé au Dwarf, qui l’exécute seul (caméra Tele).',
+    start: 'Début', end: 'Fin', camera: 'Caméra', exposure: 'Exposition (s)', gain: 'Gain', filter: 'Filtre',
+    autofocus: 'Autofocus avant la prise de vue', send: 'Envoyer', sending: 'Envoi…',
+    no_window: 'Cette cible ne dépasse pas 25° pendant la nuit noire : vérifiez le créneau.',
+    window: 'Meilleur créneau cette nuit', site: 'Site', loading: 'Chargement des appareils…', none: 'Aucun Dwarf connu (appairez-en un d’abord)',
+    offline: 'hors ligne', connected: 'connecté', busy: 'occupé',
+    bad_slot: 'La fin doit être après le début.', no_dwarf: 'Choisissez un Dwarf.',
+    prog_ok: 'Programme enregistré. Armez le Dwarf sur sa page pour qu’il démarre à {t}.', open_programs: 'Page Programmes',
+    deferred: 'Enregistré : le Dwarf n’accepte un planning que dans les 12 h avant son début, il sera synchronisé automatiquement à partir de {t} (application lancée, Dwarf connecté).',
+    pending: 'Le Dwarf est hors ligne : planning en attente, proposé à la prochaine connexion.',
+    busy_pending: 'Le Dwarf est occupé : planning en attente, proposé dès qu’il est libre.',
+    sched_ok: 'Planning envoyé au Dwarf.', rejected: 'Le Dwarf a refusé le planning : {r}', failed: 'Échec : {r}',
+  },
+}[LANG];
+const $ = id => document.getElementById(id);
+const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+document.querySelectorAll('[data-i]').forEach(e => { e.textContent = TXT[e.dataset.i]; });
+document.documentElement.lang = LANG;
+
+const q = new URLSearchParams(location.search);
+const T = {
+  name: q.get('name') || 'Target', id: q.get('id') || '',
+  ra: parseFloat(q.get('ra')), dec: parseFloat(q.get('dec')),
+  start: q.get('start') ? new Date(q.get('start')) : null, end: q.get('end') ? new Date(q.get('end')) : null,
+  site: q.get('site') || '', lat: q.has('lat') ? parseFloat(q.get('lat')) : null, lon: q.has('lon') ? parseFloat(q.get('lon')) : null,
+};
+const pad = n => String(n).padStart(2, '0');
+const hhmm = d => pad(d.getHours()) + ':' + pad(d.getMinutes());
+const toLocalInput = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + hhmm(d);
+const fmtRa = h => { const s = Math.round(h * 3600); return pad(Math.floor(s / 3600)) + 'h' + pad(Math.floor(s / 60) % 60) + 'm' + pad(s % 60) + 's'; };
+const fmtDec = d => { const s = Math.round(Math.abs(d) * 3600); return (d < 0 ? '-' : '+') + pad(Math.floor(s / 3600)) + '°' + pad(Math.floor(s / 60) % 60) + '′' + pad(s % 60) + '″'; };
+
+$('t-name').textContent = T.name;
+document.title = 'Dwarf - ' + T.name;
+let sub = (T.id && T.id !== T.name ? T.id + ' · ' : '') + (isFinite(T.ra) ? 'RA ' + fmtRa(T.ra) + ' · Dec ' + fmtDec(T.dec) : '');
+if (T.start && T.end) sub += ' · ' + TXT.window + ' ' + hhmm(T.start) + '–' + hhmm(T.end);
+if (T.site) sub += ' · ' + TXT.site + ' ' + T.site;
+$('t-sub').textContent = sub;
+
+// Slot: the target's window tonight (never in the past), else now + 10 min for 2 h
+const now = Date.now(), lead = 10 * 60000;
+let s0 = T.start && T.end && T.end.getTime() > now + lead ? new Date(Math.max(T.start.getTime(), now + lead)) : new Date(now + lead);
+let e0 = T.start && T.end && T.end.getTime() > now + lead ? T.end : new Date(s0.getTime() + 2 * 3600000);
+s0.setSeconds(0, 0); e0 = new Date(e0); e0.setSeconds(0, 0);
+$('start').value = toLocalInput(s0); $('end').value = toLocalInput(e0);
+if (!(T.start && T.end)) $('no-window').classList.remove('hidden');
+
+[10, 15, 20, 30, 45, 60, 90, 120].forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; $('exposure').appendChild(o); });
+$('exposure').value = '15';
+
+// Remembered choices (this browser)
+const KEY = 'plan_target_prefs';
+let prefs = {};
+try { prefs = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+['camera', 'exposure', 'gain', 'filter'].forEach(k => { if (prefs[k] != null) $(k).value = prefs[k]; });
+if (prefs.autofocus != null) $('autofocus').checked = !!prefs.autofocus;
+const savePrefs = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: mode(), dwarf: $('dwarf').value,
+  camera: $('camera').value, exposure: $('exposure').value, gain: $('gain').value, filter: $('filter').value, autofocus: $('autofocus').checked })); } catch (e) {} };
+
+const mode = () => (document.querySelector('input[name=mode]:checked') || {}).value || 'program';
+document.querySelector('input[name=mode][value=' + (prefs.mode === 'schedule' ? 'schedule' : 'program') + ']').checked = true;
+function updateMode() {
+  status('');
+  const sched = mode() === 'schedule';
+  $('lab-program').classList.toggle('on', !sched); $('lab-schedule').classList.toggle('on', sched);
+  $('cam-box').classList.toggle('hidden', sched); $('af-box').classList.toggle('hidden', sched);
+  $('filter-box').classList.toggle('hidden', !sched && $('camera').value === 'wide');
+}
+document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', updateMode));
+$('camera').addEventListener('change', updateMode);
+updateMode();
+$('send').textContent = TXT.send;
+
+// Dwarfs of this app
+let devices = [];
+$('dwarf').innerHTML = '<option value="">' + TXT.loading + '</option>';
+fetch('/api/dwarfs').then(r => r.json()).then(d => {
+  devices = (d && d.devices) || [];
+  $('dwarf').innerHTML = devices.length ? devices.map(x => '<option value="' + esc(x.dwarfUid) + '">' + esc(x.name) +
+    (x.model ? ' (' + esc(x.model) + ')' : '') + ' — ' + (x.connected ? (x.busy ? TXT.busy : TXT.connected) : TXT.offline) + '</option>').join('')
+    : '<option value="">' + TXT.none + '</option>';
+  if (prefs.dwarf && devices.some(x => x.dwarfUid === prefs.dwarf)) $('dwarf').value = prefs.dwarf;
+}).catch(e => { $('dwarf').innerHTML = '<option value="">' + esc(TXT.failed.replace('{r}', e.message)) + '</option>'; });
+
+function status(msg, cls, html) { const s = $('status'); s.className = cls || ''; if (html) s.innerHTML = msg; else s.textContent = msg; }
+const uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }) + Date.now();
+const IRCUT = { 'VIS Filter': 0, 'Astro Filter': 1, 'Duo-Band Filter': 2 };   // index shared by Dwarf 3 / Mini
+
+$('send').addEventListener('click', async () => {
+  const uid = $('dwarf').value;
+  const start = new Date($('start').value), end = new Date($('end').value);
+  if (!uid) return status(TXT.no_dwarf, 'err');
+  if (!(end > start)) return status(TXT.bad_slot, 'err');
+  const exp = parseFloat($('exposure').value), gain = $('gain').value || '80', filter = $('filter').value;
+  savePrefs();
+  $('send').disabled = true; status(TXT.sending);
+  try {
+    if (mode() === 'program') {
+      const camera = $('camera').value;
+      const body = { dwarfUid: uid, target: { name: T.name, ra: T.ra, dec: T.dec }, camera,
+        exposure: String(exp), gain: String(gain), count: Math.max(1, Math.ceil((end - start) / 1000 / exp)),
+        date: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
+        time: hhmm(start) + ':00', startEpochMs: start.getTime(), endTime: hhmm(end), endEpochMs: end.getTime(),
+        autofocus: $('autofocus').checked };
+      if (camera === 'tele') body.ircut = String(IRCUT[filter]);
+      const res = await fetch('/api/program', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+      status(TXT.prog_ok.replace('{t}', hhmm(start)) + ' <a href="/Program-' + LANG + '/' + encodeURIComponent(uid) + '">' + TXT.open_programs + '</a>', 'ok', true);
+    } else {
+      const schedule = {
+        scheduleId: uuid(), scheduleName: T.name + ' - ' + (T.site || 'site') + ' - ' + start.toLocaleDateString('en-CA'),
+        startTime: start.getTime(), endTime: end.getTime(), lock: 0, password: '', paramsMode: 0,
+        params: { longitude: T.lon, latitude: T.lat, cityName: T.site, focusMode: 0 },
+        shooting_tasks: [{ name: T.name, ra: T.ra, dec: T.dec, startTime: start.getTime(), endTime: end.getTime(),
+          shutterIndex: null, shutterName: String(exp), gainIndex: null, gainName: String(gain),
+          count: 0, stacked: 0, filterModeIndex: null, filterModeName: filter,
+          schedule_task_id: uuid(), createFrom: 2 }],
+      };
+      const res = await fetch('/api/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dwarfUid: uid, schedule }) });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 502) throw new Error(TXT.rejected.replace('{r}', data.reason || data.error || '?'));
+      if (!res.ok || data.error) throw new Error(TXT.failed.replace('{r}', data.error || 'HTTP ' + res.status));
+      if (data.mode === 'deferred') status(TXT.deferred.replace('{t}', data.syncAt ? new Date(data.syncAt).toLocaleString() : '?'), 'ok');
+      else if (data.mode === 'pending') status(TXT.pending, 'ok');
+      else if (data.mode === 'busy_pending') status(TXT.busy_pending, 'ok');
+      else status(TXT.sched_ok + ' <a href="/Program-' + LANG + '/' + encodeURIComponent(uid) + '">' + TXT.open_programs + '</a>', 'ok', true);
+    }
+  } catch (e) {
+    const m = e.message || String(e);
+    status(m.startsWith(TXT.rejected.split('{r}')[0]) || m.startsWith(TXT.failed.split('{r}')[0]) ? m : TXT.failed.replace('{r}', m), 'err');
+  } finally { $('send').disabled = false; }
+});
+</script>
+</body>
+</html>

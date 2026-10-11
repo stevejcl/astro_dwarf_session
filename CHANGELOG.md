@@ -12,6 +12,9 @@
     tonight, given in the address by Dwarfium Scope Archive's "Recommended tonight" page (its button on each target).
     Pick the Dwarf, send as a program of this app (Programs page, run when the Dwarf is armed) or as a native schedule
     on the Dwarf, the slot, camera, exposure, gain, filter and autofocus, then send. The choices are remembered.
+    With Scope Archive's "tonight's plan" (up to 5 targets), the page chains them over the night: the first to set
+    first, each slot within its window, the night shared between them, 5 min apart; slots editable, untick a target
+    to leave it out (the others re-flow). Sent as one program per target, or one native schedule with all of them.
 
 ## [3.2.2] - 2026-10-09
   ### Add

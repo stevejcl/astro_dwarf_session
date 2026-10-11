@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.2.3] - 2026-10-11
+  ### Add
+    ### Dwarfium Scope Archive presence
+    This app now says hello to Dwarfium Scope Archive (the URL of the Settings page) at startup and every 30 s
+    (every 10 s while it doesn't answer). Scope Archive thus knows this app's address, to offer actions done here, and
+    this app knows whether Scope Archive is running: its "Open in" / "Archive" buttons are greyed when it isn't, and a
+    click then says so at once instead of waiting for a timeout and opening a dead browser tab. Logged when it changes.
+
 ## [3.2.2] - 2026-10-09
   ### Add
     ### Catalog: mosaic planner for the Dwarf 3 / Dwarf Mini

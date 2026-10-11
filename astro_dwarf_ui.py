@@ -106,7 +106,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 
 from device_registry import bootstrap_devices
 from components.pwa import register_manifest_route
-from components import device_lock, rtsp_worker
+from components import device_lock, peer_link, rtsp_worker
 from components import scheduler_runner
 from components.api_routes import register_api_routes
 from components.scheduler_loop import start_background_loop
@@ -308,6 +308,8 @@ def main() -> None:
     # program must fire at its due time regardless of whether anyone
     # currently has a browser tab open.
     start_background_loop(get_manager())
+    # Hello to Dwarfium Scope Archive every 30 s: its presence, and our address for it
+    peer_link.start(PORT)
 
     # Same reasoning, own app.timer - a stuck/leaked run must eventually
     # get cleaned up (see check_stuck_runs()'s own docstring) whether or

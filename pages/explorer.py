@@ -248,6 +248,9 @@ def build_explorer_page() -> None:
                                 icon="inventory_2",
                                 on_click=lambda: scope_archive.archive_session(session.config, current_path[0]),
                             ).props("flat round dense").tooltip(t("archive_in_scope_archive"))
+                            scope_archive.watch_presence(
+                                archive_link, lambda: scope_archive.transfer_url(session.config, current_path[0])
+                            )
                             with ui.button(icon="download").props("flat round dense").tooltip(
                                 t("explorer_download")
                             ):

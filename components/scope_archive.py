@@ -24,6 +24,7 @@ from urllib.parse import urlencode, urlsplit
 import requests
 from nicegui import run, ui
 
+from components import peer_link
 from components.i18n import t
 
 # Scope Archive waits up to 4 s for its window's page to be ready
@@ -122,8 +123,13 @@ def page_url(config, page: str) -> str | None:
 
 async def open_page(url: str | None) -> None:
     """Shows a Scope Archive page: in its window when it runs as an app
-    (notified), else in a browser tab."""
+    (notified), else in a browser tab. When it didn't answer the last
+    hello (peer_link.py), asked again first: said so if still not
+    running, without waiting for a timeout or opening a dead tab."""
     if not url:
+        return
+    if peer_link.is_up(url) is False and await peer_link.check_now(url) is False:
+        ui.notify(t("scope_archive_not_running"), type="warning")
         return
     result = await run.io_bound(open_in_app, url)
     if result == "opened":
@@ -138,3 +144,19 @@ async def archive_session(config, media_path: str) -> None:
     """The "Archive in Dwarfium Scope Archive" action (import then
     Transfer page)."""
     await open_page(transfer_url(config, media_path))
+
+
+def watch_presence(element, url_fn) -> None:
+    """Greys a Scope Archive button while Scope Archive doesn't answer its
+    hellos (peer_link.py). Still clickable: a click asks again."""
+    def update() -> None:
+        try:
+            url = url_fn()
+        except NameError:   # url_fn's variables not built yet
+            return
+        if peer_link.is_up(url) is False:
+            element.classes(add="opacity-40")
+        else:
+            element.classes(remove="opacity-40")
+    update()
+    ui.timer(5, update)

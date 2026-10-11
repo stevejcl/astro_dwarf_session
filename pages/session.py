@@ -716,9 +716,10 @@ def build_session_page() -> None:
                 with ui.row().classes("items-center gap-1 -mt-1"):
                     ui.label(t("open_scope_label")).classes("text-xs text-grey-7")
                     for label, url in scope_links:
-                        ui.button(label, on_click=lambda _, u=url: scope_archive.open_page(u)).props(
+                        scope_btn = ui.button(label, on_click=lambda _, u=url: scope_archive.open_page(u)).props(
                             "flat dense no-caps size=sm color=primary"
                         ).classes("text-xs")
+                        scope_archive.watch_presence(scope_btn, lambda u=url: u)
 
             # Defined HERE, inside the page function, not at module
             # level - see the module docstring for why: this gives THIS

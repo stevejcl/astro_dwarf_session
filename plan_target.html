@@ -91,15 +91,11 @@
       <div id="cam-box"><label data-i="camera"></label>
         <select id="camera"><option value="tele">Tele</option><option value="wide">Wide</option></select></div>
       <div><label data-i="exposure"></label><select id="exposure"></select></div>
-      <div><label data-i="gain"></label><input type="number" id="gain" min="0" step="1" value="80"></div>
+      <div><label data-i="gain"></label><select id="gain"></select></div>
     </div>
     <div class="row">
       <div id="filter-box"><label data-i="filter"></label>
-        <select id="filter">
-          <option value="Astro Filter">Astro</option>
-          <option value="Duo-Band Filter">Duo-Band</option>
-          <option value="VIS Filter">VIS (Dwarf 3)</option>
-        </select></div>
+        <select id="filter"></select></div>
     </div>
     <label class="check" id="af-box"><input type="checkbox" id="autofocus" checked> <span data-i="autofocus"></span></label>
   </div>
@@ -219,17 +215,38 @@ function sequence() {
 }
 // Per-target capture settings (several targets): x.cap = null follows the
 // Capture card's defaults; set once changed on the row (↺ back to them).
-const EXPOSURES = [10, 15, 20, 30, 45, 60, 90, 120];
-const FILTERS = [['Astro Filter', 'Astro'], ['Duo-Band Filter', 'Duo-Band'], ['VIS Filter', 'VIS (Dwarf 3)']];
-const defaults = () => ({ exp: $('exposure').value, gain: $('gain').value || '80', filter: $('filter').value });
+// Values the Dwarf accepts, by model (dwarf_python_api data_utils.py tables -
+// the long-exposure end of AllowedExposures*, AllowedGains*, the IR filters;
+// the Dwarf II's IR_CUT / IR_PASS are left to the program's default)
+const LIMITS = {
+  'Dwarf II':   { exp: [1, 2, 4, 5, 6, 8, 10, 13, 15], gain: [...Array(25).keys()].map(i => i * 10), filters: [] },
+  'Dwarf 3':    { exp: [5, 8, 10, 13, 15, 30, 45, 60, 90, 120], gain: [0, 2, 5, ...[...Array(24).keys()].map(i => (i + 1) * 10)],
+                  filters: [['Astro Filter', 'Astro'], ['Duo-Band Filter', 'Duo-Band'], ['VIS Filter', 'VIS']] },
+  'Dwarf Mini': { exp: [5, 8, 10, 13, 15, 30, 45, 60, 90, 120, 180], gain: [0, 2, 5, ...[...Array(24).keys()].map(i => (i + 1) * 10)],
+                  filters: [['Astro Filter', 'Astro'], ['Duo-Band Filter', 'Duo-Band']] },
+};
+let devices = [];
+const limits = () => { const d = devices.find(x => x.dwarfUid === $('dwarf').value); return LIMITS[d && d.model] || LIMITS['Dwarf 3']; };
+// An allowed value: the same, else the nearest below (else the smallest)
+const snap = (v, list) => { const n = parseFloat(v); if (!isFinite(n)) return list[0]; const below = list.filter(x => x <= n); return below.length ? below[below.length - 1] : list[0]; };
+const snapFilter = (f, list) => list.some(x => x[0] === f) ? f : (list.length ? list[0][0] : null);
+const fillSelect = (el, items, value) => { el.innerHTML = items.map(([v, l]) => '<option value="' + esc(v) + '">' + esc(l) + '</option>').join(''); if (value != null) el.value = value; };
+function applyLimits() {
+  const L = limits();
+  fillSelect($('exposure'), L.exp.map(v => [v, v]), snap($('exposure').value || 15, L.exp));
+  fillSelect($('gain'), L.gain.map(v => [v, v]), snap($('gain').value || 80, L.gain));
+  fillSelect($('filter'), L.filters, snapFilter($('filter').value || 'Astro Filter', L.filters));
+  TARGETS.forEach(x => { if (x.cap) x.cap = { exp: snap(x.cap.exp, L.exp), gain: snap(x.cap.gain, L.gain), filter: snapFilter(x.cap.filter, L.filters) }; });
+}
+const defaults = () => ({ exp: $('exposure').value, gain: $('gain').value || '80', filter: $('filter').value || null });
 const capOf = x => x.cap || defaults();
-const usesFilter = () => !(mode() === 'program' && $('camera').value === 'wide');
+const usesFilter = () => limits().filters.length > 0 && !(mode() === 'program' && $('camera').value === 'wide');
 function capRow(x) {
-  const c = capOf(x), opt = (v, l, cur) => '<option value="' + v + '"' + (String(v) === String(cur) ? ' selected' : '') + '>' + l + '</option>';
+  const L = limits(), c = capOf(x), opt = (v, l, cur) => '<option value="' + v + '"' + (String(v) === String(cur) ? ' selected' : '') + '>' + l + '</option>';
   return '<div class="caprow' + (x.cap ? ' custom' : '') + '">' +
-    '<div><label>' + TXT.exposure + '</label><select data-xe="' + x.key + '">' + EXPOSURES.map(v => opt(v, v, c.exp)).join('') + '</select></div>' +
-    '<div><label>' + TXT.gain + '</label><input type="number" min="0" step="1" data-xg="' + x.key + '" value="' + esc(c.gain) + '"></div>' +
-    (usesFilter() ? '<div><label>' + TXT.filter + '</label><select data-xf="' + x.key + '">' + FILTERS.map(f => opt(f[0], f[1], c.filter)).join('') + '</select></div>' : '') +
+    '<div><label>' + TXT.exposure + '</label><select data-xe="' + x.key + '">' + L.exp.map(v => opt(v, v, c.exp)).join('') + '</select></div>' +
+    '<div><label>' + TXT.gain + '</label><select data-xg="' + x.key + '">' + L.gain.map(v => opt(v, v, c.gain)).join('') + '</select></div>' +
+    (usesFilter() ? '<div><label>' + TXT.filter + '</label><select data-xf="' + x.key + '">' + L.filters.map(f => opt(f[0], f[1], c.filter)).join('') + '</select></div>' : '') +
     (x.cap ? '<button type="button" class="reset" data-xr="' + x.key + '" title="' + TXT.reset_default + '">↺</button>' : '') +
   '</div>';
 }
@@ -263,14 +280,14 @@ $('targets').addEventListener('click', e => {
 });
 
 // ── capture settings ──────────────────────────────────────────────────────
-EXPOSURES.forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; $('exposure').appendChild(o); });
-$('exposure').value = '15';
+applyLimits();
 
 // Remembered choices (this browser)
 const KEY = 'plan_target_prefs';
 let prefs = {};
 try { prefs = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
 ['camera', 'exposure', 'gain', 'filter'].forEach(k => { if (prefs[k] != null) $(k).value = prefs[k]; });
+applyLimits();   // a remembered value the list doesn't have -> the nearest allowed
 if (prefs.autofocus != null) $('autofocus').checked = !!prefs.autofocus;
 const savePrefs = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: mode(), dwarf: $('dwarf').value,
   camera: $('camera').value, exposure: $('exposure').value, gain: $('gain').value, filter: $('filter').value, autofocus: $('autofocus').checked })); } catch (e) {} };
@@ -282,7 +299,7 @@ function updateMode() {
   const sched = mode() === 'schedule';
   $('lab-program').classList.toggle('on', !sched); $('lab-schedule').classList.toggle('on', sched);
   $('cam-box').classList.toggle('hidden', sched); $('af-box').classList.toggle('hidden', sched);
-  $('filter-box').classList.toggle('hidden', !sched && $('camera').value === 'wide');
+  $('filter-box').classList.toggle('hidden', !usesFilter());
   if (MULTI) renderTargets();   // rows show the filter only when it applies
 }
 // The defaults changed: the targets that follow them show the new values
@@ -296,7 +313,6 @@ renderTargets();
 $('send').textContent = TXT.send;
 
 // Dwarfs of this app
-let devices = [];
 $('dwarf').innerHTML = '<option value="">' + TXT.loading + '</option>';
 fetch('/api/dwarfs').then(r => r.json()).then(d => {
   devices = (d && d.devices) || [];
@@ -304,7 +320,11 @@ fetch('/api/dwarfs').then(r => r.json()).then(d => {
     (x.model ? ' (' + esc(x.model) + ')' : '') + ' — ' + (x.connected ? (x.busy ? TXT.busy : TXT.connected) : TXT.offline) + '</option>').join('')
     : '<option value="">' + TXT.none + '</option>';
   if (prefs.dwarf && devices.some(x => x.dwarfUid === prefs.dwarf)) $('dwarf').value = prefs.dwarf;
+  applyLimits(); updateMode();
 }).catch(e => { $('dwarf').innerHTML = '<option value="">' + esc(fill(TXT.failed, { r: e.message })) + '</option>'; });
+
+// Another Dwarf: its own allowed values
+$('dwarf').addEventListener('change', () => { applyLimits(); updateMode(); });
 
 // ── send ──────────────────────────────────────────────────────────────────
 function status(msg, cls, html) { const s = $('status'); s.className = cls || ''; if (html) s.innerHTML = msg; else s.textContent = msg; }
@@ -340,7 +360,7 @@ $('send').addEventListener('click', async () => {
           date: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
           time: hhmm(start) + ':00', startEpochMs: start.getTime(), endTime: hhmm(end), endEpochMs: end.getTime(),
           autofocus: $('autofocus').checked };
-        if (camera === 'tele') body.ircut = String(IRCUT[c.filter]);
+        if (camera === 'tele' && c.filter in IRCUT) body.ircut = String(IRCUT[c.filter]);
         try {
           const res = await fetch('/api/program', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
           const data = await res.json().catch(() => ({}));

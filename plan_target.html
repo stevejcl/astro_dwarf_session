@@ -11,7 +11,8 @@
        /plan-target?targets=[{"name","id","ra","dec","start","end"}...]&site=&lat=&lon=
      start / end: ISO UTC, the target's window tonight (above 25 deg), optional.
      The targets are chained over the night (the first to set first, 5 min
-     apart, each slot within its window; editable, untick to leave one out).
+     apart, each slot within its window; editable, untick to leave one out),
+     each with its exposure / gain / filter (the Capture card's by default).
      Pick a Dwarf, programs of this app (/api/program, one per target) or one
      native schedule on the Dwarf (/api/schedule), the settings, then send.
      Served by components/api_routes.py's /plan-target route, which sets the
@@ -49,6 +50,13 @@
   .thead input { width: 18px; height: 18px; }
   .thead small { color: var(--muted); font-size: 0.78rem; margin-left: 4px; }
   .trow .row label { margin-top: 6px; }
+  .caprow { display: flex; gap: 8px; align-items: flex-end; margin-top: 6px; flex-wrap: wrap; }
+  .caprow > div { flex: 1 1 110px; min-width: 0; }
+  .caprow label { margin: 0 0 3px; }
+  .caprow select, .caprow input { padding: 6px 8px; font-size: 0.88rem; }
+  .caprow .reset { flex: 0 0 auto; background: none; border: 1px solid var(--border); color: var(--accent);
+    border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  .caprow.custom select, .caprow.custom input { border-color: var(--accent); }
   button.send { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 1rem; cursor: pointer; }
   button.send:disabled { opacity: 0.5; cursor: default; }
   #status { margin-top: 12px; font-size: 0.9rem; min-height: 1.4em; white-space: pre-line; }
@@ -78,7 +86,7 @@
   </div>
 
   <div class="card">
-    <h2 data-i="capture"></h2>
+    <h2 id="capture-title" data-i="capture"></h2>
     <div class="row">
       <div id="cam-box"><label data-i="camera"></label>
         <select id="camera"><option value="tele">Tele</option><option value="wide">Wide</option></select></div>
@@ -109,6 +117,7 @@ const TXT = {
     mode_schedule: 'Native schedule (on the Dwarf)', mode_schedule_hint: 'Sent to the Dwarf, which runs it on its own (Tele camera).',
     start: 'Start', end: 'End', camera: 'Camera', exposure: 'Exposure (s)', gain: 'Gain', filter: 'Filter',
     autofocus: 'Autofocus before shooting', send: 'Send', sending: 'Sending…',
+    capture_defaults: 'Capture (default for every target)', reset_default: 'Back to the default settings',
     no_window: 'Not above 25° in the dark window tonight: check the slot.',
     no_slot: 'No room left in the night for this target: change the slots or untick a target.',
     window: 'Best slot tonight', site: 'Site', loading: 'Loading devices…', none: 'No Dwarf known (pair one first)',
@@ -128,6 +137,7 @@ const TXT = {
     mode_schedule: 'Planning natif (sur le Dwarf)', mode_schedule_hint: 'Envoyé au Dwarf, qui l’exécute seul (caméra Tele).',
     start: 'Début', end: 'Fin', camera: 'Caméra', exposure: 'Exposition (s)', gain: 'Gain', filter: 'Filtre',
     autofocus: 'Autofocus avant la prise de vue', send: 'Envoyer', sending: 'Envoi…',
+    capture_defaults: 'Prise de vue (par défaut pour chaque cible)', reset_default: 'Revenir aux réglages par défaut',
     no_window: 'Ne dépasse pas 25° pendant la nuit noire : vérifiez le créneau.',
     no_slot: 'Plus de place dans la nuit pour cette cible : modifiez les créneaux ou décochez une cible.',
     window: 'Meilleur créneau cette nuit', site: 'Site', loading: 'Chargement des appareils…', none: 'Aucun Dwarf connu (appairez-en un d’abord)',
@@ -207,6 +217,22 @@ function sequence() {
   // Display: in slot order, unticked ones last
   TARGETS.sort((a, b) => (a.on ? a.slotStart.getTime() : Infinity) - (b.on ? b.slotStart.getTime() : Infinity));
 }
+// Per-target capture settings (several targets): x.cap = null follows the
+// Capture card's defaults; set once changed on the row (↺ back to them).
+const EXPOSURES = [10, 15, 20, 30, 45, 60, 90, 120];
+const FILTERS = [['Astro Filter', 'Astro'], ['Duo-Band Filter', 'Duo-Band'], ['VIS Filter', 'VIS (Dwarf 3)']];
+const defaults = () => ({ exp: $('exposure').value, gain: $('gain').value || '80', filter: $('filter').value });
+const capOf = x => x.cap || defaults();
+const usesFilter = () => !(mode() === 'program' && $('camera').value === 'wide');
+function capRow(x) {
+  const c = capOf(x), opt = (v, l, cur) => '<option value="' + v + '"' + (String(v) === String(cur) ? ' selected' : '') + '>' + l + '</option>';
+  return '<div class="caprow' + (x.cap ? ' custom' : '') + '">' +
+    '<div><label>' + TXT.exposure + '</label><select data-xe="' + x.key + '">' + EXPOSURES.map(v => opt(v, v, c.exp)).join('') + '</select></div>' +
+    '<div><label>' + TXT.gain + '</label><input type="number" min="0" step="1" data-xg="' + x.key + '" value="' + esc(c.gain) + '"></div>' +
+    (usesFilter() ? '<div><label>' + TXT.filter + '</label><select data-xf="' + x.key + '">' + FILTERS.map(f => opt(f[0], f[1], c.filter)).join('') + '</select></div>' : '') +
+    (x.cap ? '<button type="button" class="reset" data-xr="' + x.key + '" title="' + TXT.reset_default + '">↺</button>' : '') +
+  '</div>';
+}
 function renderTargets() {
   $('targets').innerHTML = TARGETS.map(x =>
     '<div class="trow' + (x.on ? '' : ' off') + '"><div class="thead">' +
@@ -216,6 +242,7 @@ function renderTargets() {
     '</div>' +
     (x.on ? '<div class="row"><div><label>' + TXT.start + '</label><input type="datetime-local" data-s="' + x.key + '" value="' + toLocalInput(x.slotStart) + '"></div>' +
       '<div><label>' + TXT.end + '</label><input type="datetime-local" data-e="' + x.key + '" value="' + toLocalInput(x.slotEnd) + '"></div></div>' +
+      (MULTI ? capRow(x) : '') +
       (!(x.start && x.end) ? '<div class="warn">' + TXT.no_window + '</div>' : '') +
       (x.noSlot ? '<div class="warn">' + TXT.no_slot + '</div>' : '') : '') +
     '</div>').join('');
@@ -225,11 +252,18 @@ $('targets').addEventListener('change', e => {
   if (d.k != null) { byKey(d.k).on = e.target.checked; sequence(); renderTargets(); status(''); }
   else if (d.s != null) { const x = byKey(d.s), v = toDate(e.target.value); if (v) { x.slotStart = v; x.noSlot = false; } }
   else if (d.e != null) { const x = byKey(d.e), v = toDate(e.target.value); if (v) { x.slotEnd = v; x.noSlot = false; } }
+  else if (d.xe != null || d.xg != null || d.xf != null) {
+    const x = byKey(d.xe ?? d.xg ?? d.xf), c = Object.assign({}, capOf(x));
+    if (d.xe != null) c.exp = e.target.value; else if (d.xg != null) c.gain = e.target.value; else c.filter = e.target.value;
+    x.cap = c; renderTargets();
+  }
 });
-sequence(); renderTargets();
+$('targets').addEventListener('click', e => {
+  if (e.target.dataset.xr != null) { byKey(e.target.dataset.xr).cap = null; renderTargets(); }
+});
 
 // ── capture settings ──────────────────────────────────────────────────────
-[10, 15, 20, 30, 45, 60, 90, 120].forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; $('exposure').appendChild(o); });
+EXPOSURES.forEach(v => { const o = document.createElement('option'); o.value = o.textContent = v; $('exposure').appendChild(o); });
 $('exposure').value = '15';
 
 // Remembered choices (this browser)
@@ -249,10 +283,16 @@ function updateMode() {
   $('lab-program').classList.toggle('on', !sched); $('lab-schedule').classList.toggle('on', sched);
   $('cam-box').classList.toggle('hidden', sched); $('af-box').classList.toggle('hidden', sched);
   $('filter-box').classList.toggle('hidden', !sched && $('camera').value === 'wide');
+  if (MULTI) renderTargets();   // rows show the filter only when it applies
 }
+// The defaults changed: the targets that follow them show the new values
+['exposure', 'gain', 'filter'].forEach(id => $(id).addEventListener('change', () => { if (MULTI) renderTargets(); }));
+if (MULTI) $('capture-title').textContent = TXT.capture_defaults;
 document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', updateMode));
 $('camera').addEventListener('change', updateMode);
+sequence();
 updateMode();
+renderTargets();
 $('send').textContent = TXT.send;
 
 // Dwarfs of this app
@@ -287,7 +327,6 @@ $('send').addEventListener('click', async () => {
   const list = TARGETS.filter(x => x.on).sort((a, b) => a.slotStart - b.slotStart);
   const bad = checkSlots(list);
   if (bad) return status(bad, 'err');
-  const exp = parseFloat($('exposure').value), gain = $('gain').value || '80', filter = $('filter').value;
   savePrefs();
   $('send').disabled = true; status(TXT.sending);
   try {
@@ -295,13 +334,13 @@ $('send').addEventListener('click', async () => {
       const camera = $('camera').value, errors = [];
       let saved = 0;
       for (const x of list) {
-        const start = x.slotStart, end = x.slotEnd;
+        const start = x.slotStart, end = x.slotEnd, c = capOf(x), exp = parseFloat(c.exp), gain = c.gain || '80';
         const body = { dwarfUid: uid, target: { name: x.name, ra: x.ra, dec: x.dec }, camera,
           exposure: String(exp), gain: String(gain), count: Math.max(1, Math.ceil((end - start) / 1000 / exp)),
           date: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
           time: hhmm(start) + ':00', startEpochMs: start.getTime(), endTime: hhmm(end), endEpochMs: end.getTime(),
           autofocus: $('autofocus').checked };
-        if (camera === 'tele') body.ircut = String(IRCUT[filter]);
+        if (camera === 'tele') body.ircut = String(IRCUT[c.filter]);
         try {
           const res = await fetch('/api/program', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
           const data = await res.json().catch(() => ({}));
@@ -321,8 +360,8 @@ $('send').addEventListener('click', async () => {
         startTime: start.getTime(), endTime: end.getTime(), lock: 0, password: '', paramsMode: 0,
         params: { longitude: SITE.lon, latitude: SITE.lat, cityName: SITE.name, focusMode: 0 },
         shooting_tasks: list.map(x => ({ name: x.name, ra: x.ra, dec: x.dec, startTime: x.slotStart.getTime(), endTime: x.slotEnd.getTime(),
-          shutterIndex: null, shutterName: String(exp), gainIndex: null, gainName: String(gain),
-          count: 0, stacked: 0, filterModeIndex: null, filterModeName: filter,
+          shutterIndex: null, shutterName: String(capOf(x).exp), gainIndex: null, gainName: String(capOf(x).gain || '80'),
+          count: 0, stacked: 0, filterModeIndex: null, filterModeName: capOf(x).filter,
           schedule_task_id: uuid(), createFrom: 2 })),
       };
       const res = await fetch('/api/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dwarfUid: uid, schedule }) });

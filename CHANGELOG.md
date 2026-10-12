@@ -15,6 +15,9 @@
     With Scope Archive's "tonight's plan" (up to 5 targets), the page chains them over the night: the first to set
     first, each slot within its window, the night shared between them, 5 min apart; slots editable, untick a target
     to leave it out (the others re-flow). Sent as one program per target, or one native schedule with all of them.
+    Each target has its own exposure, gain and filter, prefilled from the Capture card (now the defaults for every
+    target): changing a default updates the targets not changed by hand; ↺ puts a target back on the defaults.
+    Camera and autofocus stay common.
 
 ## [3.2.2] - 2026-10-09
   ### Add

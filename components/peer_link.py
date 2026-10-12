@@ -68,7 +68,9 @@ def _hello(base: str) -> dict:
     return {"up": True, "version": version}
 
 
-def _set(base: str, result: dict) -> None:
+def _set(base: str, result: dict | None) -> None:
+    if result is None:   # run.io_bound() while the app is stopping: nothing was asked
+        return
     previous = _state.get(base)
     _state[base] = {**result, "checked": time.monotonic()}
     if previous is None or previous["up"] != result["up"]:
@@ -85,6 +87,8 @@ async def hello_all() -> None:
         bases = await run.io_bound(_bases)
     except Exception as e:
         log.error(f"Scope Archive hello: {e}")
+        return
+    if not bases:   # none set, or the app is stopping (run.io_bound() -> None)
         return
     now = time.monotonic()
     for base in bases:
@@ -111,7 +115,7 @@ async def check_now(url: str) -> bool | None:
     for base in list(_state):
         if url == base or url.startswith(base + "/"):
             _set(base, await run.io_bound(_hello, base))
-            return _state[base]["up"]
+            return _state.get(base, {}).get("up")
     return None
 
 

@@ -17,7 +17,9 @@
     to leave it out (the others re-flow). Sent as one program per target, or one native schedule with all of them.
     Each target has its own exposure, gain and filter, prefilled from the Capture card (now the defaults for every
     target): changing a default updates the targets not changed by hand; ↺ puts a target back on the defaults.
-    Camera and autofocus stay common.
+    Camera and autofocus stay common. Exposure, gain and filter lists only offer the values the chosen Dwarf accepts
+    (e.g. no 20 s; 180 s on the Mini only; VIS on the Dwarf 3 only); changing the Dwarf moves a value it lacks to the
+    nearest one below.
 
 ## [3.2.2] - 2026-10-09
   ### Add

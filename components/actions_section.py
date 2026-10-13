@@ -7,10 +7,11 @@ every ~2s poll tick, along with any button mid-interaction.
 Toggle Lights / Focus Infinite / Calibrate / Polar Position / EQ Solving
 / Reboot are ported from astro_dwarf_session_UI.py's own buttons -
 verified against that source, not guessed:
-- Toggle Lights: perform_powerOpenRGB()/perform_powerCloseRGB() - there's
-  no status field to read the light's current state back from the
-  device, so this module tracks it itself (in-memory, per dwarf_uid,
-  reset on app restart).
+- Toggle Lights: perform_powerOpenRGB()/perform_powerCloseRGB() - the
+  light's current state is read first as the Dwarf reports it (its RGB
+  notification, else rgb_state in the device state on connection - see
+  components/identify.py), the state remembered after our own commands
+  being only a fallback. Same for the power indicator.
 - Focus Infinite: perform_start_autofocus(infinite=True, ...).
 - Calibrate: perform_calibration().
 - Polar Position: NOT a single perform_* call - astro_dwarf_session_UI.
@@ -51,10 +52,10 @@ from dwarf_python_api.lib.dwarf_utils import (
 from components import connection_health, scheduler_runner
 from components.i18n import t
 
-# In-memory only - no field in get_client_status()'s fullStatus reports
-# the RGB light's current on/off state, so there's nothing to read back
-# from the device to stay in sync with. Resets to "assumed off" on app
-# restart.
+# The state remembered after our own commands - only a fallback now: the
+# Dwarf reports both lights (RGB / power indicator notifications, and
+# rgb_state / power_ind_state in the device state on connection), read
+# first by _current() (Oct 2026). Resets to "assumed off" on app restart.
 _lights_on: dict[str, bool] = {}
 # Power indicator LED (user-requested Sep 2026: "eteindre les lumieres
 # de la battery" - separate from _lights_on above, which is the main
@@ -250,8 +251,16 @@ async def _send_light(session, dwarf_uid, fn):
             connection_health.release_command_slot(dwarf_uid)
 
 
+def _current(reported: bool | None, remembered: dict, dwarf_uid: str) -> bool:
+    """A light's state before toggling it: as the Dwarf reports it
+    (user-requested Oct 2026 - the remembered one was wrong whenever the
+    light was switched elsewhere, or on at start), else as remembered."""
+    return reported if reported is not None else remembered.get(dwarf_uid, False)
+
+
 async def _handle_toggle_lights(session, dwarf_uid) -> None:
-    is_on = _lights_on.get(dwarf_uid, False)
+    from components.identify import _light_is_on
+    is_on = _current(_light_is_on(session), _lights_on, dwarf_uid)
     fn = perform_powerCloseRGB if is_on else perform_powerOpenRGB
 
     # Also during a program's capture, without the slot (user-requested
@@ -271,7 +280,8 @@ async def _handle_toggle_lights(session, dwarf_uid) -> None:
 
 
 async def _handle_toggle_power_lights(session, dwarf_uid) -> None:
-    is_on = _power_lights_on.get(dwarf_uid, False)
+    from components.identify import power_light_is_on
+    is_on = _current(power_light_is_on(session), _power_lights_on, dwarf_uid)
     fn = perform_powerIndOff if is_on else perform_powerIndOn
 
     # Also during a program's capture, without the slot (user-requested

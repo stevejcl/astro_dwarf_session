@@ -245,7 +245,9 @@ def read_device_identity(ip: str, timeout: float = 4) -> dict | None:
     if not isinstance(data, dict) or not data.get("deviceName"):
         return None
     device_id = data.get("deviceId")
-    dwarf_id = str(int(device_id) + 1) if str(device_id).isdigit() else ""   # DWARF_ID = deviceId + 1
+    # DWARF_ID = deviceId, no offset (confirmed on a real Dwarf 3 and Mini, see
+    # dwarf_python_api's DEVICE_INFO_HTTP_MODEL_MAP)
+    dwarf_id = str(int(device_id)) if str(device_id).isdigit() else ""
     model = next((m for m, i in DEVICE_ID_BY_MODEL.items() if i == dwarf_id), "")
     return {"uid": str(data["deviceName"]), "model": model}
 

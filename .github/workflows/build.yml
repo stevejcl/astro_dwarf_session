@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -39,7 +39,7 @@ jobs:
           python buildAstroDwarfUI.py
 
       - name: 📤 Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: zip-${{ github.ref_name }}-${{ runner.os }}
           path: AstroDwarfUI-${{ runner.os }}.zip
@@ -73,7 +73,7 @@ jobs:
           echo "FINAL_VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: 📥 Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: downloads
 

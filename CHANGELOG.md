@@ -9,6 +9,11 @@
     The manual configuration page takes ?name=&model=&ip= (filled in) and ?dwarfium_id=&dwarfium_base_url= (the new
     device is saved linked to that Dwarf of Scope Archive): Dwarfium-Hub opens it to add a Dwarf Scope Archive
     already knows.
+    ### Manual configuration from the IP alone
+    "Read from the Dwarf" next to the IP fills in the UID (the Dwarf's Bluetooth name) and the model from the Dwarf
+    itself (POST :8082/deviceInfo - only these two fields are kept, the passwords in that answer are never kept nor
+    logged); done on save too when the UID is empty, and on opening when the page is given an IP (Dwarfium-Hub).
+    The UID can still be typed in when the Dwarf isn't reachable.
 
 ## [3.2.3] - 2026-10-11
   ### Add

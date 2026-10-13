@@ -17,7 +17,8 @@ requested Sep 2026: Sites are the single source of truth for these) -
 this page no longer asks for them directly. The IP and UID fields are
 the two values BLE would normally have discovered on its own - the
 user reads them off the DwarfLab app's own "My Device" screen
-instead.
+instead - or the IP alone: the UID (the Dwarf's Bluetooth name) and the
+model are then read from the Dwarf itself (POST :8082/deviceInfo).
 
 Dwarfium-Hub opens this page filled in for a Dwarf Scope Archive already
 knows (?name=&model=&ip=), with its Scope Archive id and URL
@@ -27,7 +28,7 @@ from __future__ import annotations
 
 import configparser
 
-from nicegui import ui
+from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import get_manager
@@ -36,7 +37,8 @@ from components.i18n import t
 from components.pwa import add_pwa_head_tags
 from components.site_picker import site_picker
 from components.theme import apply_theme
-from device_provisioning import DEFAULT_BLE_PSD, DEVICE_MODELS, ManualDeviceInput, write_manual_config
+from device_provisioning import (DEFAULT_BLE_PSD, DEVICE_MODELS, ManualDeviceInput, read_device_identity,
+                                 write_manual_config)
 from device_registry import add_device_entry
 
 
@@ -67,15 +69,45 @@ def build_manual_config_page() -> None:
             site_select, get_selected_site = site_picker()
 
             ui.label(t("manual_config_ip_hint")).classes("text-xs text-grey-6")
-            ip_input = ui.input(t("manual_config_ip"), value=ip).classes("w-full")
+            with ui.row().classes("w-full items-center no-wrap gap-2"):
+                ip_input = ui.input(t("manual_config_ip"), value=ip).classes("flex-1")
+                read_button = ui.button(t("manual_config_read"), icon="wifi_find").props("flat no-caps")
             uid_input = ui.input(t("manual_config_uid")).classes("w-full")
+
+            async def read_from_dwarf(quiet: bool = False) -> bool:
+                """UID + model from the Dwarf at the IP typed in."""
+                address = ip_input.value.strip()
+                if not address:
+                    if not quiet:
+                        ui.notify(t("manual_config_ip_first"), type="warning")
+                    return False
+                read_button.props("loading")
+                try:
+                    info = await run.io_bound(read_device_identity, address)
+                finally:
+                    read_button.props(remove="loading")
+                if not info:
+                    if not quiet:
+                        ui.notify(t("manual_config_no_answer", ip=address), type="warning", multi_line=True)
+                    return False
+                uid_input.value = info["uid"]
+                if info["model"]:
+                    model_select.value = info["model"]
+                if not device_name.value.strip():
+                    device_name.value = info["uid"]
+                ui.notify(t("manual_config_read_ok", uid=info["uid"]), type="positive")
+                return True
+
+            read_button.on_click(read_from_dwarf)
+            if ip:      # opened with the IP (Dwarfium-Hub): the rest from the Dwarf, if it answers
+                ui.timer(0.5, lambda: read_from_dwarf(quiet=True), once=True)
             ble_psd_input = ui.input(t("bluetooth_password"), value=DEFAULT_BLE_PSD).classes(
                 "w-full"
             )
 
             status_label = ui.label("").classes("text-sm")
 
-            def handle_save() -> None:
+            async def handle_save() -> None:
                 if not device_name.value.strip():
                     ui.notify(t("pairing_name_required"), type="negative")
                     return
@@ -83,9 +115,11 @@ def build_manual_config_page() -> None:
                 if not site:
                     ui.notify(t("manual_config_site_required"), type="negative")
                     return
-                if not ip_input.value.strip() or not uid_input.value.strip():
+                if not ip_input.value.strip():
                     ui.notify(t("manual_config_ip_uid_required"), type="negative")
                     return
+                if not uid_input.value.strip() and not await read_from_dwarf():
+                    return      # neither typed nor read: said by read_from_dwarf()
 
                 data = ManualDeviceInput(
                     device_name=device_name.value.strip(),

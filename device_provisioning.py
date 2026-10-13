@@ -224,6 +224,32 @@ def write_manual_config(data: ManualDeviceInput) -> tuple[str, str]:
     return config_py, config_ini
 
 
+def read_device_identity(ip: str, timeout: float = 4) -> dict | None:
+    """Blocking. What the Dwarf at `ip` says it is - {"uid": its Bluetooth
+    name (deviceName, the UID BLE pairing would store), "model": one of
+    DEVICE_MODELS or ""} - from POST http://<ip>:8082/deviceInfo, or None
+    when nothing answers. Lets a device be configured from its IP alone.
+
+    That answer also holds the Dwarf's and the Wi-Fi's passwords in clear
+    text (see dwarf_python_api's perform_get_device_info_http): only these
+    two fields are kept, and the answer is never logged."""
+    import requests
+
+    try:
+        response = requests.post(f"http://{ip}:8082/deviceInfo", timeout=timeout)
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+    data = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
+    if not isinstance(data, dict) or not data.get("deviceName"):
+        return None
+    device_id = data.get("deviceId")
+    dwarf_id = str(int(device_id) + 1) if str(device_id).isdigit() else ""   # DWARF_ID = deviceId + 1
+    model = next((m for m, i in DEVICE_ID_BY_MODEL.items() if i == dwarf_id), "")
+    return {"uid": str(data["deviceName"]), "model": model}
+
+
 def update_dwarf_ip(config_py_path: str, new_ip: str) -> None:
     """Rewrites ONLY the DWARF_IP line of an EXISTING config.py in
     place, preserving every other line exactly (uid/model/ble_psd/...)

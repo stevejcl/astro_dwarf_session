@@ -442,10 +442,14 @@ TRANSLATIONS: dict[str, str] = {
     "manual_config_model":          "Mod\u00e8le",
     "manual_config_site":           "Site",
     "manual_config_site_required":  "Choisissez un site.",
-    "manual_config_ip_hint":        "Relevez l'IP et l'UID depuis l'\u00e9cran \"My Device\" de l'application DwarfLab.",
+    "manual_config_ip_hint":        "L'IP suffit quand le Dwarf est sur le r\u00e9seau : \u00ab Lire depuis le Dwarf \u00bb remplit son UID (nom Bluetooth) et son mod\u00e8le. Sinon relevez l'IP et l'UID depuis l'\u00e9cran \"My Device\" de l'application DwarfLab.",
     "manual_config_ip":             "IP de l'appareil",
     "manual_config_uid":            "UID de l'appareil",
-    "manual_config_ip_uid_required": "IP et UID sont requis.",
+    "manual_config_ip_uid_required":"L'IP est requise (l'UID est lu depuis le Dwarf, ou saisi).",
+    "manual_config_read_ok":        "Dwarf {uid}",
+    "manual_config_no_answer":      "Le Dwarf n'a pas r\u00e9pondu \u00e0 {ip} : est-il allum\u00e9 et sur ce r\u00e9seau ? Sinon saisissez son UID (\u00e9cran \"My Device\" de l'application DwarfLab).",
+    "manual_config_ip_first":       "Saisissez d'abord l'IP du Dwarf",
+    "manual_config_read":           "Lire depuis le Dwarf",
     "manual_config_success":        "{device_name} configur\u00e9.",
 
     # -- Site picker (shared by pairing / manual config / settings) ------

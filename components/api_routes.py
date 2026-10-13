@@ -329,12 +329,17 @@ def register_api_routes() -> None:
 
     @app.post("/api/open-page")
     async def api_open_page(request: Request):
-        """Shows a page of this app in its own window, brought to the front
-        - Dwarfium-Hub opens the manual configuration / pairing here instead
-        of in a browser. This PC only. {"shown": false} without a window
-        (--no_native): the caller opens a browser instead."""
-        from urllib.parse import urlsplit
-        if not request.client or request.client.host not in ("127.0.0.1", "::1", "localhost"):
+        """Shows a page of this app where it is open on this PC - its own
+        window, or a local browser tab: Dwarfium-Hub opens the manual
+        configuration / pairing there instead of a new browser tab.
+        Plain NiceGUI navigation of the pages connected from this computer:
+        never the native window's own methods, whose answers can hang (a
+        get_current_url() left Dwarfium Lite blocked, Oct 2026). This PC
+        only. {"shown": false} when no page of this app is open here: the
+        caller opens a browser instead."""
+        from nicegui import Client, ui
+        local = ("127.0.0.1", "::1", "localhost")
+        if not request.client or request.client.host not in local:
             return JSONResponse({"error": "this computer only"}, status_code=403)
         try:
             path = str((await request.json()).get("path") or "")
@@ -342,21 +347,16 @@ def register_api_routes() -> None:
             path = ""
         if not path.startswith("/") or path.startswith("//"):
             return JSONResponse({"error": "path must start with /"}, status_code=400)
-        window = app.native.main_window
-        if window is None:
-            return {"shown": False}
-        try:
-            current = urlsplit(await window.get_current_url() or "")
-            base = f"{current.scheme}://{current.netloc}" if current.netloc else f"http://127.0.0.1:{request.url.port}"
-            window.load_url(base + path)
-            window.restore()
-            window.show()
-            window.set_always_on_top(True)      # to the front, then a normal window again
-            window.set_always_on_top(False)
-        except Exception as e:
-            print(f"[open-page] {e}")
-            return {"shown": False}
-        return {"shown": True}
+        shown = False
+        for client in list(Client.instances.values()):
+            try:
+                if client.has_socket_connection and client.ip in local:
+                    with client:
+                        ui.navigate.to(path)
+                    shown = True
+            except Exception as e:      # a page closing meanwhile
+                print(f"[open-page] {e}")
+        return {"shown": shown}
 
     @app.get("/Program-{lang}")
     @app.get("/Program-{lang}/{dwarf_uid}")

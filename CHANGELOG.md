@@ -18,13 +18,15 @@
     Its ring light flashes 3 times, to tell which Dwarf it is when several are on: a button on each device card and
     next to the IP of the manual configuration, and GET /api/identify?ip= (Scope Archive's Dwarf page, Dwarfium-Hub's
     Dwarfs tab). Never during a capture: refused when a program runs on it, a photo is being taken, or its state shows
-    a camera / motor / focus operation (a native schedule running on the Dwarf too). A Dwarf already connected uses
-    its own connection and command slot, and gets its light back as it was; otherwise a short connection of its own,
-    closed afterwards - refused, not forced, when another app (DwarfLab) holds the Dwarf.
+    a camera / motor / focus operation (a native schedule running on the Dwarf too). The light ends as the Dwarf
+    reported it before (its rgb_state, on when unknown - a Dwarf's ring light is usually on). A Dwarf already
+    connected uses its own connection and command slot; otherwise a short connection of its own, closed afterwards -
+    refused, not forced, when another app (DwarfLab) holds the Dwarf.
     ### Pages opened in this app's window
-    POST /api/open-page {"path"} (this computer only) shows a page of this app in its own window, brought to the front:
-    Dwarfium-Hub opens the manual configuration and the pairing there instead of in a browser. {"shown": false}
-    without a window (--no_native).
+    POST /api/open-page {"path"} (this computer only) shows a page of this app where it is open on this PC (its own
+    window, or a local browser tab): Dwarfium-Hub opens the manual configuration and the pairing there instead of in a
+    new browser tab. Plain page navigation, never the window's own methods (whose answers can hang). {"shown": false}
+    when no page of this app is open here.
 
 ## [3.2.3] - 2026-10-11
   ### Add

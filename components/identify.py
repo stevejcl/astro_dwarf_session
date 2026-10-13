@@ -57,18 +57,37 @@ def _capturing(session: DwarfSession) -> bool:
     return bool(full_status.get("takePhotoStarted") or full_status.get("takeWidePhotoStarted"))
 
 
+def _light_is_on(session: DwarfSession) -> bool | None:
+    """The ring light as the Dwarf reports it: its last RGB notification,
+    else the device state received on connection (rgb_state); None when
+    neither says. (A Dwarf's ring light is usually on - assuming it off
+    left it off after identifying, user-reported Oct 2026.)"""
+    client = getattr(session, "client_instance", None)
+    notified = getattr(client, "RgbIndStateDwarf", None)
+    if notified is not None:
+        return bool(notified)
+    info = getattr(client, "last_device_state_info", None)
+    try:
+        if info is not None and info.HasField("device_state_info"):
+            return bool(info.device_state_info.rgb_state.state)
+    except (AttributeError, ValueError):
+        pass
+    return None
+
+
 def _flash(session: DwarfSession, light_was_on: bool) -> bool:
-    """Blocking. FLASHES on/off, then the light as it was."""
+    """Blocking. FLASHES times the opposite of the light's state and back,
+    so it ends as it was (on stays on, off stays off)."""
+    first, back = ((perform_powerCloseRGB, perform_powerOpenRGB) if light_was_on
+                   else (perform_powerOpenRGB, perform_powerCloseRGB))
     for _ in range(FLASHES):
         # is False, not falsy: 0 is a success code (see actions_section)
-        if perform_powerOpenRGB(session=session) is False:
+        if first(session=session) is False:
             return False
         time.sleep(_ON_S)
-        if perform_powerCloseRGB(session=session) is False:
+        if back(session=session) is False:
             return False
         time.sleep(_OFF_S)
-    if light_was_on:
-        perform_powerOpenRGB(session=session)
     return True
 
 
@@ -87,7 +106,8 @@ def _identify_throwaway(ip: str) -> str:
             return OCCUPIED if "OCCUPIED" in error.upper() else NO_ANSWER
         if connection_health._device_busy(session):
             return BUSY
-        return OK if _flash(session, light_was_on=False) else FAILED
+        light = _light_is_on(session)
+        return OK if _flash(session, light_was_on=True if light is None else light) else FAILED
     finally:
         try:
             disconnect_socket(session)
@@ -113,7 +133,12 @@ async def identify(ip: str) -> str:
         return BUSY
     try:
         from components.actions_section import _lights_on
-        ok = await run.io_bound(_flash, session, _lights_on.get(uid, False))
+        light = _light_is_on(session)
+        if light is None:
+            light = _lights_on.get(uid, True)
+        ok = await run.io_bound(_flash, session, light)
+        if ok:
+            _lights_on[uid] = light       # the Lights button knows it too
         return OK if ok else FAILED
     finally:
         connection_health.release_command_slot(uid)

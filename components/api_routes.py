@@ -311,6 +311,14 @@ def register_api_routes() -> None:
     def api_dwarfs():
         return JSONResponse({"devices": _devices_snapshot()})
 
+    @app.get("/api/app-info")
+    def api_app_info():
+        """Which app answers on this port, and its version (Dwarfium-Hub:
+        tells this app from another program on the port, and learns the
+        version of an installation it didn't make)."""
+        from components.app_version import get_app_version
+        return {"app": "astro_dwarf_session", "name": "Dwarfium Lite", "version": get_app_version()}
+
     @app.get("/Program-{lang}")
     @app.get("/Program-{lang}/{dwarf_uid}")
     def program_page(lang: str, dwarf_uid: str | None = None):

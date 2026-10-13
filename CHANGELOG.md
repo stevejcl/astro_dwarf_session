@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.2.4] - 2026-10-13
+  ### Add
+    ### /api/app-info
+    GET /api/app-info answers {"app": "astro_dwarf_session", "name", "version"}: Dwarfium-Hub tells this app from
+    another program on the same port, and learns the version of an installation it didn't install.
+
 ## [3.2.3] - 2026-10-11
   ### Add
     ### Dwarfium Scope Archive presence

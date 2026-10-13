@@ -25,8 +25,9 @@
     ### Pages opened in this app's window
     POST /api/open-page {"path"} (this computer only) shows a page of this app where it is open on this PC (its own
     window, or a local browser tab): Dwarfium-Hub opens the manual configuration and the pairing there instead of in a
-    new browser tab. Plain page navigation, never the window's own methods (whose answers can hang). {"shown": false}
-    when no page of this app is open here.
+    new browser tab, and brings this app's window to the front (Windows: plain Win32, as Dwarfium Scope Archive does).
+    Plain page navigation, never the window's own methods (whose answers can hang). {"shown": false} when no page of
+    this app is open here.
 
 ## [3.2.3] - 2026-10-11
   ### Add

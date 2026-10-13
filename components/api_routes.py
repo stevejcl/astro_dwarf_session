@@ -331,7 +331,8 @@ def register_api_routes() -> None:
     async def api_open_page(request: Request):
         """Shows a page of this app where it is open on this PC - its own
         window, or a local browser tab: Dwarfium-Hub opens the manual
-        configuration / pairing there instead of a new browser tab.
+        configuration / pairing there instead of a new browser tab - the
+        window brought to the front (components/window_front.py, Windows).
         Plain NiceGUI navigation of the pages connected from this computer:
         never the native window's own methods, whose answers can hang (a
         get_current_url() left Dwarfium Lite blocked, Oct 2026). This PC
@@ -356,6 +357,14 @@ def register_api_routes() -> None:
                     shown = True
             except Exception as e:      # a page closing meanwhile
                 print(f"[open-page] {e}")
+        if shown and app.native.main_window is not None:
+            # This app's window to the front, through Win32 in a thread
+            # (components/window_front.py) - not pywebview's own calls
+            from components.window_front import bring_to_front
+            try:
+                await run.io_bound(bring_to_front)
+            except Exception as e:
+                print(f"[open-page] front: {e}")
         return {"shown": shown}
 
     @app.get("/Program-{lang}")

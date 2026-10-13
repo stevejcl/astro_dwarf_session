@@ -319,6 +319,45 @@ def register_api_routes() -> None:
         from components.app_version import get_app_version
         return {"app": "astro_dwarf_session", "name": "Dwarfium Lite", "version": get_app_version()}
 
+    @app.get("/api/identify")
+    async def api_identify(ip: str = ""):
+        """Flashes the ring light of the Dwarf at `ip` (components/identify.py):
+        Scope Archive's Dwarf page and Dwarfium-Hub's Dwarfs tab ask for it.
+        {"result": ok | busy | no_answer | occupied | failed}."""
+        from components.identify import identify
+        return {"result": await identify(ip)}
+
+    @app.post("/api/open-page")
+    async def api_open_page(request: Request):
+        """Shows a page of this app in its own window, brought to the front
+        - Dwarfium-Hub opens the manual configuration / pairing here instead
+        of in a browser. This PC only. {"shown": false} without a window
+        (--no_native): the caller opens a browser instead."""
+        from urllib.parse import urlsplit
+        if not request.client or request.client.host not in ("127.0.0.1", "::1", "localhost"):
+            return JSONResponse({"error": "this computer only"}, status_code=403)
+        try:
+            path = str((await request.json()).get("path") or "")
+        except (ValueError, AttributeError):
+            path = ""
+        if not path.startswith("/") or path.startswith("//"):
+            return JSONResponse({"error": "path must start with /"}, status_code=400)
+        window = app.native.main_window
+        if window is None:
+            return {"shown": False}
+        try:
+            current = urlsplit(await window.get_current_url() or "")
+            base = f"{current.scheme}://{current.netloc}" if current.netloc else f"http://127.0.0.1:{request.url.port}"
+            window.load_url(base + path)
+            window.restore()
+            window.show()
+            window.set_always_on_top(True)      # to the front, then a normal window again
+            window.set_always_on_top(False)
+        except Exception as e:
+            print(f"[open-page] {e}")
+            return {"shown": False}
+        return {"shown": True}
+
     @app.get("/Program-{lang}")
     @app.get("/Program-{lang}/{dwarf_uid}")
     def program_page(lang: str, dwarf_uid: str | None = None):

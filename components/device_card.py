@@ -148,6 +148,10 @@ class DeviceCardView:
     """One card per DwarfSession, built once. Call update(session) on
     every poll instead of recreating the card."""
 
+    async def _identify(self) -> None:
+        from components.identify import identify_and_notify
+        await identify_and_notify(self._session.config.dwarf_ip)
+
     def __init__(
         self,
         session: DwarfSession,
@@ -162,6 +166,7 @@ class DeviceCardView:
         on_move(uid, where): called by the card's order menu, where being
         "first", "up", "down" or "last"."""
         self.dwarf_uid = session.dwarf_uid
+        self._session = session         # the latest one (update()), for Identify
         self.hidden = hidden
         self._banner_kind: str | None = None
         self._dynamic_label: ui.label | None = None
@@ -210,6 +215,15 @@ class DeviceCardView:
                                         with ui.row().classes("items-center gap-2 no-wrap"):
                                             ui.icon(icon).classes("text-grey-7")
                                             ui.label(t(label))
+                    # Identify: its ring light flashes (several Dwarfs on the
+                    # table); stopPropagation: not the card's own click
+                    ui.button(icon="flare").props("flat round dense size=sm").classes(
+                        "text-grey-6"
+                    ).tooltip(t("identify_button")).on(
+                        "click",
+                        lambda: self._identify(),
+                        js_handler="(e) => { e.stopPropagation(); emit(); }",
+                    )
                     if on_toggle_hidden is not None:
                         # Hide / show this Dwarf (header only, listed last,
                         # not auto-connected); stopPropagation: not the
@@ -376,6 +390,7 @@ class DeviceCardView:
         self.update(session)
 
     def update(self, session: DwarfSession) -> None:
+        self._session = session
         full_status: dict = {}
         new_values: dict = {}
         if session.is_connected:

@@ -450,6 +450,13 @@ TRANSLATIONS: dict[str, str] = {
     "manual_config_no_answer":      "Le Dwarf n'a pas r\u00e9pondu \u00e0 {ip} : est-il allum\u00e9 et sur ce r\u00e9seau ? Sinon saisissez son UID (\u00e9cran \"My Device\" de l'application DwarfLab).",
     "manual_config_ip_first":       "Saisissez d'abord l'IP du Dwarf",
     "manual_config_read":           "Lire depuis le Dwarf",
+    "identify_button":              "Identifier : l'anneau lumineux du Dwarf clignote",
+    "identify_running":             "Identification du Dwarf : regardez son anneau lumineux\u2026",
+    "identify_ok":                  "Le Dwarf \u00e0 {ip} a fait clignoter son anneau lumineux 3 fois",
+    "identify_busy":                "Le Dwarf \u00e0 {ip} est occup\u00e9 (capture, goto, programme\u2026) : pas d'identification, la lumi\u00e8re g\u00e2cherait les images",
+    "identify_no_answer":           "Aucun Dwarf n'a r\u00e9pondu \u00e0 {ip} : est-il allum\u00e9 et sur ce r\u00e9seau ?",
+    "identify_occupied":            "Le Dwarf \u00e0 {ip} est pris par une autre application (DwarfLab\u2026) : fermez-la d'abord",
+    "identify_failed":              "Le Dwarf \u00e0 {ip} n'a pas accept\u00e9 la commande de lumi\u00e8re",
     "manual_config_success":        "{device_name} configur\u00e9.",
 
     # -- Site picker (shared by pairing / manual config / settings) ------

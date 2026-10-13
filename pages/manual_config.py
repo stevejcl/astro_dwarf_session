@@ -72,6 +72,7 @@ def build_manual_config_page() -> None:
             with ui.row().classes("w-full items-center no-wrap gap-2"):
                 ip_input = ui.input(t("manual_config_ip"), value=ip).classes("flex-1")
                 read_button = ui.button(t("manual_config_read"), icon="wifi_find").props("flat no-caps")
+                identify_button = ui.button(icon="flare").props("flat round").tooltip(t("identify_button"))
             uid_input = ui.input(t("manual_config_uid")).classes("w-full")
 
             async def read_from_dwarf(quiet: bool = False) -> bool:
@@ -99,6 +100,20 @@ def build_manual_config_page() -> None:
                 return True
 
             read_button.on_click(read_from_dwarf)
+
+            async def identify_dwarf() -> None:
+                """Its ring light flashes: the right Dwarf, with several on?"""
+                if not ip_input.value.strip():
+                    ui.notify(t("manual_config_ip_first"), type="warning")
+                    return
+                from components.identify import identify_and_notify
+                identify_button.props("loading")
+                try:
+                    await identify_and_notify(ip_input.value.strip())
+                finally:
+                    identify_button.props(remove="loading")
+
+            identify_button.on_click(identify_dwarf)
             if ip:      # opened with the IP (Dwarfium-Hub): the rest from the Dwarf, if it answers
                 ui.timer(0.5, lambda: read_from_dwarf(quiet=True), once=True)
             ble_psd_input = ui.input(t("bluetooth_password"), value=DEFAULT_BLE_PSD).classes(

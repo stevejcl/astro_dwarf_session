@@ -57,22 +57,32 @@ def _capturing(session: DwarfSession) -> bool:
     return bool(full_status.get("takePhotoStarted") or full_status.get("takeWidePhotoStarted"))
 
 
-def _light_is_on(session: DwarfSession) -> bool | None:
-    """The ring light as the Dwarf reports it: its last RGB notification,
-    else the device state received on connection (rgb_state); None when
-    neither says. (A Dwarf's ring light is usually on - assuming it off
-    left it off after identifying, user-reported Oct 2026.)"""
+def _reported_state(session: DwarfSession, notified_attr: str, state_field: str) -> bool | None:
+    """A light as the Dwarf reports it: its last notification (the
+    WebSocketClient's notified_attr), else the device state received on
+    connection (device_state_info.<state_field>); None when neither says."""
     client = getattr(session, "client_instance", None)
-    notified = getattr(client, "RgbIndStateDwarf", None)
+    notified = getattr(client, notified_attr, None)
     if notified is not None:
         return bool(notified)
     info = getattr(client, "last_device_state_info", None)
     try:
         if info is not None and info.HasField("device_state_info"):
-            return bool(info.device_state_info.rgb_state.state)
+            return bool(getattr(info.device_state_info, state_field).state)
     except (AttributeError, ValueError):
         pass
     return None
+
+
+def _light_is_on(session: DwarfSession) -> bool | None:
+    """The ring light (a Dwarf's ring light is usually on - assuming it off
+    left it off after identifying, user-reported Oct 2026)."""
+    return _reported_state(session, "RgbIndStateDwarf", "rgb_state")
+
+
+def power_light_is_on(session: DwarfSession) -> bool | None:
+    """The power (battery) indicator."""
+    return _reported_state(session, "PowerIndStateDwarf", "power_ind_state")
 
 
 def _flash(session: DwarfSession, light_was_on: bool) -> bool:

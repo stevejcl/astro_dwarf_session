@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.2.5] - 2026-10-13
+  ### BugFix
+    ### Lights and power light: the Dwarf's own state
+    Toggle lights and toggle power light read the light's state as the Dwarf reports it before sending a command (its
+    RGB / power indicator notification, else rgb_state / power_ind_state in the device state on connection), the
+    state remembered after this app's own commands being only a fallback: a light switched elsewhere (the DwarfLab
+    app, the Dwarf itself) or on from the start no longer needs two clicks.
+
 ## [3.2.4] - 2026-10-13
   ### Add
     ### /api/app-info

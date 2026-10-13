@@ -14,6 +14,17 @@
     itself (POST :8082/deviceInfo - only these two fields are kept, the passwords in that answer are never kept nor
     logged); done on save too when the UID is empty, and on opening when the page is given an IP (Dwarfium-Hub).
     The UID can still be typed in when the Dwarf isn't reachable.
+    ### Identify a Dwarf
+    Its ring light flashes 3 times, to tell which Dwarf it is when several are on: a button on each device card and
+    next to the IP of the manual configuration, and GET /api/identify?ip= (Scope Archive's Dwarf page, Dwarfium-Hub's
+    Dwarfs tab). Never during a capture: refused when a program runs on it, a photo is being taken, or its state shows
+    a camera / motor / focus operation (a native schedule running on the Dwarf too). A Dwarf already connected uses
+    its own connection and command slot, and gets its light back as it was; otherwise a short connection of its own,
+    closed afterwards - refused, not forced, when another app (DwarfLab) holds the Dwarf.
+    ### Pages opened in this app's window
+    POST /api/open-page {"path"} (this computer only) shows a page of this app in its own window, brought to the front:
+    Dwarfium-Hub opens the manual configuration and the pairing there instead of in a browser. {"shown": false}
+    without a window (--no_native).
 
 ## [3.2.3] - 2026-10-11
   ### Add

@@ -450,6 +450,13 @@ TRANSLATIONS: dict[str, str] = {
     "manual_config_no_answer":      "The Dwarf didn't answer at {ip}: is it on and on this network? Otherwise type its UID (\"My Device\" screen of the DwarfLab app).",
     "manual_config_ip_first":       "Type the Dwarf's IP first",
     "manual_config_read":           "Read from the Dwarf",
+    "identify_button":              "Identify: the Dwarf's ring light flashes",
+    "identify_running":             "Identifying the Dwarf: watch its ring light…",
+    "identify_ok":                  "The Dwarf at {ip} flashed its ring light 3 times",
+    "identify_busy":                "The Dwarf at {ip} is busy (capture, goto, program…): not identified, the light would spoil the frames",
+    "identify_no_answer":           "No Dwarf answered at {ip}: is it on and on this network?",
+    "identify_occupied":            "The Dwarf at {ip} is held by another app (DwarfLab…): close it there first",
+    "identify_failed":              "The Dwarf at {ip} didn't accept the light command",
     "manual_config_success":        "{device_name} configured.",
 
     # -- Site picker (shared by pairing / manual config / settings) ------

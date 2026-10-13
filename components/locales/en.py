@@ -442,10 +442,14 @@ TRANSLATIONS: dict[str, str] = {
     "manual_config_model":          "Model",
     "manual_config_site":           "Site",
     "manual_config_site_required":  "Pick a site.",
-    "manual_config_ip_hint":        "Read the IP and UID from the DwarfLab app's \"My Device\" screen.",
+    "manual_config_ip_hint":        "The IP is enough when the Dwarf is on the network: \"Read from the Dwarf\" fills in its UID (Bluetooth name) and model. Otherwise read the IP and UID from the DwarfLab app's \"My Device\" screen.",
     "manual_config_ip":             "Device IP",
     "manual_config_uid":            "Device UID",
-    "manual_config_ip_uid_required": "IP and UID are required.",
+    "manual_config_ip_uid_required":"The IP is required (the UID is read from the Dwarf, or typed in).",
+    "manual_config_read_ok":        "Dwarf {uid}",
+    "manual_config_no_answer":      "The Dwarf didn't answer at {ip}: is it on and on this network? Otherwise type its UID (\"My Device\" screen of the DwarfLab app).",
+    "manual_config_ip_first":       "Type the Dwarf's IP first",
+    "manual_config_read":           "Read from the Dwarf",
     "manual_config_success":        "{device_name} configured.",
 
     # -- Site picker (shared by pairing / manual config / settings) ------

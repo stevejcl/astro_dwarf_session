@@ -5,6 +5,10 @@
     ### /api/app-info
     GET /api/app-info answers {"app": "astro_dwarf_session", "name", "version"}: Dwarfium-Hub tells this app from
     another program on the same port, and learns the version of an installation it didn't install.
+    ### Manual configuration filled in by Dwarfium-Hub
+    The manual configuration page takes ?name=&model=&ip= (filled in) and ?dwarfium_id=&dwarfium_base_url= (the new
+    device is saved linked to that Dwarf of Scope Archive): Dwarfium-Hub opens it to add a Dwarf Scope Archive
+    already knows.
 
 ## [3.2.3] - 2026-10-11
   ### Add

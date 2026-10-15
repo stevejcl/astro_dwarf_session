@@ -997,7 +997,96 @@ def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
                 name=f"resume-orphan-{dwarf_uid}",
             )
         return
+    if _capture_had_started(id_command):
+        # The Dwarf captures on its own once started: the app stopped
+        # (a Windows update at 4:30, user-reported Oct 2026) and the
+        # capture went on to its end - requeued, it would be run again
+        _finalize_orphan_ended_on_device(dwarf_uid, session, dirs, filename, path, program, id_command)
+        return
     _requeue_orphan_to_todo(dwarf_uid, dirs, filename, path, program, id_command)
+
+
+# Last steps once the capture has started (dwarf_session.STEP_DESCRIPTIONS)
+_CAPTURE_STEP_LABELS = {STEP_DESCRIPTIONS[k] for k in ("step_11", "step_12", "step_14", "step_15", "step_16")}
+
+
+def _capture_had_started(id_command: dict) -> bool:
+    return id_command.get("last_step") in _CAPTURE_STEP_LABELS
+
+
+def _album_check(session, program: dict) -> dict | None:
+    """What the Dwarf saved for this program, from its album (task_check:
+    the session of its target within its window, and its shotsInfo.json
+    - images taken / stacked). None when it can't be told (album not
+    reachable, session not found, no shotsInfo.json). Blocking, HTTP."""
+    from components import task_check   # lazy: it imports pages
+    try:
+        task = task_check.program_task(program, getattr(session, "config", None))
+        if task is None:
+            return None
+        summary = task_check.summarize(session, task)
+    except Exception as e:
+        log.warning(f"[{session.dwarf_uid}] Album check of an orphaned program failed: {e}")
+        return None
+    return summary if summary.get("status") in ("ok", "empty") else None
+
+
+def _finalize_orphan_ended_on_device(dwarf_uid, session, dirs, filename, path, program, id_command) -> None:
+    """A Current/ program whose capture had started, the Dwarf no longer
+    capturing: it ended on the Dwarf while the app was stopped - never
+    back to ToDo. How it ended comes from the Dwarf's album (images taken
+    and stacked for that session): to Done when it reached the count
+    asked, to Error when fewer images or none stacked. When the album
+    can't tell, from the Dwarf's counters if it still reports them, else
+    to Done, marked as not confirmed."""
+    take_photo = program.get("setup_camera", {}).get("do_action")
+    requested = (program.get("setup_camera", {}).get("count") if take_photo
+                 else program.get("setup_wide_camera", {}).get("count")) or ""
+    _set_dwarf_field(id_command, session)
+    id_command["count_info"] = requested
+    try:
+        asked = int(requested or 0)
+    except (TypeError, ValueError):
+        asked = 0
+
+    album = _album_check(session, program)
+    if album is not None:
+        id_command["shots_taken"], id_command["shots_stacked"] = album.get("taken"), album.get("stacked")
+        source = "confirmed by its album"
+    else:
+        _capture_shots_result(id_command, session)
+        source = "its end was not followed"
+    try:
+        taken = int(id_command.get("shots_taken") or 0)
+    except (TypeError, ValueError):
+        taken = 0
+
+    if album is not None and album.get("status") == "empty":
+        failed, message = True, "Capture ended on the Dwarf while the app was stopped, no image stacked (its album)"
+    elif taken and asked and taken < asked:
+        failed = True
+        message = f"Capture stopped on the Dwarf before its end ({taken}/{asked}) while the app was stopped ({source})"
+    else:
+        failed = False
+        counts = f" - {taken} taken, {id_command.get('shots_stacked')} stacked" if album is not None else ""
+        message = f"Capture ended on the Dwarf while the app was stopped ({source}){counts}"
+    status, result, dest_dir = ("error", False, dirs["ERROR_DIR"]) if failed else ("done", True, dirs["DONE_DIR"])
+
+    starting_date = id_command.get("starting_date") or session_now(session).strftime("%Y-%m-%d %H:%M:%S")
+    dt_str = starting_date.replace(":", "-").replace(" ", "-")
+    new_filename = f"{dt_str}_" + re.sub(r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}_", "", filename)
+    full_program = {"command": program}
+    _update_process_status(full_program, status, result=result, message=message, session=session)
+    if status == "error":
+        id_command["processed_date"] = session_now(session).strftime("%Y-%m-%d %H:%M:%S")
+    os.makedirs(dest_dir, exist_ok=True)
+    try:
+        _write_json(os.path.join(dest_dir, new_filename), full_program)
+        os.remove(path)
+        log.notice(f"[{dwarf_uid}] Orphaned Current/ file: capture ended on the Dwarf, moved to "
+                   f"{'Error' if failed else 'Done'}: {filename} ({message})")
+    except OSError:
+        log.warning(f"[{dwarf_uid}] Could not move orphaned file {filename} out of Current/.")
 
 def _finalize_orphan_to_error(dwarf_uid, dirs, filename, path, program, id_command) -> None:
     id_command["process"] = "error"

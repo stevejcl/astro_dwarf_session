@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.2.5] - 2026-10-16
+  ### BugFix
+    ### A capture finished while the app was stopped is no longer put back in ToDo
+    The app stopped during a capture (a Windows update at night) and restarted after the Dwarf had finished: the
+    program left in Current/ was put back in ToDo as pending, as if never run - it would have been captured again.
+    Now, when its capture had started and the Dwarf no longer captures, it goes to Done ("capture ended on the Dwarf
+    while the app was stopped") - to Error when the Dwarf still reports fewer shots than asked. Only a program
+    stopped before its capture started (goto, calibration...) is put back in ToDo, as before.
+
 ## [3.2.4] - 2026-10-13
   ### Add
     ### /api/app-info

@@ -997,7 +997,61 @@ def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
                 name=f"resume-orphan-{dwarf_uid}",
             )
         return
+    if _capture_had_started(id_command):
+        # The Dwarf captures on its own once started: the app stopped
+        # (a Windows update at 4:30, user-reported Oct 2026) and the
+        # capture went on to its end - requeued, it would be run again
+        _finalize_orphan_ended_on_device(dwarf_uid, session, dirs, filename, path, program, id_command)
+        return
     _requeue_orphan_to_todo(dwarf_uid, dirs, filename, path, program, id_command)
+
+
+# Last steps once the capture has started (dwarf_session.STEP_DESCRIPTIONS)
+_CAPTURE_STEP_LABELS = {STEP_DESCRIPTIONS[k] for k in ("step_11", "step_12", "step_14", "step_15", "step_16")}
+
+
+def _capture_had_started(id_command: dict) -> bool:
+    return id_command.get("last_step") in _CAPTURE_STEP_LABELS
+
+
+def _finalize_orphan_ended_on_device(dwarf_uid, session, dirs, filename, path, program, id_command) -> None:
+    """A Current/ program whose capture had started, the Dwarf no longer
+    capturing: it ended on the Dwarf while the app was stopped. To Done
+    (to Error when the Dwarf's counters, if it still reports them, show
+    fewer shots than asked), never back to ToDo."""
+    take_photo = program.get("setup_camera", {}).get("do_action")
+    requested = (program.get("setup_camera", {}).get("count") if take_photo
+                 else program.get("setup_wide_camera", {}).get("count")) or ""
+    _set_dwarf_field(id_command, session)
+    _capture_shots_result(id_command, session)
+    id_command["count_info"] = requested
+    try:
+        short = int(id_command.get("shots_taken") or 0) < int(requested or 0) and bool(id_command.get("shots_taken"))
+    except (TypeError, ValueError):
+        short = False
+    if short:
+        status, result, dest_dir = "error", False, dirs["ERROR_DIR"]
+        message = (f"Capture stopped on the Dwarf before its end ({id_command.get('shots_taken')}/{requested}) "
+                   "while the app was stopped")
+    else:
+        status, result, dest_dir = "done", True, dirs["DONE_DIR"]
+        message = "Capture ended on the Dwarf while the app was stopped (its end was not followed)"
+
+    starting_date = id_command.get("starting_date") or session_now(session).strftime("%Y-%m-%d %H:%M:%S")
+    dt_str = starting_date.replace(":", "-").replace(" ", "-")
+    new_filename = f"{dt_str}_" + re.sub(r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}_", "", filename)
+    full_program = {"command": program}
+    _update_process_status(full_program, status, result=result, message=message, session=session)
+    if status == "error":
+        id_command["processed_date"] = session_now(session).strftime("%Y-%m-%d %H:%M:%S")
+    os.makedirs(dest_dir, exist_ok=True)
+    try:
+        _write_json(os.path.join(dest_dir, new_filename), full_program)
+        os.remove(path)
+        log.notice(f"[{dwarf_uid}] Orphaned Current/ file: capture ended on the Dwarf, moved to "
+                   f"{'Error' if status == 'error' else 'Done'}: {filename}")
+    except OSError:
+        log.warning(f"[{dwarf_uid}] Could not move orphaned file {filename} out of Current/.")
 
 def _finalize_orphan_to_error(dwarf_uid, dirs, filename, path, program, id_command) -> None:
     id_command["process"] = "error"

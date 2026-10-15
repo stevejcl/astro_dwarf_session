@@ -544,6 +544,11 @@ async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], No
         _finish_ongoing_notification(notification, t("connected"), "positive")
         connection_health.mark_just_connected(dwarf_uid)
         _label_thread_for_device(session)
+        # A program left in Current/ (app stopped during a capture, the
+        # Dwarf switched on later): resumed, or filed by how its capture
+        # ended - as the dashboard's Connect all and the auto-reconnect do
+        from components import scheduler_runner  # local import - avoids circular import
+        await run.io_bound(scheduler_runner.reconcile_orphaned_current_files, dwarf_uid, session)
 
         pending = pending_schedules.get_pending(dwarf_uid)
         # Too early (>12 h before start): the device would refuse it - the

@@ -10,6 +10,8 @@
     count asked, to Error when it stopped before (clouds, battery...) or stacked nothing. When the album can't tell,
     to Done marked "its end was not followed". Only a program stopped before its capture started (goto,
     calibration...) is put back in ToDo, as before.
+    Also checked when the Dwarf, off when the app restarted, is connected later from its device page (only the
+    dashboard's Connect all and the automatic reconnection did it).
 
 ## [3.2.4] - 2026-10-13
   ### Add

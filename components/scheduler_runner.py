@@ -1166,6 +1166,15 @@ def _run_starting_blocking(
         source_filepath,
     )
 
+def _reset_capture_counts(session) -> None:
+    client = getattr(session, "client_instance", None)
+    if client is not None and hasattr(client, "initialize_count"):
+        try:
+            client.initialize_count()
+        except Exception:
+            pass
+
+
 def _run_blocking(
     program: dict, session, state: RunState, source_filepath: str | None
 ) -> None:
@@ -1182,6 +1191,10 @@ def _run_blocking(
     full_program = {"command": program}
     id_command = program.setdefault("id_command", {})
     current_path = None
+    # The previous capture's counts are still in the client until this
+    # capture's first progress (user-seen Oct 2026: "1/13" shown at a
+    # program's start, then 0/0)
+    _reset_capture_counts(session)
 
     if source_filepath is not None:
         dirs = session_dirs_for(session)

@@ -34,6 +34,13 @@
     A delay in progress is kept in memory only (lost if the app restarts).
 
   ### BugFix
+    ### End of the night card: the estimated time
+    A program without an end time counted as ending at its START ("end of the night around 21:17, last planned
+    activity until 21:15" for a program starting at 21:15). Its end is now estimated: 5 min of preparation (start
+    position, focus, EQ, calibration, goto) + count x exposure. The program running counts too.
+    ### A program's start showed the previous capture's counts
+    "1/13" shown for a moment at a program's start, then 0/0: the client kept the last capture's counts until the
+    new capture's first progress. Reset when a program starts.
     ### "Client has been deleted but is still being used" on a device page
     The page refreshed every 2 s after its connection check, which can take a few seconds - when the page had been
     left or reloaded meanwhile (or an action ended after it), NiceGUI warned with a long stack. Not refreshed then.

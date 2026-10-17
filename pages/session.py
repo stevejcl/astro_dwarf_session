@@ -726,6 +726,16 @@ def build_session_page() -> None:
                         ).classes("text-xs")
                         scope_archive.watch_presence(scope_btn, lambda u=url: u)
 
+            # This page's browser client: a refresh after an await (the
+            # poll's connection check, an action) may come once the page
+            # was left or reloaded - "Client has been deleted but is
+            # still being used" (user-reported Oct 2026)
+            page_client = ui.context.client
+
+            def refresh_session_view() -> None:
+                if not page_client.is_deleted:
+                    session_view.refresh()
+
             # Defined HERE, inside the page function, not at module
             # level - see the module docstring for why: this gives THIS
             # page load its own private refreshable object, so its
@@ -996,7 +1006,7 @@ def build_session_page() -> None:
             except KeyError:
                 actions_session = None
             if actions_session is not None:
-                build_actions_section(actions_session, session_view.refresh)
+                build_actions_section(actions_session, refresh_session_view)
                 build_camera_stream_section(actions_session)
                 with ui.card().classes("w-full p-0"), ui.expansion(t("motor_pad_title"), icon="control_camera").classes("w-full"):
                     build_motor_pad(actions_session)
@@ -1170,6 +1180,8 @@ def build_session_page() -> None:
                 build_program_section(program_session)
 
             def refresh_view_and_camera_settings() -> None:
+                if page_client.is_deleted:
+                    return
                 session_view.refresh()
                 refresh_camera_settings()
 
@@ -1195,7 +1207,7 @@ def build_session_page() -> None:
                 except KeyError:
                     return
                 await connection_health.maybe_check(session)
-                if time.monotonic() - last_press[0] < _PRESS_QUIET_S:
+                if time.monotonic() - last_press[0] < _PRESS_QUIET_S or page_client.is_deleted:
                     return
                 session_view.refresh()
 

@@ -538,7 +538,6 @@ TRANSLATIONS: dict[str, str] = {
     "eon_exit_due":                 "End-of-session screen left at {time}",
     "eon_night_estimate":           "End of the night around {time} (last planned activity ends at {last})",
     "eon_night_estimate_idle":      "End of the night around {time}",
-    "eon_night_estimate_none":      "End of the night {minutes} min after the next capture ends",
     "eon_closed_by_app":            "Lenses closed by Dwarfium Lite: the next program goes back to the initial position first",
     "eon_position_none":            "No initial position saved yet",
     "eon_position":                 "Initial position: {position} - saved {saved_at} ({source})",
@@ -566,4 +565,9 @@ TRANSLATIONS: dict[str, str] = {
     "eon_opened_by_hand":           "It is open",
     "action_go_open_position_hint": "Go to the initial position: axes reset, then back to the saved position (the polar position when none is saved)",
     "action_save_open_position_hint":"Save the initial position: where you placed the Dwarf (its axes are reset first and come back)",
+    "eon_sum_exit":                 "End-of-session screen left after {minutes} min",
+    "eon_sum_exit_off":             "End-of-session screen kept",
+    "eon_sum_night_off":            "Nothing at the end of the night",
+    "eon_sum_night_close":          "Lenses closed after {minutes} min",
+    "eon_sum_night_power_off":      "Dwarf powered off after {minutes} min",
 }

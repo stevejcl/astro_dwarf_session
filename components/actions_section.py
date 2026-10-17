@@ -459,7 +459,7 @@ def build_actions_section(session, refresh_view) -> None:
                     end_of_night.action_go_to_open_position,
                     success_message=t("action_go_open_position_done"),
                 )),
-            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate").tooltip(t("action_go_open_position_hint"))
             ui.button(
                 t("action_save_open_position"),
                 icon="bookmark_add",
@@ -475,7 +475,7 @@ def build_actions_section(session, refresh_view) -> None:
                         position=end_of_night.describe_position(end_of_night.open_position(dwarf_uid)),
                     ),
                 )),
-            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate").tooltip(t("action_save_open_position_hint"))
             ui.button(
                 t("action_eq_solving"),
                 icon="my_location",

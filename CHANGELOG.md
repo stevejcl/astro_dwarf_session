@@ -16,19 +16,19 @@
       3.1.6) always come before the power off. The card shows the estimated time.
       Never while a schedule of the Dwarf itself is planned or waiting to be sent: it must stay on and as set up -
       it sleeps when idle and wakes before its tasks (DwarfLab: "Do not power off after sync").
-    - Opening position: the Pitch position (and the Rotation on D2 / D3: the night's last goto turned it - not on
+    - Initial position: the Pitch position (and the Rotation on D2 / D3: the night's last goto turned it - not on
       the Mini, its Rotation can't be reset) saved after each successful calibration of a program, or by the user
-      (Actions: "Save the opening position"). New program step "Start position" (saved opening position - axes
+      (Actions: "Save position"). New program step "Start position" (saved initial position - axes
       reset then back to it, the polar position when none is saved - or the polar position); done anyway when this
       app closed the lenses, so a remote Dwarf never stays closed.
-    - Actions: "Close the lenses", "Go to the opening position", "Save the opening position".
+    - Actions: "Close the lenses", "Initial position" (go to it), "Save position".
       The Dwarf gives a motor position only once its axis was reset since it was switched on (NEED RESET): saving
       by hand resets the axes first (a reset goes to the limit and comes back to where the axis was).
     - "Bulky accessory mounted" (a cap, a thick filter holder on a D3): folding the Pitch could make it touch -
       closing, a Pitch reset (to its limit), the Dwarf powering off from rest. Then no end-of-night closing or power
       off, no start position in programs, and a confirmation for the Polar position, Close the lenses, Go to / Save
-      the opening position. A filter on the D2's own magnetic holder doesn't touch.
-      To use with an accessory: calibrate (or save the opening position) first, then mount it and tick the box. Lenses
+      the initial position. A filter on the D2's own magnetic holder doesn't touch.
+      To use with an accessory: calibrate (or save the initial position) first, then mount it and tick the box. Lenses
       closed by this app a night before and the box ticked: not reopened by programs - said in the steps and on the
       card ("It is open" once opened by hand).
     A delay in progress is kept in memory only (lost if the app restarts).

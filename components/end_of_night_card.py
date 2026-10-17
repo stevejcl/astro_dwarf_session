@@ -39,7 +39,7 @@ def build_end_of_night_card(session) -> None:
                       on_change=lambda e: save_exit(after_min=int(e.value or 0))).classes("w-28")
             ui.checkbox(t("eon_stop_tracking"), value=ex["stop_tracking"],
                         on_change=lambda e: save_exit(stop_tracking=bool(e.value)))
-        ui.label(t("eon_exit_hint")).classes("text-xs text-grey-6 -mt-1")
+        ui.label(t("eon_exit_hint")).classes("text-xs text-grey-6 -mt-1").style("white-space: pre-line")
 
         ui.separator()
 
@@ -52,7 +52,7 @@ def build_end_of_night_card(session) -> None:
                       on_change=lambda e: save_night(action=e.value)).classes("min-w-56")
             ui.number(t("eon_after_min"), value=night["after_min"], min=0, max=600, step=5, format="%d",
                       on_change=lambda e: save_night(after_min=int(e.value or 0))).classes("w-28")
-        ui.label(t("eon_night_hint")).classes("text-xs text-grey-6 -mt-1")
+        ui.label(t("eon_night_hint")).classes("text-xs text-grey-6 -mt-1").style("white-space: pre-line")
 
         def toggle_accessory(e) -> None:
             E.set_accessory(uid, bool(e.value))
@@ -60,7 +60,8 @@ def build_end_of_night_card(session) -> None:
 
         with ui.row().classes("items-center gap-2"):
             ui.checkbox(t("eon_accessory"), value=E.has_accessory(uid), on_change=toggle_accessory)
-            ui.icon("info").classes("text-grey-6").tooltip(t("eon_accessory_hint"))
+            with ui.icon("info").classes("text-grey-6"):
+                ui.tooltip(t("eon_accessory_hint")).style("white-space: pre-line; max-width: 420px")
 
         @ui.refreshable
         def estimate() -> None:
@@ -103,16 +104,16 @@ def build_end_of_night_card(session) -> None:
         @ui.refreshable
         def position() -> None:
             pos = E.open_position(uid)
-            with ui.row().classes("items-center gap-2 flex-wrap"):
-                ui.icon("bookmark", size="sm").classes("text-grey-7")
+            with ui.row().classes("w-full items-center gap-2 no-wrap"):
+                ui.icon("bookmark", size="sm").classes("text-grey-7 shrink-0")
                 if pos is None:
                     ui.label(t("eon_position_none")).classes("text-sm")
                 else:
                     ui.label(t("eon_position", position=E.describe_position(pos), saved_at=pos.get("saved_at", ""),
-                               source=t("eon_source_" + str(pos.get("source", "auto"))))).classes("text-sm")
+                               source=t("eon_source_" + str(pos.get("source", "auto"))))).classes("text-sm flex-1 min-w-0")
                     ui.button(icon="delete_outline", on_click=lambda: (E.clear_open_position(uid), position.refresh())) \
-                        .props("flat dense round size=sm").tooltip(t("eon_position_clear"))
-            ui.label(t("eon_position_hint")).classes("text-xs text-grey-6")
+                        .props("flat dense round size=sm").classes("shrink-0").tooltip(t("eon_position_clear"))
+            ui.label(t("eon_position_hint")).classes("text-xs text-grey-6").style("white-space: pre-line")
 
         position()
 

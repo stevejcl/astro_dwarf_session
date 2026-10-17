@@ -22,6 +22,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from components import scheduler_loop, scheduler_runner, task_check_cache
 from components.i18n import get_language, t
 from components.json_files import read_json, write_json_atomic
+from components.end_of_night_card import build_end_of_night_card
 from components.program_editor import build_program_editor
 from components.site_time import site_now
 from components.schedule_editor import build_schedule_editor
@@ -199,6 +200,7 @@ def build_programs_page() -> None:
                             ),
                         )
                     ui.label(t("scheduler_armed_hint")).classes("text-xs text-grey-6")
+                    build_end_of_night_card(session)
 
                     scripts_container = ui.column().classes("w-full gap-2 mt-2")
 

@@ -1370,6 +1370,10 @@ def _run_blocking(
                     os.remove(current_path)
                 state.last_saved_path = error_path
     finally:
+        # Its end-of-session settings for what follows (components/end_of_night.py),
+        # before the run is seen as over
+        from components import end_of_night
+        end_of_night.program_ended(session.dwarf_uid, id_command, bool(state.stop_requested))
         state.running = False
         #clear_run(session.dwarf_uid)
         connection_health.release_command_slot(session.dwarf_uid)

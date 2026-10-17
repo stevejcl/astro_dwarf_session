@@ -31,6 +31,7 @@ from components.camera_settings import (
 )
 from components.datetime_picker import date_picker_input, time_picker_input
 from components.current_activity import program_target
+from components import end_of_night
 from components.i18n import t
 from components.json_files import write_json_atomic
 from components.session_dirs import ensure_dirs
@@ -142,6 +143,34 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
         with ui.row().classes("w-full gap-2"):
             wait_before_input = ui.number(t("prog_wait_before"), value=cmd["auto_focus"]["wait_before"], min=0).classes("flex-1")
             wait_after_input = ui.number(t("prog_wait_after"), value=cmd["auto_focus"]["wait_after"], min=0).classes("flex-1")
+
+        # Start position and what follows the session (components/end_of_night.py)
+        end_session = cmd["id_command"].get("end_session") or {}
+        exit_default = end_of_night.get_settings(session.dwarf_uid)["exit"]
+        with ui.row().classes("w-full gap-x-4 gap-y-1 items-center flex-wrap"):
+            start_position_select = ui.select(
+                {end_of_night.START_NONE: t("prog_start_none"), end_of_night.START_SAVED: t("prog_start_saved"),
+                 end_of_night.START_POLAR: t("prog_start_polar")},
+                value=cmd["id_command"].get("start_position") or end_of_night.START_NONE,
+                label=t("prog_start_position"),
+            ).classes("min-w-56")
+            ui.icon("info").classes("text-grey-6").tooltip(t("prog_start_position_hint"))
+        with ui.row().classes("w-full gap-x-4 gap-y-1 items-center flex-wrap"):
+            exit_mode_select = ui.select(
+                {end_of_night.OVERRIDE_DEFAULT: t("prog_exit_default"), end_of_night.OVERRIDE_ON: t("prog_exit_on"),
+                 end_of_night.OVERRIDE_OFF: t("prog_exit_off")},
+                value=end_session.get("mode") or end_of_night.OVERRIDE_DEFAULT,
+                label=t("prog_exit_label"),
+            ).classes("min-w-56")
+            exit_after_input = ui.number(
+                t("eon_after_min"), value=end_session.get("after_min", exit_default["after_min"]),
+                min=0, max=240, step=1, format="%d",
+            ).classes("w-28")
+            exit_stop_cb = ui.checkbox(t("eon_stop_tracking"),
+                                       value=bool(end_session.get("stop_tracking", exit_default["stop_tracking"])))
+            ui.icon("info").classes("text-grey-6").tooltip(t("prog_exit_hint"))
+            for element in (exit_after_input, exit_stop_cb):
+                element.bind_visibility_from(exit_mode_select, "value", value=end_of_night.OVERRIDE_ON)
 
         ui.label(t("prog_actions")).classes("text-sm text-grey-6 mt-2")
         with ui.row().classes("w-full justify-between gap-4"):
@@ -804,6 +833,12 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                     "date": date_input.value.strip(),
                     "time": time_input.value.strip(),
                     "max_retries": int(retries_input.value or 3),
+                    "start_position": start_position_select.value or end_of_night.START_NONE,
+                    "end_session": {
+                        "mode": exit_mode_select.value or end_of_night.OVERRIDE_DEFAULT,
+                        "after_min": int(exit_after_input.value or 0),
+                        "stop_tracking": bool(exit_stop_cb.value),
+                    },
                 },
                 "eq_solving": {
                     "do_action": eq_solving_cb.value,

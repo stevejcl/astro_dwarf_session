@@ -1,5 +1,38 @@
 # Changelog
 
+## [3.2.6] - 2026-10-17
+  ### Add
+    ### After the session and end of the night
+    After a capture the Dwarf stayed on its end-of-session screen, still tracking (battery), and powered off while
+    tracking the D3 / Mini don't close their lenses (from rest they do - user-tested). New card in the Programs page's
+    Scripts tab, per Dwarf (end_of_night.json):
+    - Leave the end-of-session screen N min (5 by default) after each capture - a program, a capture from the
+      Actions, the Dwarf's own schedule while connected: Go Live, and Stop goto (the tracking) if ticked. A program
+      can override it in the editor ("After the session"); nothing after a program stopped by the user.
+    - End of the night, X min after the last capture (off by default): close the lenses when the next planned
+      activity is more than 15 min away, or power the Dwarf off - only when nothing is planned any more (programs
+      in ToDo, tasks of the Dwarf's schedule, a schedule waiting to be sent): a remote Dwarf can't be switched back
+      on. Go Live, Stop goto and the lenses closed (Pitch: motor_action 12 on D2, 1 on D3 / Mini - dwarf_python_api
+      3.1.6) always come before the power off. The card shows the estimated time.
+      Never while a schedule of the Dwarf itself is planned or waiting to be sent: it must stay on and as set up -
+      it sleeps when idle and wakes before its tasks (DwarfLab: "Do not power off after sync").
+    - Opening position: the Pitch position (and the Rotation on D2 / D3: the night's last goto turned it - not on
+      the Mini, its Rotation can't be reset) saved after each successful calibration of a program, or by the user
+      (Actions: "Save the opening position"). New program step "Start position" (saved opening position - axes
+      reset then back to it, the polar position when none is saved - or the polar position); done anyway when this
+      app closed the lenses, so a remote Dwarf never stays closed.
+    - Actions: "Close the lenses", "Go to the opening position", "Save the opening position".
+      The Dwarf gives a motor position only once its axis was reset since it was switched on (NEED RESET): saving
+      by hand resets the axes first (a reset goes to the limit and comes back to where the axis was).
+    - "Bulky accessory mounted" (a cap, a thick filter holder on a D3): folding the Pitch could make it touch -
+      closing, a Pitch reset (to its limit), the Dwarf powering off from rest. Then no end-of-night closing or power
+      off, no start position in programs, and a confirmation for the Polar position, Close the lenses, Go to / Save
+      the opening position. A filter on the D2's own magnetic holder doesn't touch.
+      To use with an accessory: calibrate (or save the opening position) first, then mount it and tick the box. Lenses
+      closed by this app a night before and the box ticked: not reopened by programs - said in the steps and on the
+      card ("It is open" once opened by hand).
+    A delay in progress is kept in memory only (lost if the app restarts).
+
 ## [3.2.5] - 2026-10-16
   ### BugFix
     ### A capture finished while the app was stopped is no longer put back in ToDo

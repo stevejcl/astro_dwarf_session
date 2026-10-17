@@ -567,6 +567,7 @@ TRANSLATIONS: dict[str, str] = {
     "action_save_open_position_hint":"Enregistrer la position initiale : l\u00e0 o\u00f9 vous avez plac\u00e9 le Dwarf (ses axes sont d'abord r\u00e9initialis\u00e9s et y reviennent)",
     "eon_sum_exit":                 "\u00c9cran de fin de session quitt\u00e9 apr\u00e8s {minutes} min",
     "eon_sum_exit_off":             "\u00c9cran de fin de session gard\u00e9",
-    "eon_sum_night":                "fin de nuit : {action} apr\u00e8s {minutes} min",
     "eon_sum_night_off":            "rien en fin de nuit",
+    "eon_sum_night_close":          "objectifs ferm\u00e9s apr\u00e8s {minutes} min",
+    "eon_sum_night_power_off":      "Dwarf \u00e9teint apr\u00e8s {minutes} min",
 }

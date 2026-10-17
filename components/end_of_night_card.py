@@ -29,8 +29,8 @@ def _summary(uid: str) -> str:
     if night["action"] == E.NIGHT_NONE:
         parts.append(t("eon_sum_night_off"))
     else:
-        action = t("eon_night_close") if night["action"] == E.NIGHT_CLOSE else t("eon_night_power_off")
-        parts.append(t("eon_sum_night", action=action, minutes=night["after_min"]))
+        key = "eon_sum_night_close" if night["action"] == E.NIGHT_CLOSE else "eon_sum_night_power_off"
+        parts.append(t(key, minutes=night["after_min"]))
     return " \u00b7 ".join(parts)
 
 

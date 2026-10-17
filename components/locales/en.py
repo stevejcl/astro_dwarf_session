@@ -567,6 +567,7 @@ TRANSLATIONS: dict[str, str] = {
     "action_save_open_position_hint":"Save the initial position: where you placed the Dwarf (its axes are reset first and come back)",
     "eon_sum_exit":                 "End-of-session screen left after {minutes} min",
     "eon_sum_exit_off":             "End-of-session screen kept",
-    "eon_sum_night":                "end of the night: {action} after {minutes} min",
     "eon_sum_night_off":            "nothing at the end of the night",
+    "eon_sum_night_close":          "lenses closed after {minutes} min",
+    "eon_sum_night_power_off":      "Dwarf powered off after {minutes} min",
 }

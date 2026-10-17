@@ -98,6 +98,18 @@ def set_settings(dwarf_uid: str, exit_: dict | None = None, night: dict | None =
             night={**current["night"], **(night or {})})
 
 
+def has_accessory(dwarf_uid: str) -> bool:
+    """A bulky accessory on the tube (a cap, a thick filter holder on a D3 -
+    user-pointed Oct 2026): folding the Pitch could make it touch. A Pitch
+    reset folds it too (to its limit, then back), and so does the Dwarf
+    powering off from rest - none of them done automatically then."""
+    return bool(_entry(dwarf_uid).get("accessory"))
+
+
+def set_accessory(dwarf_uid: str, mounted: bool) -> None:
+    _update(dwarf_uid, accessory=True if mounted else None)
+
+
 def exit_settings_for(dwarf_uid: str, override: dict | None) -> dict:
     """The Dwarf's exit settings, with a program's id_command["end_session"]
     ({"mode": default/on/off, "after_min", "stop_tracking"}) over them."""
@@ -251,7 +263,10 @@ def go_to_start_position(session, mode: str) -> bool:
 
 def start_position_mode(session, program_mode: str | None) -> str:
     """What a program does at start: its own choice, or the saved position
-    when this app closed the lenses (a remote Dwarf must not stay closed)."""
+    when this app closed the lenses (a remote Dwarf must not stay closed).
+    Nothing with a bulky accessory mounted (the Pitch reset folds it)."""
+    if has_accessory(session.dwarf_uid):
+        return START_NONE
     mode = program_mode or START_NONE
     if mode == START_NONE and is_closed_by_app(session.dwarf_uid):
         return START_SAVED
@@ -479,7 +494,8 @@ async def tick(manager) -> None:
 
         idle_since = _idle_since.get(uid)
         night = get_settings(uid)["night"]
-        if (idle_since is None or night["action"] == NIGHT_NONE or _night_done.get(uid) == idle_since
+        if (idle_since is None or night["action"] == NIGHT_NONE or has_accessory(uid)
+                or _night_done.get(uid) == idle_since
                 or now < idle_since + max(0, int(night["after_min"])) * 60):
             continue
         upcoming = next_activity(session, now)

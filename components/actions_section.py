@@ -317,6 +317,26 @@ async def _handle_reboot(session, dwarf_uid) -> None:
     dialog.open()
 
 
+async def _accessory_guard(dwarf_uid, action) -> None:
+    """Runs action (a coroutine function) - after a confirmation when a
+    bulky accessory is mounted (components/end_of_night.py): the command
+    folds the Pitch (closing, or a reset to its limit)."""
+    if not end_of_night.has_accessory(dwarf_uid):
+        await action()
+        return
+    with ui.dialog() as dialog, ui.card():
+        ui.label(t("accessory_confirm"))
+        with ui.row().classes("w-full justify-end gap-2 mt-2"):
+            ui.button(t("cancel"), on_click=dialog.close).props("flat")
+
+            async def _confirmed() -> None:
+                dialog.close()
+                await action()
+
+            ui.button(t("accessory_confirm_button"), on_click=_confirmed).props("color=negative")
+    dialog.open()
+
+
 def build_actions_section(session, refresh_view) -> None:
     """Call once per page load. refresh_view: the session page's own
     session_view.refresh (see pages/session.py) - called after an action
@@ -412,38 +432,38 @@ def build_actions_section(session, refresh_view) -> None:
             ui.button(
                 t("action_polar_position"),
                 icon="explore",
-                on_click=lambda: _run_and_notify(
+                on_click=lambda: _accessory_guard(dwarf_uid, lambda: _run_and_notify(
                     session,
                     dwarf_uid,
                     _polar_position_sequence,
                     success_message=t("action_polar_position_done"),
-                ),
+                )),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             # Lenses and opening position (components/end_of_night.py)
             ui.button(
                 t("action_close_lenses"),
                 icon="lens_blur",
-                on_click=lambda: _run_and_notify(
+                on_click=lambda: _accessory_guard(dwarf_uid, lambda: _run_and_notify(
                     session,
                     dwarf_uid,
                     end_of_night.action_close_lenses,
                     success_message=t("action_close_lenses_done"),
-                ),
+                )),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_go_open_position"),
                 icon="settings_backup_restore",
-                on_click=lambda: _run_and_notify(
+                on_click=lambda: _accessory_guard(dwarf_uid, lambda: _run_and_notify(
                     session,
                     dwarf_uid,
                     end_of_night.action_go_to_open_position,
                     success_message=t("action_go_open_position_done"),
-                ),
+                )),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_save_open_position"),
                 icon="bookmark_add",
-                on_click=lambda: _run_and_notify(
+                on_click=lambda: _accessory_guard(dwarf_uid, lambda: _run_and_notify(
                     session,
                     dwarf_uid,
                     end_of_night.action_save_open_position,
@@ -454,7 +474,7 @@ def build_actions_section(session, refresh_view) -> None:
                         "action_save_open_position_done",
                         position=end_of_night.describe_position(end_of_night.open_position(dwarf_uid)),
                     ),
-                ),
+                )),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(
                 t("action_eq_solving"),

@@ -557,4 +557,9 @@ TRANSLATIONS: dict[str, str] = {
     "prog_exit_off":                "Rester sur l'\u00e9cran de fin de session",
     "prog_exit_hint":               "Passer en Live (et Stop goto) quelques minutes apr\u00e8s ce programme, sauf si un autre d\u00e9marre avant. Le r\u00e9glage par d\u00e9faut est dans l'onglet Scripts.",
     "action_save_open_position_failed":"Position d'ouverture non enregistr\u00e9e : le reset d'un axe ou la lecture de la position a \u00e9chou\u00e9 - voir le journal.",
+    "accessory_confirm":            "Un accessoire encombrant est mont\u00e9 sur ce Dwarf (cache, support de filtre \u00e9pais) : cette commande replie le Pitch (fermeture, ou reset en but\u00e9e) et il pourrait toucher. Continuer ?",
+    "accessory_confirm_button":     "Continuer quand m\u00eame",
+    "eon_accessory":                "Accessoire encombrant mont\u00e9 (cache, support de filtre \u00e9pais)",
+    "eon_accessory_hint":           "Replier le Pitch pourrait le faire toucher - fermeture des objectifs, reset du Pitch (il va en but\u00e9e), extinction du Dwarf depuis le repos. Alors : ni fermeture ni extinction en fin de nuit, pas de position de d\u00e9part dans les programmes, une confirmation pour ces Actions. Une calibration fait aussi un reset du Pitch. Un filtre sur le support magn\u00e9tique d'origine du D2 ne touche pas.",
+    "eon_accessory_on":             "Accessoire mont\u00e9 : fin de nuit et positions de d\u00e9part suspendues - d\u00e9cochez une fois retir\u00e9",
 }

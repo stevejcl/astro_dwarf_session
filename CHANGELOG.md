@@ -22,6 +22,10 @@
     - Actions: "Close the lenses", "Go to the opening position", "Save the opening position".
       The Dwarf gives a motor position only once its axis was reset since it was switched on (NEED RESET): saving
       by hand resets the axes first (a reset goes to the limit and comes back to where the axis was).
+    - "Bulky accessory mounted" (a cap, a thick filter holder on a D3): folding the Pitch could make it touch -
+      closing, a Pitch reset (to its limit), the Dwarf powering off from rest. Then no end-of-night closing or power
+      off, no start position in programs, and a confirmation for the Polar position, Close the lenses, Go to / Save
+      the opening position. A filter on the D2's own magnetic holder doesn't touch.
     A delay in progress is kept in memory only (lost if the app restarts).
 
 ## [3.2.5] - 2026-10-16

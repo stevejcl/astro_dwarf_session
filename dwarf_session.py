@@ -476,6 +476,10 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
         if session is not None:
             from components import end_of_night
             start_mode = end_of_night.start_position_mode(session, program.get('id_command', {}).get('start_position'))
+            if end_of_night.has_accessory(session.dwarf_uid) and program.get('id_command', {}).get('start_position') not in (None, end_of_night.START_NONE):
+                log.warning("Start position skipped: a bulky accessory is mounted (the Pitch reset would fold it)")
+                if progress_callback:
+                    progress_callback("Start position skipped: accessory mounted", "success")
             if start_mode != end_of_night.START_NONE:
                 if interrupted(): return
                 log.notice(f"Moving to the start position ({start_mode})")

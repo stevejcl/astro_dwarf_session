@@ -54,6 +54,14 @@ def build_end_of_night_card(session) -> None:
                       on_change=lambda e: save_night(after_min=int(e.value or 0))).classes("w-28")
         ui.label(t("eon_night_hint")).classes("text-xs text-grey-6 -mt-1")
 
+        def toggle_accessory(e) -> None:
+            E.set_accessory(uid, bool(e.value))
+            estimate.refresh()
+
+        with ui.row().classes("items-center gap-2"):
+            ui.checkbox(t("eon_accessory"), value=E.has_accessory(uid), on_change=toggle_accessory)
+            ui.icon("info").classes("text-grey-6").tooltip(t("eon_accessory_hint"))
+
         @ui.refreshable
         def estimate() -> None:
             current = E.get_settings(uid)
@@ -74,6 +82,8 @@ def build_end_of_night_card(session) -> None:
                     lines.append(t("eon_night_estimate_idle", time=_hhmm(state["idle_since"] + delay)))
                 else:
                     lines.append(t("eon_night_estimate_none", minutes=current["night"]["after_min"]))
+            if E.has_accessory(uid):
+                ui.label(t("eon_accessory_on")).classes("text-sm text-orange-700")
             if E.is_closed_by_app(uid):
                 lines.append(t("eon_closed_by_app"))
             for line in lines:

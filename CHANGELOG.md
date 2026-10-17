@@ -33,6 +33,11 @@
       card ("It is open" once opened by hand).
     A delay in progress is kept in memory only (lost if the app restarts).
 
+  ### BugFix
+    ### "Client has been deleted but is still being used" on a device page
+    The page refreshed every 2 s after its connection check, which can take a few seconds - when the page had been
+    left or reloaded meanwhile (or an action ended after it), NiceGUI warned with a long stack. Not refreshed then.
+
 ## [3.2.5] - 2026-10-16
   ### BugFix
     ### A capture finished while the app was stopped is no longer put back in ToDo

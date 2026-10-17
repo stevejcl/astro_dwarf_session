@@ -300,7 +300,7 @@ def reset_axes(session) -> bool:
 
 
 def ensure_axes_referenced(session) -> None:
-    """Before a program's calibration: axes reset when the Dwarf doesn't
+    """Before a program's EQ / calibration: axes reset when the Dwarf doesn't
     give its Pitch position yet (user log, Oct 2026: NEED RESET after a
     calibration - it doesn't always reset its motors), so the position read
     after the calibration can be saved. Not with a bulky accessory (the

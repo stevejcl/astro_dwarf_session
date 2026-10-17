@@ -226,22 +226,37 @@ def read_position(session, need_rotation: bool = False) -> dict | None:
     return position
 
 
+# Already there when this close on each axis: nothing moved
+_SAME_POSITION_DEG = 1.0
+
+
 def go_to_open_position(session) -> bool:
-    """The saved opening position, the axes reset first (their reference may
-    be lost: the Dwarf powered off and on) - the polar position's order:
-    Rotation reset, Pitch reset, Rotation, Pitch. The Rotation on D2 / D3
-    when it was saved: closing the lenses doesn't move it, but the night's
-    last goto did. False when none is saved or a command failed."""
-    from dwarf_python_api.lib.dwarf_utils import motor_action, perform_motor_run_to_v3
+    """The saved opening position. The axes are reset only when the Dwarf
+    doesn't give its position (NEED RESET: powered off and on since), and
+    nothing moves when it is already there (user-requested Oct 2026: a
+    reset at each start, even right after "Save position"). Then the
+    polar position's order: Rotation, Pitch. The Rotation on D2 / D3 when
+    it was saved: closing the lenses doesn't move it, but the night's last
+    goto did. False when none is saved or a command failed."""
+    from dwarf_python_api.lib.dwarf_utils import perform_motor_run_to_v3
 
     pos = open_position(session.dwarf_uid)
     if pos is None:
         return False
     with_rotation = pos.get("rotation") is not None and _has_rotation_reset(session)
-    if with_rotation and not motor_action(5, session=session):  # Rotation reset
-        return False
-    if not motor_action(6, session=session):  # Pitch reset
-        return False
+    current = read_position(session, need_rotation=with_rotation)
+    if current is None:
+        log.notice(f"[{session.dwarf_uid}] Axes not referenced: reset before going to the initial position")
+        if not reset_axes(session):
+            return False
+        current = read_position(session, need_rotation=with_rotation)
+    if current is not None:
+        same_pitch = abs(current["pitch"] - float(pos["pitch"])) <= _SAME_POSITION_DEG
+        same_rotation = (not with_rotation or
+                         abs(current.get("rotation", 1e9) - float(pos["rotation"])) <= _SAME_POSITION_DEG)
+        if same_pitch and same_rotation:
+            log.notice(f"[{session.dwarf_uid}] Already at the initial position: not moved")
+            return True
     if with_rotation and not perform_motor_run_to_v3(1, float(pos["rotation"]), speed=10, session=session):
         return False
     return bool(perform_motor_run_to_v3(2, float(pos["pitch"]), speed=10, session=session))
@@ -300,7 +315,7 @@ def reset_axes(session) -> bool:
 
 
 def ensure_axes_referenced(session) -> None:
-    """Before a program's calibration: axes reset when the Dwarf doesn't
+    """Before a program's EQ / calibration: axes reset when the Dwarf doesn't
     give its Pitch position yet (user log, Oct 2026: NEED RESET after a
     calibration - it doesn't always reset its motors), so the position read
     after the calibration can be saved. Not with a bulky accessory (the

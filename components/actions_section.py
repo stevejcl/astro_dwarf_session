@@ -337,6 +337,15 @@ async def _accessory_guard(dwarf_uid, action) -> None:
     dialog.open()
 
 
+def _eq_solving(session):
+    """EQ Solving from the Actions (often run several times while the base
+    is adjusted - user practice): the axes referenced first when the Dwarf
+    doesn't give its position, so a program's calibration afterwards needs
+    no reset after the EQ (components/end_of_night.py)."""
+    end_of_night.ensure_axes_referenced(session)
+    return start_polar_align(session=session)
+
+
 def _start_astro_capture(session):
     """Astro Capture from the Actions: the last program's run (its steps at
     the bottom of the page) is cleared once the capture starts - it stayed
@@ -492,7 +501,7 @@ def build_actions_section(session, refresh_view) -> None:
                 on_click=lambda: _run_and_notify(
                     session,
                     dwarf_uid,
-                    start_polar_align,
+                    _eq_solving,
                     success_message=t("action_eq_solving_done"),
                     refresh_view=eq_result_update,
                 ),

@@ -40,8 +40,14 @@
   ### BugFix
     ### Initial position not saved after a calibration
     A calibration doesn't always reset the Dwarf's motors: reading the position after it answered NEED RESET and
-    nothing was saved. Before a program's calibration, the axes are now reset when the Dwarf doesn't give its
-    position (each axis goes to its limit and comes back where it was) - not with a bulky accessory mounted.
+    nothing was saved. Before a program's EQ Solving and calibration (before the EQ when there is one: a reset after
+    it might shift what it measured), the axes are now reset when the Dwarf doesn't give its position (each axis
+    goes to its limit and comes back where it was) - not with a bulky accessory mounted.
+    The Actions' EQ Solving does the same before the EQ (an EQ done by hand, in several iterations, before a program:
+    the program then finds the axes referenced and resets nothing after it).
+    Going to the initial position (a program's start position, the Actions) resets the axes only when the Dwarf
+    doesn't give its position (switched off since), and moves nothing when it is already there (within 1 degree) -
+    it reset them at every start, even right after "Save position".
     ### A manual capture left the last program's steps shown
     Starting a capture from the Actions (or the official app, or the Dwarf's own schedule) left the last program's
     steps and result at the bottom of the device page. They are cleared when such a capture starts.

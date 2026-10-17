@@ -494,6 +494,16 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 if interrupted(): return
                 verify_action(continue_action, "step_1f", progress_callback=progress_callback)
 
+        # The axes referenced before the EQ and the calibration (a reset goes
+        # to the limit and comes back to where the axis was): the Dwarf then
+        # gives the position after the calibration, saved as the initial one
+        # (components/end_of_night.py). Before the EQ, not between it and the
+        # calibration: a reset after the EQ might shift what it measured.
+        if session is not None and (eq_solving or calibration):
+            from components import end_of_night
+            end_of_night.ensure_axes_referenced(session)
+            if interrupted(): return
+
         # Auto Focus
         if auto_focus:
             wait_before = program.get('auto_focus', {}).get('wait_before', 0)
@@ -641,14 +651,6 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             time.sleep(5)
             if interrupted(): return
             
-            # The axes referenced first (a reset comes back to where they
-            # were): the position after the calibration is the initial one
-            # to save (components/end_of_night.py)
-            if session is not None:
-                from components import end_of_night
-                end_of_night.ensure_axes_referenced(session)
-                if interrupted(): return
-
             log.notice("Starting Calibration")
             wait_before = program.get('calibration', {}).get('wait_before', 0)
             if interrupted(): return

@@ -414,7 +414,7 @@ def build_actions_section(session, refresh_view) -> None:
                 on_click=lambda: _run_and_notify(
                     session,
                     dwarf_uid,
-                    _polar_position_sequence,
+                    end_of_night.polar_position,
                     success_message=t("action_polar_position_done"),
                 ),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
@@ -442,7 +442,9 @@ def build_actions_section(session, refresh_view) -> None:
             ui.button(
                 t("action_save_open_position"),
                 icon="bookmark_add",
-                on_click=lambda: _run_and_notify(
+                on_click=lambda: ui.notify(t("action_save_open_position_unreferenced"), type="warning",
+                                           multi_line=True, timeout=10000)
+                if not end_of_night.is_referenced(dwarf_uid) else _run_and_notify(
                     session,
                     dwarf_uid,
                     end_of_night.action_save_open_position,
@@ -470,7 +472,7 @@ def build_actions_section(session, refresh_view) -> None:
                 on_click=lambda: _run_and_notify(
                     session,
                     dwarf_uid,
-                    perform_calibration,
+                    end_of_night.calibrate,
                     success_message=t("action_calibrate_done"),
                 ),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")

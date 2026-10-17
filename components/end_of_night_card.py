@@ -22,7 +22,7 @@ def _info(key: str) -> None:
         ui.tooltip(t(key)).style("white-space: pre-line; max-width: 420px").classes("text-sm")
 
 
-def _summary(uid: str) -> str:
+def _summary(uid: str) -> list[str]:
     current = E.get_settings(uid)
     ex, night = current["exit"], current["night"]
     parts = [t("eon_sum_exit", minutes=ex["after_min"]) if ex["enabled"] else t("eon_sum_exit_off")]
@@ -31,7 +31,7 @@ def _summary(uid: str) -> str:
     else:
         key = "eon_sum_night_close" if night["action"] == E.NIGHT_CLOSE else "eon_sum_night_power_off"
         parts.append(t(key, minutes=night["after_min"]))
-    return " \u00b7 ".join(parts)
+    return parts  # one line per action
 
 
 def build_end_of_night_card(session) -> None:
@@ -39,8 +39,7 @@ def build_end_of_night_card(session) -> None:
     settings = E.get_settings(uid)
 
     def refresh_all() -> None:
-        expansion._props["caption"] = _summary(uid)
-        expansion.update()
+        summary.refresh()
         estimate.refresh()
 
     def save_exit(**values) -> None:
@@ -53,8 +52,20 @@ def build_end_of_night_card(session) -> None:
 
     with ui.card().classes("w-full gap-1 p-2"):
         # Folded by default: the scripts below matter most
-        with ui.expansion(t("eon_title"), caption=_summary(uid), icon="bedtime") \
-                .classes("w-full").props("dense") as expansion:
+        with ui.expansion().classes("w-full").props("dense") as expansion:
+            # Header: the title and one line per action
+            with expansion.add_slot("header"):
+                with ui.row().classes("w-full items-center gap-3 no-wrap"):
+                    ui.icon("bedtime", size="sm").classes("shrink-0")
+                    with ui.column().classes("gap-0 min-w-0"):
+                        ui.label(t("eon_title")).classes("text-sm font-medium")
+
+                        @ui.refreshable
+                        def summary() -> None:
+                            for line in _summary(uid):
+                                ui.label(line).classes("text-xs text-grey-6")
+
+                        summary()
             # After each session
             ex = settings["exit"]
             with ui.row().classes("items-center gap-x-4 gap-y-1 flex-wrap"):

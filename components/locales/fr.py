@@ -538,7 +538,6 @@ TRANSLATIONS: dict[str, str] = {
     "eon_exit_due":                 "\u00c9cran de fin de session quitt\u00e9 \u00e0 {time}",
     "eon_night_estimate":           "Fin de nuit vers {time} (derni\u00e8re activit\u00e9 pr\u00e9vue jusqu'\u00e0 {last})",
     "eon_night_estimate_idle":      "Fin de nuit vers {time}",
-    "eon_night_estimate_none":      "Fin de nuit {minutes} min apr\u00e8s la fin de la prochaine capture",
     "eon_closed_by_app":            "Objectifs ferm\u00e9s par Dwarfium Lite : le prochain programme revient d'abord \u00e0 la position initiale",
     "eon_position_none":            "Aucune position initiale enregistr\u00e9e",
     "eon_position":                 "Position initiale : {position} - enregistr\u00e9e le {saved_at} ({source})",
@@ -566,4 +565,8 @@ TRANSLATIONS: dict[str, str] = {
     "eon_opened_by_hand":           "C'est ouvert",
     "action_go_open_position_hint": "Aller \u00e0 la position initiale : reset des axes, puis retour \u00e0 la position enregistr\u00e9e (la position polaire si aucune)",
     "action_save_open_position_hint":"Enregistrer la position initiale : l\u00e0 o\u00f9 vous avez plac\u00e9 le Dwarf (ses axes sont d'abord r\u00e9initialis\u00e9s et y reviennent)",
+    "eon_sum_exit":                 "\u00c9cran de fin de session quitt\u00e9 apr\u00e8s {minutes} min",
+    "eon_sum_exit_off":             "\u00c9cran de fin de session gard\u00e9",
+    "eon_sum_night":                "fin de nuit : {action} apr\u00e8s {minutes} min",
+    "eon_sum_night_off":            "rien en fin de nuit",
 }

@@ -287,16 +287,37 @@ def action_go_to_open_position(session) -> bool:
     return go_to_start_position(session, START_SAVED)
 
 
+def reset_axes(session) -> bool:
+    """Rotation then Pitch reset (the Pitch only on the Mini, its Rotation
+    can't be reset). Each axis goes to its limit and comes back to where it
+    was (user-confirmed): the Dwarf then knows its position (NEED RESET
+    otherwise)."""
+    from dwarf_python_api.lib.dwarf_utils import motor_action
+
+    if _has_rotation_reset(session) and not motor_action(5, session=session):
+        return False
+    return bool(motor_action(6, session=session))
+
+
+def ensure_axes_referenced(session) -> None:
+    """Before a program's calibration: axes reset when the Dwarf doesn't
+    give its Pitch position yet (user log, Oct 2026: NEED RESET after a
+    calibration - it doesn't always reset its motors), so the position read
+    after the calibration can be saved. Not with a bulky accessory (the
+    Pitch reset folds it). Never fails the program."""
+    if has_accessory(session.dwarf_uid) or _read_motor(session, 2) is not None:
+        return
+    log.notice(f"[{session.dwarf_uid}] Axes not referenced yet: reset before the calibration")
+    if not reset_axes(session):
+        log.warning(f"[{session.dwarf_uid}] Axes reset failed - the initial position won't be saved")
+
+
 def action_save_open_position(session) -> bool:
     """Where the user placed the Dwarf: its axes reset first - a reset goes
     to the limit and comes back to where the axis was (user-confirmed), and
     the Dwarf gives a position only after it (NEED RESET). Both axes on
     D2 / D3, the Pitch on the Mini (its Rotation can't be reset)."""
-    from dwarf_python_api.lib.dwarf_utils import motor_action
-
-    if _has_rotation_reset(session) and not motor_action(5, session=session):
-        return False
-    if not motor_action(6, session=session):
+    if not reset_axes(session):
         return False
     position = read_position(session, need_rotation=True)
     if position is None:

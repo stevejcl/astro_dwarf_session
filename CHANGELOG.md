@@ -38,6 +38,10 @@
     the field, for both cameras.
 
   ### BugFix
+    ### Initial position not saved after a calibration
+    A calibration doesn't always reset the Dwarf's motors: reading the position after it answered NEED RESET and
+    nothing was saved. Before a program's calibration, the axes are now reset when the Dwarf doesn't give its
+    position (each axis goes to its limit and comes back where it was) - not with a bulky accessory mounted.
     ### A manual capture left the last program's steps shown
     Starting a capture from the Actions (or the official app, or the Dwarf's own schedule) left the last program's
     steps and result at the bottom of the device page. They are cleared when such a capture starts.

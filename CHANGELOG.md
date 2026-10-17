@@ -32,6 +32,10 @@
       closed by this app a night before and the box ticked: not reopened by programs - said in the steps and on the
       card ("It is open" once opened by hand).
     A delay in progress is kept in memory only (lost if the app restarts).
+    ### Camera settings: number of frames
+    A capture started from the Actions used the count left in the Dwarf by its last session. "Frames" is now on the
+    wide row of the device page's camera settings (third, under the tele filter): sent on Enter or when leaving
+    the field, for both cameras.
 
   ### BugFix
     ### End of the night card: the estimated time

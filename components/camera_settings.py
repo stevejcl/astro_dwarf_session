@@ -39,12 +39,14 @@ from dwarf_python_api.lib.dwarf_utils import (
     PARAM_ID_ASTRO_GAIN,
     PARAM_ID_ASTRO_WIDE_EXPOSURE,
     PARAM_ID_ASTRO_WIDE_GAIN,
+    PARAM_ID_ASTRO_STACK_COUNT_TELE,
     perform_read_exposure_v3,
     perform_read_gain_v3,
     perform_set_astro_exposure_by_name_v3,
     perform_set_astro_gain_v3,
     perform_set_ir_filter_v3,
     perform_set_astro_ir_filter_v3,
+    perform_set_astro_stack_count_v3,
 )
 
 from components import connection_health
@@ -245,6 +247,21 @@ def _camera_row(session, camera: str, dwarf_type: str) -> None:
                 label=t("ir_filter"),
                 on_change=lambda e: _handle_set_ir_filter(session, dwarf_type, e.value),
             ).classes("w-32").props("dense")
+        else:
+            # Number of frames of a capture started from the Actions (user-
+            # requested Oct 2026) - third on this row, under the tele filter.
+            # Sent on Enter / leaving the field, not at each keystroke.
+            count_info = perform_read_gain_v3(param_id=PARAM_ID_ASTRO_STACK_COUNT_TELE, session=session)
+            count_input = ui.number(
+                label=t("stack_count"),
+                value=int(count_info["value"]) if count_info else None,
+                min=1,
+                max=999,
+                step=1,
+                format="%d",
+            ).classes("w-32").props("dense").tooltip(t("stack_count_hint"))
+            for event in ("blur", "keydown.enter"):
+                count_input.on(event, lambda _e, field=count_input: _handle_set_stack_count(session, field.value))
 
 
 async def _handle_set_exposure(session, camera: str, dwarf_type: str, name) -> None:
@@ -312,5 +329,27 @@ async def _handle_set_ir_filter(session, dwarf_type: str, name) -> None:
     success = result is not False  # see _handle_set_exposure() for why
     ui.notify(
         t("ir_filter_set", value=name) if success else t("command_failed"),
+        type="positive" if success else "negative",
+    )
+
+
+async def _handle_set_stack_count(session, value) -> None:
+    """The count for both cameras: a capture from the Actions uses the one
+    of the camera it starts."""
+    if value is None or int(value) < 1:
+        return
+    count = int(value)
+    dwarf_uid = session.dwarf_uid
+    if not connection_health.try_acquire_command_slot(dwarf_uid):
+        ui.notify(t("device_busy"), type="warning")
+        return
+    try:
+        tele = await run.io_bound(perform_set_astro_stack_count_v3, count, camera="tele", session=session)
+        wide = await run.io_bound(perform_set_astro_stack_count_v3, count, camera="wide", session=session)
+    finally:
+        connection_health.release_command_slot(dwarf_uid)
+    success = tele is not False and wide is not False  # see _handle_set_exposure() for why
+    ui.notify(
+        t("stack_count_set", value=count) if success else t("command_failed"),
         type="positive" if success else "negative",
     )

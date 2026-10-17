@@ -562,4 +562,6 @@ TRANSLATIONS: dict[str, str] = {
     "eon_accessory":                "Accessoire encombrant mont\u00e9 (cache, support de filtre \u00e9pais)",
     "eon_accessory_hint":           "Replier le Pitch pourrait le faire toucher - fermeture des objectifs, reset du Pitch (il va en but\u00e9e), extinction du Dwarf depuis le repos. Alors : ni fermeture ni extinction en fin de nuit, pas de position de d\u00e9part dans les programmes, une confirmation pour ces Actions. Une calibration fait aussi un reset du Pitch. Un filtre sur le support magn\u00e9tique d'origine du D2 ne touche pas.",
     "eon_accessory_on":             "Accessoire mont\u00e9 : fin de nuit et positions de d\u00e9part suspendues - d\u00e9cochez une fois retir\u00e9",
+    "eon_accessory_closed":         "Les objectifs ont \u00e9t\u00e9 ferm\u00e9s par Dwarfium Lite et un accessoire est maintenant mont\u00e9 : les programmes ne les rouvriront pas - ouvrez le Dwarf \u00e0 la main.",
+    "eon_opened_by_hand":           "C'est ouvert",
 }

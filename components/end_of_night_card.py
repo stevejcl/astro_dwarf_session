@@ -84,6 +84,12 @@ def build_end_of_night_card(session) -> None:
                     lines.append(t("eon_night_estimate_none", minutes=current["night"]["after_min"]))
             if E.has_accessory(uid):
                 ui.label(t("eon_accessory_on")).classes("text-sm text-orange-700")
+                if E.is_closed_by_app(uid):
+                    with ui.row().classes("items-center gap-2"):
+                        ui.label(t("eon_accessory_closed")).classes("text-sm text-red-700")
+                        ui.button(t("eon_opened_by_hand"),
+                                  on_click=lambda: (E.set_closed_by_app(uid, False), estimate.refresh())) \
+                            .props("flat dense no-caps size=sm")
             if E.is_closed_by_app(uid):
                 lines.append(t("eon_closed_by_app"))
             for line in lines:

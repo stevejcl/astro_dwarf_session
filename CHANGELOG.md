@@ -26,6 +26,9 @@
       closing, a Pitch reset (to its limit), the Dwarf powering off from rest. Then no end-of-night closing or power
       off, no start position in programs, and a confirmation for the Polar position, Close the lenses, Go to / Save
       the opening position. A filter on the D2's own magnetic holder doesn't touch.
+      To use with an accessory: calibrate (or save the opening position) first, then mount it and tick the box. Lenses
+      closed by this app a night before and the box ticked: not reopened by programs - said in the steps and on the
+      card ("It is open" once opened by hand).
     A delay in progress is kept in memory only (lost if the app restarts).
 
 ## [3.2.5] - 2026-10-16

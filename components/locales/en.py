@@ -562,4 +562,6 @@ TRANSLATIONS: dict[str, str] = {
     "eon_accessory":                "Bulky accessory mounted (cap, thick filter holder)",
     "eon_accessory_hint":           "Folding the Pitch could make it touch - closing the lenses, a Pitch reset (it goes to its limit), the Dwarf powering off from rest. Then: no end-of-night closing or power off, no start position in programs, a confirmation for those Actions. A calibration resets the Pitch too. A filter on the D2's own magnetic holder doesn't touch.",
     "eon_accessory_on":             "Accessory mounted: the end of the night and the start positions are suspended - untick it once removed",
+    "eon_accessory_closed":         "The lenses were closed by Dwarfium Lite and an accessory is now mounted: programs won't reopen them - open the Dwarf by hand.",
+    "eon_opened_by_hand":           "It is open",
 }

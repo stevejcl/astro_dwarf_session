@@ -18,10 +18,10 @@
       it sleeps when idle and wakes before its tasks (DwarfLab: "Do not power off after sync").
     - Opening position: the Pitch position (and the Rotation on D2 / D3: the night's last goto turned it - not on
       the Mini, its Rotation can't be reset) saved after each successful calibration of a program, or by the user
-      (Actions: "Save the opening position"). New program step "Start position" (saved opening position - axes
+      (Actions: "Save position"). New program step "Start position" (saved opening position - axes
       reset then back to it, the polar position when none is saved - or the polar position); done anyway when this
       app closed the lenses, so a remote Dwarf never stays closed.
-    - Actions: "Close the lenses", "Go to the opening position", "Save the opening position".
+    - Actions: "Close the lenses", "Reopen" (go to the opening position), "Save position".
       The Dwarf gives a motor position only once its axis was reset since it was switched on (NEED RESET): saving
       by hand resets the axes first (a reset goes to the limit and comes back to where the axis was).
     - "Bulky accessory mounted" (a cap, a thick filter holder on a D3): folding the Pitch could make it touch -

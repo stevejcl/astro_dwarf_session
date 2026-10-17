@@ -308,6 +308,9 @@ def main() -> None:
     # program must fire at its due time regardless of whether anyone
     # currently has a browser tab open.
     start_background_loop(get_manager())
+    # Exit the end-of-session screen / end of the night (components/end_of_night.py)
+    from components import end_of_night
+    end_of_night.start_background_loop(get_manager())
     # Hello to Dwarfium Scope Archive every 30 s: its presence, and our address for it
     peer_link.start(PORT)
 

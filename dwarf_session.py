@@ -99,6 +99,7 @@ STEP_DESCRIPTIONS = {
     "step_1c": "Do Automatic Autofocus",
     "step_1d": "Do Infinite Autofocus",
     "step_1e": "Entering Astro/DSO (or Solar) shooting mode",
+    "step_1f": "Move to the start position",
     "step_2": "Set Exposure to 1s for Calibration",
     "step_3": "Set Gain to 80 for Calibration",
     "step_4": "Set IR Filter for Calibration",
@@ -468,6 +469,20 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
         # describes.
         verify_action(continue_action, "step_1e", progress_callback=progress_callback)
 
+        # Start position (components/end_of_night.py): the saved opening
+        # position or the polar position, asked by the program - or the
+        # saved one anyway when this app closed the lenses at the end of
+        # the night (a remote Dwarf must not stay closed)
+        if session is not None:
+            from components import end_of_night
+            start_mode = end_of_night.start_position_mode(session, program.get('id_command', {}).get('start_position'))
+            if start_mode != end_of_night.START_NONE:
+                if interrupted(): return
+                log.notice(f"Moving to the start position ({start_mode})")
+                continue_action = end_of_night.go_to_start_position(session, start_mode)
+                if interrupted(): return
+                verify_action(continue_action, "step_1f", progress_callback=progress_callback)
+
         # Auto Focus
         if auto_focus:
             wait_before = program.get('auto_focus', {}).get('wait_before', 0)
@@ -624,6 +639,14 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             continue_action = perform_calibration(session=session)
             if interrupted(): return
             verify_action(continue_action, "step_7", progress_callback=progress_callback)
+            # The Dwarf's motors initialized and the sky visible there: the
+            # opening position to go back to after closing the lenses
+            # (components/end_of_night.py)
+            if session is not None:
+                from components import end_of_night
+                pitch = end_of_night.read_pitch(session)
+                if pitch is not None:
+                    end_of_night.save_open_position(session.dwarf_uid, pitch, "auto")
             wait_after = program.get('calibration', {}).get('wait_after', 0)
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")

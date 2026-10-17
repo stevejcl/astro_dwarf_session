@@ -49,7 +49,7 @@ from dwarf_python_api.lib.dwarf_utils import (
     start_polar_align,
 )
 
-from components import connection_health, scheduler_runner
+from components import connection_health, end_of_night, scheduler_runner
 from components.i18n import t
 
 # The state remembered after our own commands - only a fallback now: the
@@ -416,6 +416,41 @@ def build_actions_section(session, refresh_view) -> None:
                     dwarf_uid,
                     _polar_position_sequence,
                     success_message=t("action_polar_position_done"),
+                ),
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            # Lenses and opening position (components/end_of_night.py)
+            ui.button(
+                t("action_close_lenses"),
+                icon="lens_blur",
+                on_click=lambda: _run_and_notify(
+                    session,
+                    dwarf_uid,
+                    end_of_night.action_close_lenses,
+                    success_message=t("action_close_lenses_done"),
+                ),
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ui.button(
+                t("action_go_open_position"),
+                icon="settings_backup_restore",
+                on_click=lambda: _run_and_notify(
+                    session,
+                    dwarf_uid,
+                    end_of_night.action_go_to_open_position,
+                    success_message=t("action_go_open_position_done"),
+                ),
+            ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
+            ui.button(
+                t("action_save_open_position"),
+                icon="bookmark_add",
+                on_click=lambda: _run_and_notify(
+                    session,
+                    dwarf_uid,
+                    end_of_night.action_save_open_position,
+                    success_message="",
+                    success_message_fn=lambda: t(
+                        "action_save_open_position_done",
+                        pitch=f"{(end_of_night.open_position(dwarf_uid) or {}).get('pitch', 0):.1f}",
+                    ),
                 ),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
             ui.button(

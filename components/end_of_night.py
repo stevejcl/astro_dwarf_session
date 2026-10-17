@@ -357,24 +357,81 @@ def native_planned(session, now: float | None = None) -> bool:
     return bool(pending) and not pending_schedules.is_expired(pending, now)
 
 
+# Before the capture itself: start position, focus, EQ, calibration, goto
+_PROGRAM_PREP_S = 5 * 60
+
+
+def _exposure_s(value) -> float:
+    """A program's exposure ("60", "0.5", "1/250") in seconds; 0 if unreadable."""
+    try:
+        text = str(value).strip()
+        if "/" in text:
+            num, den = text.split("/", 1)
+            return float(num) / float(den)
+        return float(text)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 0.0
+
+
+def program_duration_s(cmd: dict) -> float:
+    """Estimated duration of a program without an end time: preparation,
+    then count x exposure of its camera (user-seen Oct 2026: the estimated
+    end of the night used the next program's START)."""
+    for key in ("setup_camera", "setup_wide_camera"):
+        setup = cmd.get(key) or {}
+        if setup.get("do_action"):
+            try:
+                count = int(setup.get("count") or 0)
+            except (TypeError, ValueError):
+                count = 0
+            return _PROGRAM_PREP_S + count * _exposure_s(setup.get("exposure"))
+    return _PROGRAM_PREP_S
+
+
+def _estimated_end(cmd: dict, start: datetime) -> datetime:
+    """Its end_time when it has one (scheduler_loop._extract_end_time), else
+    start + its estimated duration."""
+    from datetime import timedelta
+    from components.scheduler_loop import _extract_end_time
+
+    end_at = _extract_end_time(cmd, start)
+    if end_at:
+        try:
+            return datetime.strptime(end_at, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+    return start + timedelta(seconds=program_duration_s(cmd))
+
+
 def last_planned_end(session, now: float | None = None) -> float | None:
-    """Epoch end of the last planned activity (a program's end_time, else
-    its start; a native task's end) - for the estimated end of the night."""
-    from components import native_schedule
-    from components.scheduler_loop import list_upcoming_programs
+    """Epoch end of the last planned activity - the program running, the
+    programs in ToDo (their end time, else start + estimated duration), the
+    native tasks - for the estimated end of the night."""
+    from components import native_schedule, scheduler_runner
+    from components.scheduler_loop import _read_schedule
+    from components.session_dirs import session_dirs_for
     from components.site_time import site_now
 
     now = now if now is not None else time.time()
+    site_now_dt = site_now(session.config)
+    site_offset = now - site_now_dt.timestamp()
     ends: list[float] = []
-    site_offset = now - site_now(session.config).timestamp()
-    for program in list_upcoming_programs(session.dwarf_uid, session):
-        if program.get("status") != "todo":
-            continue
-        value = program.get("endAt") or program.get("scheduledAt")
+    state = scheduler_runner.get_run_state(session.dwarf_uid)
+    if state is not None and state.running and state.program:
+        started = state.program.get("id_command", {}).get("starting_date")
         try:
-            ends.append(datetime.strptime(value, "%Y-%m-%d %H:%M:%S").timestamp() + site_offset)
+            start = datetime.strptime(started, "%Y-%m-%d %H:%M:%S")
         except (TypeError, ValueError):
-            continue
+            start = site_now_dt.replace(tzinfo=None)
+        ends.append(_estimated_end(state.program, start).timestamp() + site_offset)
+    todo = session_dirs_for(session)["TODO_DIR"]
+    if os.path.isdir(todo):
+        for filename in os.listdir(todo):
+            if filename.endswith(".json"):
+                parsed = _read_schedule(os.path.join(todo, filename))
+                if parsed is not None:
+                    start, data = parsed
+                    ends.append(_estimated_end(data.get("command", {}), start).timestamp() + site_offset)
     ends += [task["end"] for task in native_schedule.upcoming_tasks(session.dwarf_uid, now)]
     future = [e for e in ends if e > now]
     return max(future) if future else None

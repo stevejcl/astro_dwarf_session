@@ -147,10 +147,16 @@ def build_end_of_night_card(session) -> None:
                         ui.button(t("eon_opened_by_hand"),
                                   on_click=lambda: (E.set_closed_by_app(uid, False), estimate.refresh())) \
                             .props("flat dense no-caps size=sm")
-            elif E.is_closed_by_app(uid):
-                lines.append(t("eon_closed_by_app"))
             for line in lines:
                 ui.label(line).classes("text-xs text-primary px-2")
+            if E.is_closed_by_app(uid) and not E.has_accessory(uid):
+                # One line, the explanation in its tooltip
+                with ui.row().classes("items-center gap-1 px-2 no-wrap"):
+                    ui.icon("lock", size="xs").classes("text-primary shrink-0")
+                    ui.label(t("eon_closed_short")).classes("text-xs text-primary whitespace-nowrap") \
+                        .tooltip(t("eon_closed_by_app"))
+                    ui.button(icon="close", on_click=lambda: (E.set_closed_by_app(uid, False), estimate.refresh())) \
+                        .props("flat dense round size=xs").tooltip(t("eon_opened_by_hand"))
 
         estimate()
 

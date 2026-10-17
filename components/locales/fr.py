@@ -538,7 +538,7 @@ TRANSLATIONS: dict[str, str] = {
     "eon_exit_due":                 "\u00c9cran de fin de session quitt\u00e9 \u00e0 {time}",
     "eon_night_estimate":           "Fin de nuit vers {time} (derni\u00e8re activit\u00e9 pr\u00e9vue jusqu'\u00e0 {last})",
     "eon_night_estimate_idle":      "Fin de nuit vers {time}",
-    "eon_closed_by_app":            "Objectifs ferm\u00e9s par Dwarfium Lite : le prochain programme revient d'abord \u00e0 la position initiale",
+    "eon_closed_by_app":            "Objectifs ferm\u00e9s par Dwarfium Lite (fin de nuit ou \u00ab Fermer les objectifs \u00bb) : le prochain programme revient d'abord \u00e0 la position initiale.",
     "eon_position_none":            "Aucune position initiale enregistr\u00e9e",
     "eon_position":                 "Position initiale : {position} - enregistr\u00e9e le {saved_at} ({source})",
     "eon_source_auto":              "apr\u00e8s une calibration",
@@ -570,4 +570,5 @@ TRANSLATIONS: dict[str, str] = {
     "eon_sum_night_off":            "Rien en fin de nuit",
     "eon_sum_night_close":          "Objectifs ferm\u00e9s apr\u00e8s {minutes} min",
     "eon_sum_night_power_off":      "Dwarf \u00e9teint apr\u00e8s {minutes} min",
+    "eon_closed_short":             "Objectifs ferm\u00e9s : rouverts au prochain programme",
 }

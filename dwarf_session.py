@@ -641,6 +641,14 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             time.sleep(5)
             if interrupted(): return
             
+            # The axes referenced first (a reset comes back to where they
+            # were): the position after the calibration is the initial one
+            # to save (components/end_of_night.py)
+            if session is not None:
+                from components import end_of_night
+                end_of_night.ensure_axes_referenced(session)
+                if interrupted(): return
+
             log.notice("Starting Calibration")
             wait_before = program.get('calibration', {}).get('wait_before', 0)
             if interrupted(): return

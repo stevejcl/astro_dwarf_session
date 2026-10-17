@@ -38,6 +38,9 @@
     the field, for both cameras.
 
   ### BugFix
+    ### A manual capture left the last program's steps shown
+    Starting a capture from the Actions (or the official app, or the Dwarf's own schedule) left the last program's
+    steps and result at the bottom of the device page. They are cleared when such a capture starts.
     ### End of the night card: the estimated time
     A program without an end time counted as ending at its START ("end of the night around 21:17, last planned
     activity until 21:15" for a program starting at 21:15). Its end is now estimated: 5 min of preparation (start

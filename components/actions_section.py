@@ -337,6 +337,16 @@ async def _accessory_guard(dwarf_uid, action) -> None:
     dialog.open()
 
 
+def _start_astro_capture(session):
+    """Astro Capture from the Actions: the last program's run (its steps at
+    the bottom of the page) is cleared once the capture starts - it stayed
+    shown under a manual capture (user-reported Oct 2026)."""
+    result = perform_takeAstroPhoto(session=session)
+    if result is not False:
+        scheduler_runner.clear_run(session.dwarf_uid)
+    return result
+
+
 def build_actions_section(session, refresh_view) -> None:
     """Call once per page load. refresh_view: the session page's own
     session_view.refresh (see pages/session.py) - called after an action
@@ -359,7 +369,7 @@ def build_actions_section(session, refresh_view) -> None:
                 on_click=lambda: _run_and_notify(
                     session,
                     dwarf_uid,
-                    perform_takeAstroPhoto,
+                    _start_astro_capture,
                     success_message=t("astro_capture_started"),
                     refresh_view=refresh_view,
                 ),

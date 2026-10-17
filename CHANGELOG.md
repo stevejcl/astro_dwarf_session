@@ -14,8 +14,9 @@
       in ToDo, tasks of the Dwarf's schedule, a schedule waiting to be sent): a remote Dwarf can't be switched back
       on. Go Live, Stop goto and the lenses closed (Pitch: motor_action 12 on D2, 1 on D3 / Mini - dwarf_python_api
       3.1.6) always come before the power off. The card shows the estimated time.
-    - Opening position: the Pitch position saved after each successful calibration of a program, or by the user
-      (Actions: "Save the opening position"). New program step "Start position" (saved opening position - Pitch
+    - Opening position: the Pitch position (and the Rotation on D2 / D3: the night's last goto turned it - not on
+      the Mini, its Rotation can't be reset) saved after each successful calibration of a program, or by the user
+      (Actions: "Save the opening position"). New program step "Start position" (saved opening position - axes
       reset then back to it, the polar position when none is saved - or the polar position); done anyway when this
       app closed the lenses, so a remote Dwarf never stays closed.
     - Actions: "Close the lenses", "Go to the opening position", "Save the opening position".

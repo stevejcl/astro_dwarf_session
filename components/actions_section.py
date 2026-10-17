@@ -452,7 +452,7 @@ def build_actions_section(session, refresh_view) -> None:
                     display_duration=8.0,
                     success_message_fn=lambda: t(
                         "action_save_open_position_done",
-                        pitch=f"{(end_of_night.open_position(dwarf_uid) or {}).get('pitch', 0):.1f}",
+                        position=end_of_night.describe_position(end_of_night.open_position(dwarf_uid)),
                     ),
                 ),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")

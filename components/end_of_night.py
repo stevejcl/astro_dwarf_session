@@ -117,18 +117,30 @@ def exit_settings_for(dwarf_uid: str, override: dict | None) -> dict:
 
 # ── opening position ──────────────────────────────────────────────────────
 def open_position(dwarf_uid: str) -> dict | None:
-    """{"pitch", "saved_at", "source": "auto"/"manual"} or None."""
+    """{"pitch", "rotation" (D2 / D3 only), "saved_at", "source": "auto" /
+    "manual"} or None."""
     pos = _entry(dwarf_uid).get("open_position")
     return pos if isinstance(pos, dict) and isinstance(pos.get("pitch"), (int, float)) else None
 
 
-def save_open_position(dwarf_uid: str, pitch: float, source: str, saved_at: str | None = None) -> None:
-    _update(dwarf_uid, open_position={
-        "pitch": round(float(pitch), 2),
-        "saved_at": saved_at or datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "source": source,
-    })
-    log.notice(f"[{dwarf_uid}] Opening position saved ({source}): Pitch {pitch:.2f}°")
+def save_open_position(dwarf_uid: str, position: dict, source: str, saved_at: str | None = None) -> None:
+    """position: read_position()'s {"pitch", "rotation"?}."""
+    entry = {"pitch": round(float(position["pitch"]), 2)}
+    if position.get("rotation") is not None:
+        entry["rotation"] = round(float(position["rotation"]), 2)
+    entry.update(saved_at=saved_at or datetime.now().strftime("%Y-%m-%d %H:%M"), source=source)
+    _update(dwarf_uid, open_position=entry)
+    log.notice(f"[{dwarf_uid}] Opening position saved ({source}): {entry}")
+
+
+def describe_position(pos: dict | None) -> str:
+    """ "Pitch 172.4°, Rotation 158.0°" for the UI."""
+    if not pos:
+        return ""
+    text = f"Pitch {float(pos['pitch']):.1f}°"
+    if pos.get("rotation") is not None:
+        text += f", Rotation {float(pos['rotation']):.1f}°"
+    return text
 
 
 def clear_open_position(dwarf_uid: str) -> None:
@@ -168,25 +180,57 @@ def close_lenses(session) -> bool:
     return bool(motor_action(12 if _model(session) == 2 else 1, session=session))
 
 
-def read_pitch(session) -> float | None:
+def _has_rotation_reset(session) -> bool:
+    """The Mini's Rotation axis has no home switch: it can't be reset, so
+    only its Pitch is saved and restored."""
+    return _model(session) != 5
+
+
+def _read_motor(session, motor_id: int) -> float | None:
     from dwarf_python_api.lib.dwarf_utils import perform_get_motor_position_full
 
     try:
-        return perform_get_motor_position_full(2, session=session)
+        return perform_get_motor_position_full(motor_id, session=session)
     except Exception as e:  # never fails a program for this
-        log.warning(f"Pitch position not read: {e}")
+        log.warning(f"Motor {motor_id} position not read: {e}")
         return None
 
 
+def read_position(session, need_rotation: bool = False) -> dict | None:
+    """{"pitch", "rotation"} - the Rotation on D2 / D3 only, when the Dwarf
+    gives it. The Dwarf gives a motor position only once that axis was
+    reset since it was switched on (NEED RESET): None when the Pitch isn't
+    given, or the Rotation isn't while need_rotation (on D2 / D3)."""
+    pitch = _read_motor(session, 2)
+    if pitch is None:
+        return None
+    position = {"pitch": pitch}
+    if _has_rotation_reset(session):
+        rotation = _read_motor(session, 1)
+        if rotation is None and need_rotation:
+            return None
+        if rotation is not None:
+            position["rotation"] = rotation
+    return position
+
+
 def go_to_open_position(session) -> bool:
-    """Pitch reset, then to the saved opening position. False when none is
-    saved or a command failed."""
+    """The saved opening position, the axes reset first (their reference may
+    be lost: the Dwarf powered off and on) - the polar position's order:
+    Rotation reset, Pitch reset, Rotation, Pitch. The Rotation on D2 / D3
+    when it was saved: closing the lenses doesn't move it, but the night's
+    last goto did. False when none is saved or a command failed."""
     from dwarf_python_api.lib.dwarf_utils import motor_action, perform_motor_run_to_v3
 
     pos = open_position(session.dwarf_uid)
     if pos is None:
         return False
+    with_rotation = pos.get("rotation") is not None and _has_rotation_reset(session)
+    if with_rotation and not motor_action(5, session=session):  # Rotation reset
+        return False
     if not motor_action(6, session=session):  # Pitch reset
+        return False
+    if with_rotation and not perform_motor_run_to_v3(1, float(pos["rotation"]), speed=10, session=session):
         return False
     return bool(perform_motor_run_to_v3(2, float(pos["pitch"]), speed=10, session=session))
 
@@ -229,10 +273,11 @@ def action_go_to_open_position(session) -> bool:
 
 
 def action_save_open_position(session) -> bool:
-    pitch = read_pitch(session)
-    if pitch is None:
+    """Both axes on D2 / D3 (the user placed the Dwarf after a reset)."""
+    position = read_position(session, need_rotation=True)
+    if position is None:
         return False
-    save_open_position(session.dwarf_uid, pitch, "manual")
+    save_open_position(session.dwarf_uid, position, "manual")
     return True
 
 

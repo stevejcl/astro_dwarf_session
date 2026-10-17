@@ -92,7 +92,7 @@ def build_end_of_night_card(session) -> None:
                 if pos is None:
                     ui.label(t("eon_position_none")).classes("text-sm")
                 else:
-                    ui.label(t("eon_position", pitch=f"{pos['pitch']:.1f}", saved_at=pos.get("saved_at", ""),
+                    ui.label(t("eon_position", position=E.describe_position(pos), saved_at=pos.get("saved_at", ""),
                                source=t("eon_source_" + str(pos.get("source", "auto"))))).classes("text-sm")
                     ui.button(icon="delete_outline", on_click=lambda: (E.clear_open_position(uid), position.refresh())) \
                         .props("flat dense round size=sm").tooltip(t("eon_position_clear"))

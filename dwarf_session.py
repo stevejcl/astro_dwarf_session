@@ -644,9 +644,9 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             # (components/end_of_night.py)
             if session is not None:
                 from components import end_of_night
-                pitch = end_of_night.read_pitch(session)
-                if pitch is not None:
-                    end_of_night.save_open_position(session.dwarf_uid, pitch, "auto")
+                position = end_of_night.read_position(session)
+                if position is not None:
+                    end_of_night.save_open_position(session.dwarf_uid, position, "auto")
             wait_after = program.get('calibration', {}).get('wait_after', 0)
             if interrupted(): return
             log.warning(f"Waiting for {wait_after} seconds")

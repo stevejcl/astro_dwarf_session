@@ -341,6 +341,22 @@ def next_activity(session, now: float | None = None) -> float | None:
     return min(starts) if starts else None
 
 
+def native_planned(session, now: float | None = None) -> bool:
+    """A task of the Dwarf's own schedule still to come (cached), or a
+    schedule waiting to be sent to it. Then the Dwarf must stay on and as
+    it was set up (DwarfLab: "Do not power off after sync. Dwarf auto
+    sleeps when idle and auto starts before tasks"): neither closed nor
+    powered off here."""
+    import pending_schedules
+    from components import native_schedule
+
+    now = now if now is not None else time.time()
+    if native_schedule.upcoming_tasks(session.dwarf_uid, now):
+        return True
+    pending = pending_schedules.get_pending(session.dwarf_uid)
+    return bool(pending) and not pending_schedules.is_expired(pending, now)
+
+
 def last_planned_end(session, now: float | None = None) -> float | None:
     """Epoch end of the last planned activity (a program's end_time, else
     its start; a native task's end) - for the estimated end of the night."""
@@ -497,6 +513,12 @@ async def tick(manager) -> None:
         if (idle_since is None or night["action"] == NIGHT_NONE or has_accessory(uid)
                 or _night_done.get(uid) == idle_since
                 or now < idle_since + max(0, int(night["after_min"])) * 60):
+            continue
+        if native_planned(session, now):
+            # The Dwarf's own schedule: it must stay on and where it was set
+            # up - it sleeps when idle and wakes before its tasks (DwarfLab)
+            _night_done[uid] = idle_since
+            log.info(f"[{uid}] End of the night: a schedule of the Dwarf is still planned - left as it is.")
             continue
         upcoming = next_activity(session, now)
         if night["action"] == NIGHT_POWER_OFF and upcoming is None:

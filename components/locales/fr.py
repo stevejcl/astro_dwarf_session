@@ -534,7 +534,7 @@ TRANSLATIONS: dict[str, str] = {
     "eon_night_none":               "Rien",
     "eon_night_close":              "Fermer les objectifs",
     "eon_night_power_off":          "\u00c9teindre le Dwarf",
-    "eon_night_hint":               "Apr\u00e8s la derni\u00e8re capture : les objectifs sont ferm\u00e9s si la prochaine activit\u00e9 pr\u00e9vue est \u00e0 plus de 15 min (le prochain programme les rouvre) ; le Dwarf n'est \u00e9teint que si plus rien n'est pr\u00e9vu (programmes, planning sur le Dwarf, planning en attente d'envoi) - un Dwarf distant ne peut pas \u00eatre rallum\u00e9. Objectifs toujours ferm\u00e9s avant l'extinction. Dwarfium Lite doit rester lanc\u00e9 et connect\u00e9.",
+    "eon_night_hint":               "Apr\u00e8s la derni\u00e8re capture : les objectifs sont ferm\u00e9s si le prochain programme pr\u00e9vu de cette appli est \u00e0 plus de 15 min (il les rouvre) ; le Dwarf n'est \u00e9teint que si plus rien n'est pr\u00e9vu. Jamais tant qu'un planning du Dwarf lui-m\u00eame est pr\u00e9vu (ou en attente d'envoi) : il doit rester allum\u00e9 et en place - il se met en veille seul et se r\u00e9veille avant ses t\u00e2ches. Un Dwarf distant ne peut pas \u00eatre rallum\u00e9. Objectifs toujours ferm\u00e9s avant l'extinction. Dwarfium Lite doit rester lanc\u00e9 et connect\u00e9.",
     "eon_exit_due":                 "\u00c9cran de fin de session quitt\u00e9 \u00e0 {time}",
     "eon_night_estimate":           "Fin de nuit vers {time} (derni\u00e8re activit\u00e9 pr\u00e9vue jusqu'\u00e0 {last})",
     "eon_night_estimate_idle":      "Fin de nuit vers {time}",

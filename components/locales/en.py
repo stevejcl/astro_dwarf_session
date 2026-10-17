@@ -534,7 +534,7 @@ TRANSLATIONS: dict[str, str] = {
     "eon_night_none":               "Nothing",
     "eon_night_close":              "Close the lenses",
     "eon_night_power_off":          "Power off the Dwarf",
-    "eon_night_hint":               "After the last capture: the lenses are closed when the next planned activity is more than 15 min away (the next program opens them again); the Dwarf is powered off only when nothing is planned any more (programs, schedule on the Dwarf, schedule waiting to be sent) - a remote Dwarf can't be switched back on. Lenses always closed before powering off. Dwarfium Lite must stay running and connected.",
+    "eon_night_hint":               "After the last capture: the lenses are closed when the next planned program of this app is more than 15 min away (it opens them again); the Dwarf is powered off only when nothing is planned any more. Never while a schedule of the Dwarf itself is planned (or waiting to be sent): it must stay on and as set up - it sleeps when idle and wakes before its tasks. A remote Dwarf can't be switched back on. Lenses always closed before powering off. Dwarfium Lite must stay running and connected.",
     "eon_exit_due":                 "End-of-session screen left at {time}",
     "eon_night_estimate":           "End of the night around {time} (last planned activity ends at {last})",
     "eon_night_estimate_idle":      "End of the night around {time}",

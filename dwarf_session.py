@@ -644,7 +644,6 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
             # (components/end_of_night.py)
             if session is not None:
                 from components import end_of_night
-                end_of_night.mark_referenced(session.dwarf_uid)
                 pitch = end_of_night.read_pitch(session)
                 if pitch is not None:
                     end_of_night.save_open_position(session.dwarf_uid, pitch, "auto")

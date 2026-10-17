@@ -25,7 +25,7 @@ import asyncio
 
 from nicegui import run, ui
 
-from components import connection_health, end_of_night
+from components import connection_health
 from components.i18n import t
 from dwarf_python_api.lib.dwarf_utils import perform_motor_joystick_v3, perform_motor_joystick_stop_v3
 from dwarf_python_api.lib.dwarf_utils import perform_get_motor_position_full, perform_motor_run_to_v3, motor_action
@@ -209,8 +209,6 @@ def build_motor_position_tool(session) -> None:
             ok = await run.io_bound(motor_action, action, 0, session)
         finally:
             connection_health.release_command_slot(dwarf_uid)
-        if ok and action == 6:
-            end_of_night.mark_referenced(dwarf_uid)  # Pitch position meaningful from now
         status_label.set_text("Reset sent." if ok else "Reset failed - see app log.")
         status_label.classes(replace="text-xs text-grey-6" if ok else "text-xs text-red-700")
 

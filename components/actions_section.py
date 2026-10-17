@@ -137,6 +137,7 @@ async def _run_and_notify(
     *,
     success_message: str,
     success_message_fn: Callable[[], str] | None = None,
+    failure_message: str | None = None,
     refresh_view=None,
     display_duration: float = 2.0,
     **kwargs,
@@ -181,7 +182,7 @@ async def _run_and_notify(
         notification.message = success_message_fn() if success_message_fn else success_message
         notification.type = "positive"
     else:
-        notification.message = t("command_failed")
+        notification.message = failure_message or t("command_failed")
         notification.type = "negative"
     if refresh_view:
         refresh_view()
@@ -414,7 +415,7 @@ def build_actions_section(session, refresh_view) -> None:
                 on_click=lambda: _run_and_notify(
                     session,
                     dwarf_uid,
-                    end_of_night.polar_position,
+                    _polar_position_sequence,
                     success_message=t("action_polar_position_done"),
                 ),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")
@@ -442,13 +443,13 @@ def build_actions_section(session, refresh_view) -> None:
             ui.button(
                 t("action_save_open_position"),
                 icon="bookmark_add",
-                on_click=lambda: ui.notify(t("action_save_open_position_unreferenced"), type="warning",
-                                           multi_line=True, timeout=10000)
-                if not end_of_night.is_referenced(dwarf_uid) else _run_and_notify(
+                on_click=lambda: _run_and_notify(
                     session,
                     dwarf_uid,
                     end_of_night.action_save_open_position,
                     success_message="",
+                    failure_message=t("action_save_open_position_failed"),
+                    display_duration=8.0,
                     success_message_fn=lambda: t(
                         "action_save_open_position_done",
                         pitch=f"{(end_of_night.open_position(dwarf_uid) or {}).get('pitch', 0):.1f}",
@@ -472,7 +473,7 @@ def build_actions_section(session, refresh_view) -> None:
                 on_click=lambda: _run_and_notify(
                     session,
                     dwarf_uid,
-                    end_of_night.calibrate,
+                    perform_calibration,
                     success_message=t("action_calibrate_done"),
                 ),
             ).props("flat align=left :stack=False no-wrap").classes("!flex-row !justify-start text-left whitespace-nowrap truncate")

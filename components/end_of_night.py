@@ -143,22 +143,6 @@ def set_closed_by_app(dwarf_uid: str, closed: bool) -> None:
     _update(dwarf_uid, closed_by_app=True if closed else None)
 
 
-# ── Pitch reference ───────────────────────────────────────────────────────
-# A motor position means something only once the axis was reset since the
-# Dwarf was switched on (user-pointed Oct 2026): a calibration, the polar
-# position or a Pitch reset do it. Kept per connection - forgotten when
-# the Dwarf disconnects (it may be switched off and on meanwhile).
-_pitch_referenced: set[str] = set()
-
-
-def mark_referenced(dwarf_uid: str) -> None:
-    _pitch_referenced.add(dwarf_uid)
-
-
-def is_referenced(dwarf_uid: str) -> bool:
-    return dwarf_uid in _pitch_referenced
-
-
 # ── Dwarf commands (blocking, the caller holds the command slot) ──────────
 def _model(session) -> int:
     return config_to_dwarf_id_int(session.config.dwarf_model_id) or 2
@@ -204,40 +188,21 @@ def go_to_open_position(session) -> bool:
         return False
     if not motor_action(6, session=session):  # Pitch reset
         return False
-    mark_referenced(session.dwarf_uid)
     return bool(perform_motor_run_to_v3(2, float(pos["pitch"]), speed=10, session=session))
 
 
 def go_to_start_position(session, mode: str) -> bool:
     """A program's start position: the saved one (the polar position when
     none is saved) or the polar position. Clears closed_by_app on success."""
+    from components.actions_section import _polar_position_sequence
+
     if mode == START_SAVED and open_position(session.dwarf_uid) is not None:
         ok = go_to_open_position(session)
     else:
-        ok = polar_position(session)
+        ok = bool(_polar_position_sequence(session))
     if ok:
         set_closed_by_app(session.dwarf_uid, False)
     return ok
-
-
-def polar_position(session) -> bool:
-    """The polar position (its axes reset first): the Pitch referenced."""
-    from components.actions_section import _polar_position_sequence
-
-    ok = bool(_polar_position_sequence(session))
-    if ok:
-        mark_referenced(session.dwarf_uid)
-    return ok
-
-
-def calibrate(session) -> bool:
-    """The Actions' Calibrate: the Dwarf resets its Pitch for it."""
-    from dwarf_python_api.lib.dwarf_utils import perform_calibration
-
-    result = perform_calibration(session=session)
-    if result is not False:
-        mark_referenced(session.dwarf_uid)
-    return result
 
 
 def start_position_mode(session, program_mode: str | None) -> str:
@@ -264,9 +229,6 @@ def action_go_to_open_position(session) -> bool:
 
 
 def action_save_open_position(session) -> bool:
-    """Only once the Pitch is referenced - the UI tells why otherwise."""
-    if not is_referenced(session.dwarf_uid):
-        return False
     pitch = read_pitch(session)
     if pitch is None:
         return False
@@ -430,7 +392,6 @@ async def power_off_cleanup(session) -> None:
     connection_health.forget(uid)
     device_lock.release(uid)
     connection_health.mark_manual_disconnect(uid)
-    _pitch_referenced.discard(uid)
 
 
 async def tick(manager) -> None:
@@ -439,7 +400,6 @@ async def tick(manager) -> None:
         uid = session.dwarf_uid
         if not session.is_connected:
             _was_busy.pop(uid, None)
-            _pitch_referenced.discard(uid)
             continue
         busy = _is_busy(session)
         if busy:

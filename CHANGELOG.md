@@ -19,9 +19,8 @@
       reset then back to it, the polar position when none is saved - or the polar position); done anyway when this
       app closed the lenses, so a remote Dwarf never stays closed.
     - Actions: "Close the lenses", "Go to the opening position", "Save the opening position".
-      A motor position means something only once the axis was reset since the Dwarf was switched on: saving it by
-      hand is refused until the Pitch is referenced in this connection (Polar position, a calibration, Go to the
-      opening position or a Pitch reset in the motor tool - then the joystick).
+      The Dwarf gives a motor position only once its axis was reset since it was switched on (NEED RESET): saving
+      by hand then says to do the Polar position (or a calibration) first, then the joystick.
     A delay in progress is kept in memory only (lost if the app restarts).
 
 ## [3.2.5] - 2026-10-16

@@ -545,7 +545,7 @@ TRANSLATIONS: dict[str, str] = {
     "eon_source_auto":              "apr\u00e8s une calibration",
     "eon_source_manual":            "manuellement",
     "eon_position_clear":           "Oublier cette position",
-    "eon_position_hint":            "Enregistr\u00e9e apr\u00e8s chaque calibration r\u00e9ussie d'un programme, ou avec \u00ab Enregistrer la position d'ouverture \u00bb dans les Actions - une fois le Pitch r\u00e9initialis\u00e9 depuis l'allumage (Position polaire, calibration ou reset du Pitch ; puis le joystick). Un programme y revient au d\u00e9marrage si demand\u00e9, ou quand Dwarfium Lite a ferm\u00e9 les objectifs.",
+    "eon_position_hint":            "Enregistr\u00e9e apr\u00e8s chaque calibration r\u00e9ussie d'un programme, ou avec \u00ab Enregistrer la position d'ouverture \u00bb dans les Actions. Un programme y revient au d\u00e9marrage si demand\u00e9, ou quand Dwarfium Lite a ferm\u00e9 les objectifs.",
     "prog_start_position":          "Position de d\u00e9part",
     "prog_start_none":              "Aucune",
     "prog_start_saved":             "Position d'ouverture enregistr\u00e9e",
@@ -556,5 +556,5 @@ TRANSLATIONS: dict[str, str] = {
     "prog_exit_on":                 "Quitter l'\u00e9cran de fin de session",
     "prog_exit_off":                "Rester sur l'\u00e9cran de fin de session",
     "prog_exit_hint":               "Passer en Live (et Stop goto) quelques minutes apr\u00e8s ce programme, sauf si un autre d\u00e9marre avant. Le r\u00e9glage par d\u00e9faut est dans l'onglet Scripts.",
-    "action_save_open_position_unreferenced":"La position du Pitch n'est pas encore connue depuis l'allumage du Dwarf : faites d'abord la Position polaire (ou une calibration, ou un reset du Pitch), puis d\u00e9placez le Dwarf au joystick si besoin, puis enregistrez.",
+    "action_save_open_position_failed":"Position non lue : le Dwarf ne la donne qu'une fois l'axe r\u00e9initialis\u00e9 depuis l'allumage (NEED RESET). Faites d'abord la Position polaire (ou une calibration), d\u00e9placez au joystick si besoin, puis enregistrez.",
 }

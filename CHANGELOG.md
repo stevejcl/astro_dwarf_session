@@ -21,7 +21,7 @@
       app closed the lenses, so a remote Dwarf never stays closed.
     - Actions: "Close the lenses", "Go to the opening position", "Save the opening position".
       The Dwarf gives a motor position only once its axis was reset since it was switched on (NEED RESET): saving
-      by hand then says to do the Polar position (or a calibration) first, then the joystick.
+      by hand resets the axes first (a reset goes to the limit and comes back to where the axis was).
     A delay in progress is kept in memory only (lost if the app restarts).
 
 ## [3.2.5] - 2026-10-16

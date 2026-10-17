@@ -273,7 +273,16 @@ def action_go_to_open_position(session) -> bool:
 
 
 def action_save_open_position(session) -> bool:
-    """Both axes on D2 / D3 (the user placed the Dwarf after a reset)."""
+    """Where the user placed the Dwarf: its axes reset first - a reset goes
+    to the limit and comes back to where the axis was (user-confirmed), and
+    the Dwarf gives a position only after it (NEED RESET). Both axes on
+    D2 / D3, the Pitch on the Mini (its Rotation can't be reset)."""
+    from dwarf_python_api.lib.dwarf_utils import motor_action
+
+    if _has_rotation_reset(session) and not motor_action(5, session=session):
+        return False
+    if not motor_action(6, session=session):
+        return False
     position = read_position(session, need_rotation=True)
     if position is None:
         return False

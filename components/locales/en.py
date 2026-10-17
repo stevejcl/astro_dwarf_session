@@ -545,7 +545,7 @@ TRANSLATIONS: dict[str, str] = {
     "eon_source_auto":              "after a calibration",
     "eon_source_manual":            "manually",
     "eon_position_clear":           "Forget this position",
-    "eon_position_hint":            "Saved after each successful calibration of a program, or with \"Save the opening position\" in the Actions. A program goes back to it at start when asked, or when Dwarfium Lite closed the lenses.",
+    "eon_position_hint":            "Saved after each successful calibration of a program, or with \"Save the opening position\" in the Actions (place the Dwarf with the joystick, then save: its axes are reset first and come back to where they were). Pitch and Rotation on D2 / D3, the Pitch on the Mini. A program goes back to it at start when asked, or when Dwarfium Lite closed the lenses.",
     "prog_start_position":          "Start position",
     "prog_start_none":              "None",
     "prog_start_saved":             "Saved opening position",
@@ -556,5 +556,5 @@ TRANSLATIONS: dict[str, str] = {
     "prog_exit_on":                 "Leave the end-of-session screen",
     "prog_exit_off":                "Stay on the end-of-session screen",
     "prog_exit_hint":               "Go Live (and Stop goto) a few minutes after this program, unless another one starts first. The default is set in the Scripts tab.",
-    "action_save_open_position_failed":"Position not read: the Dwarf gives a motor position only once its axis was reset since it was switched on (NEED RESET) - both axes on D2 / D3, the Pitch on the Mini. Do the Polar position (or a calibration) first, move with the joystick if needed, then save.",
+    "action_save_open_position_failed":"Opening position not saved: an axis reset or the position reading failed - see the log.",
 }

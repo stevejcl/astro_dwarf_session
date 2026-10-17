@@ -571,4 +571,7 @@ TRANSLATIONS: dict[str, str] = {
     "eon_sum_night_close":          "Objectifs ferm\u00e9s apr\u00e8s {minutes} min",
     "eon_sum_night_power_off":      "Dwarf \u00e9teint apr\u00e8s {minutes} min",
     "eon_closed_short":             "Objectifs ferm\u00e9s : rouverts au prochain programme",
+    "stack_count":                  "Nb poses",
+    "stack_count_hint":             "Nombre de poses d'une capture lanc\u00e9e depuis les Actions (t\u00e9l\u00e9 et grand angle)",
+    "stack_count_set":              "Nombre de poses r\u00e9gl\u00e9 \u00e0 {value}",
 }

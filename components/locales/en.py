@@ -571,4 +571,7 @@ TRANSLATIONS: dict[str, str] = {
     "eon_sum_night_close":          "Lenses closed after {minutes} min",
     "eon_sum_night_power_off":      "Dwarf powered off after {minutes} min",
     "eon_closed_short":             "Lenses closed: reopened by the next program",
+    "stack_count":                  "Frames",
+    "stack_count_hint":             "Number of frames of a capture started from the Actions (tele and wide)",
+    "stack_count_set":              "Frames set to {value}",
 }

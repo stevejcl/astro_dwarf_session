@@ -547,6 +547,12 @@ async def tick(manager) -> None:
         if busy:
             if not _was_busy.get(uid):
                 activity_started(uid)
+                # A capture not run by a program of this app (the official
+                # app, the Dwarf's own schedule): the last program's run,
+                # shown at the bottom of the device page, is over
+                from components import scheduler_runner
+                if not scheduler_runner.is_running(uid):
+                    scheduler_runner.clear_run(uid)
             _was_busy[uid] = True
             continue
         if _was_busy.get(uid):

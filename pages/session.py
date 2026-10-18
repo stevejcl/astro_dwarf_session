@@ -47,7 +47,7 @@ from dwarf_python_api.lib.my_logger import (
     unregister_thread_device_label,
 )
 
-from components import connection_health, device_lock, scheduler_runner, native_schedule, scope_archive, task_check_cache
+from components import connection_health, device_lock, device_task, scheduler_runner, native_schedule, scope_archive, task_check_cache
 from components.native_schedule import parse_native_schedule_info
 from components.actions_section import build_actions_section
 from components.camera_stream import build_camera_stream_section
@@ -762,6 +762,10 @@ def build_session_page() -> None:
                         or full_status.get("takePhotoStarted")
                         or full_status.get("takeWidePhotoStarted")
                     )
+                    # A megastack (this app's or another's): its progress in
+                    # the banner, like a capture's stacked / taken (user-
+                    # requested: only shown low on the page, in the program)
+                    megastack_on = session.is_connected and device_task.megastack_running(session)
 
                     # session.is_connected only reflects whether a
                     # client_instance/websocket OBJECT still exists - it
@@ -791,6 +795,12 @@ def build_session_page() -> None:
                     program_running = scheduler_runner.is_running(dwarf_uid)
                     if error:
                         status_banner(t("error_with_detail", error=error), kind="danger")
+                    elif megastack_on:
+                        counts = device_task.megastack_counts(session)
+                        status_banner(
+                            device_task.megastack_progress_text(counts) if counts else t("device_task_megastack"),
+                            kind="info",
+                        )
                     elif capturing:
                         stacked = (
                             full_status.get("takePhotoStacked", 0)

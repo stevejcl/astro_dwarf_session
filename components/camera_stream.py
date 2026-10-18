@@ -508,7 +508,23 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
         new_values = result.get("newValues", {})
         by_camera = full_status.get("StreamTypeByCamera", {})
 
+        # A megastack: its stack's thumbnail in the Tele frame (nothing to
+        # see in the Tele preview meanwhile), re-read on progress
+        from components import device_task
+        megastack_thumb = device_task.megastack_preview_url(session)
+
         for preview in previews:
+            if megastack_thumb and preview.cam_id == 0 and preview.expansion.value:
+                if preview.rtsp_started:
+                    rtsp_worker.stop_worker(preview.rtsp_url, preview)
+                    preview.rtsp_started = False
+                    preview.rtsp_image.set_source("")
+                preview.rtsp_container.set_visibility(False)
+                preview.not_available_label.set_visibility(False)
+                preview.container.set_visibility(True)
+                if preview.image.source != megastack_thumb:
+                    preview.image.set_source(megastack_thumb)
+                continue
             if not preview.expansion.value:
                 # This camera's panel is collapsed - release its own
                 # RTSP worker if it's still holding one, skip the rest
@@ -551,7 +567,9 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
                 preview.rtsp_started = False
                 preview.rtsp_image.set_source("")
 
-            if not is_rtsp and preview.stack_field in new_values:
+            # Back to the Tele preview once a megastack (its thumbnail above) is over
+            back_from_megastack = "stacked_thumbnail" in (preview.image.source or "")
+            if not is_rtsp and (preview.stack_field in new_values or back_from_megastack):
                 preview.image.set_source(f"{preview.url}?t={time.monotonic()}")
 
     ui.timer(_POLL_INTERVAL_S, _poll)

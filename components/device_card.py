@@ -145,21 +145,6 @@ def _schedule_detail(session: DwarfSession, activity: dict) -> str:
 
 
 
-def _megastack_preview(session) -> str:
-    """The running megastack's stack thumbnail on the Dwarf, its progress as
-    the cache key ("" when none runs): this app's run (RunState, components/
-    megastack.py), else one the Dwarf runs for another app (device_task)."""
-    state = scheduler_runner.get_run_state(session.dwarf_uid)
-    if state is not None and state.running and state.preview_url:
-        return f"{state.preview_url}?v={state.preview_version}"
-    task = device_task.running_task(session)
-    if task and task["megastack"] and task["result_dir"]:
-        from components import megastack
-
-        counts = device_task.progress(session)
-        return f"{megastack.preview_url(session, task['result_dir'])}?v={counts[1] if counts else 0}"
-    return ""
-
 class DeviceCardView:
     """One card per DwarfSession, built once. Call update(session) on
     every poll instead of recreating the card."""
@@ -561,7 +546,7 @@ class DeviceCardView:
             # gates the thumbnail now.
             # A megastack: its stack's thumbnail instead of the Tele preview
             # (nothing to see there meanwhile), re-read on progress
-            megastack_thumb = _megastack_preview(session)
+            megastack_thumb = device_task.megastack_preview_url(session)
             if megastack_thumb:
                 if self._thumbnail is not None:
                     self._thumbnail.set_visibility(True)

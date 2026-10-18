@@ -47,8 +47,9 @@
     meanwhile.
     Sessions whose FITS are no longer on the Dwarf (its folders listed over FTP) are named and refused before
     anything is sent - the Dwarf's own check let them through, then refused the start (INVALID_DATA, user-seen).
-    On the home screen, the Dwarf's card shows the stack's thumbnail as it grows instead of the Tele preview
-    (nothing to see there meanwhile) - for a megastack run by this app or by the official app.
+    On the home screen, the Dwarf's card - and on the device page, the Tele frame - show the stack's thumbnail as it
+    grows instead of the Tele preview (nothing to see there meanwhile), back to the Tele preview after it - for a
+    megastack run by this app or by the official app.
     Also from this app: the Explorer page's Megastack button (top right) - tick sessions of a target (single
     captures; another target, a mosaic or a megastack result is refused), then Megastack: the same program, followed
     on the device page.

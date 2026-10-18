@@ -42,7 +42,7 @@
     like the official app's megastack (its commands found by a capture, dwarf_python_api 3.1.6). Asked through
     POST /api/megastack (Scope Archive's Explore), run as a program: the Dwarf checks the sessions (refused with its
     reason: target, filter, binning, missing dark frames), starts, then is followed until its stack is in the album -
-    steps on the device page, the result in the Results tab (View shows it). Nothing else runs on the Dwarf
+    steps and images stacked so far ("252/598", read from the result's shotsInfo.json) on the device page, the result in the Results tab (View shows it). Nothing else runs on the Dwarf
     meanwhile.
   ### BugFix
     ### A program reopened in the editor kept its old date

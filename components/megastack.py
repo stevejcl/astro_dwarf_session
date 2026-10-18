@@ -85,6 +85,32 @@ def resolve_folders(session, names: list[str]) -> tuple[list[str], list[str]]:
     return folders, missing
 
 
+def _progress(session, result_dir: str) -> tuple[int, int] | None:
+    """(stacked, to stack) from the result's shotsInfo.json, which the Dwarf
+    updates while it stacks (user-checked Oct 2026: "shotsStacked": 252,
+    "shotsToStack": 598) - None while not readable yet."""
+    from pages.explorer import _fetch_shots_info, _shots_info_url
+
+    info = _fetch_shots_info(_shots_info_url(session.config.dwarf_ip, result_dir + "stacked_thumbnail.jpg"))
+    try:
+        return int(info["shotsStacked"]), int(info["shotsToStack"])
+    except (TypeError, KeyError, ValueError):
+        return None
+
+
+def _show_progress(session, program: dict, counts: tuple[int, int]) -> None:
+    """Shown like a capture's counts: the running program's view ("252/598
+    stacked") and, kept in id_command, the Results tab's card."""
+    from components import scheduler_runner
+
+    stacked, total = counts
+    id_command = program.setdefault("id_command", {})
+    id_command["shots_stacked"], id_command["shots_taken"] = stacked, total
+    state = scheduler_runner.get_run_state(session.dwarf_uid)
+    if state is not None and state.running:
+        state.shots_stacked, state.shots_taken = stacked, total
+
+
 def _in_album(session, result_dir: str) -> bool:
     entries = perform_list_astro_sessions_http(session=session) or []
     return any((_session_folder(e) or "") == result_dir for e in entries)
@@ -149,6 +175,9 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
             step(STEP_STACKING, False, "too long")
             raise RuntimeError("Megastack: still running after 8 h - no longer followed")
         perform_get_device_state_info(session=session)
+        counts = _progress(session, result_dir)
+        if counts is not None:
+            _show_progress(session, program, counts)
         task = get_task_state(session=session)
         idle = get_task_state("TASK_ID_IDLE", session=session)
         if task is not None and task["updated"] >= started_at:
@@ -162,6 +191,9 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
 
     for _ in range(_ALBUM_TRIES):
         if _in_album(session, result_dir):
+            counts = _progress(session, result_dir)
+            if counts is not None:
+                _show_progress(session, program, counts)
             step(STEP_STACKING, True, "done")
             log.success(f"Megastack done: {result_dir}")
             return

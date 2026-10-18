@@ -51,6 +51,9 @@
     captures; another target, a mosaic or a megastack result is refused), then Megastack: the same program, followed
     on the device page.
   ### BugFix
+    ### A megastack's thumbnail never showed - only its loading spinner
+    The program view is rebuilt every second: the thumbnail was recreated each time and never finished loading.
+    One image now, its source changed only when more images are stacked.
     ### A megastack running on the Dwarf (started by the official app, even closed since)
     The Dwarf can do nothing else meanwhile: a program started then failed on its first commands. Known now from the
     Dwarf's task state (sent with each device state, dwarf_python_api 3.1.6): a due program waits in ToDo and starts

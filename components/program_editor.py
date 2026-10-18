@@ -104,6 +104,27 @@ def _blank_program(config=None) -> dict:
     }
 
 
+def _refresh_past_date(program: dict, config) -> bool:
+    """An existing program opened with its date/time already past (a result
+    reopened to capture its target again): the date moves to the next
+    occurrence of its time, the time is kept (user-reported Oct 2026: the
+    old date went unnoticed, the program ran at once, and a resume after a
+    network drop then took the old date's end time). True when changed."""
+    id_command = program["command"].setdefault("id_command", {})
+    try:
+        when = datetime.strptime(f"{id_command.get('date', '')} {id_command.get('time', '')}", "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return False
+    now = site_now(config).replace(tzinfo=None)
+    if when > now:
+        return False
+    when = now.replace(hour=when.hour, minute=when.minute, second=when.second, microsecond=0)
+    if when <= now:
+        when += timedelta(days=1)
+    id_command["date"] = when.strftime("%Y-%m-%d")
+    return True
+
+
 def _filename_for(program: dict) -> str:
     id_command = program["command"]["id_command"]
     date = id_command.get("date", "")
@@ -119,6 +140,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
     save, e.g. to refresh a scripts list."""
     program = json.loads(json.dumps(initial_program)) if initial_program else _blank_program(session.config)
     cmd = program["command"]
+    date_refreshed = bool(initial_program) and _refresh_past_date(program, session.config)
 
     # Wrapped in a card (user-reported Sep 2026, native-window
     # screenshot: "couleur identique" - this whole editor was a flat
@@ -133,6 +155,8 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
 
         with ui.row().classes("w-full gap-2 flex-wrap"):
             date_input = date_picker_input(t("prog_date"), cmd["id_command"]["date"]).classes("flex-1 min-w-[140px]")
+            if date_refreshed:
+                ui.notify(t("prog_date_refreshed", date=cmd["id_command"]["date"]), type="info")
             time_input = time_picker_input(
                 t("prog_time"), cmd["id_command"]["time"], with_seconds=True
             ).classes("flex-1 min-w-[140px]")

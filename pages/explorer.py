@@ -217,11 +217,94 @@ def build_explorer_page() -> None:
                     "flat round"
                 )
                 ui.label(t("explorer_title")).classes("text-xl")
-                ui.element("div").classes("w-8")  # keeps the title centered
+                # Megastack (components/megastack.py): tick sessions of a target,
+                # the Dwarf stacks them together
+                megastack_toggle = ui.button(icon="auto_awesome_motion").props("flat round").tooltip(
+                    t("explorer_megastack")
+                )
 
             if session is None or not session.config.dwarf_ip:
                 ui.label(t("explorer_no_ip")).classes("text-grey-6")
                 return
+
+            # Megastack selection: the sessions ticked, by thumbnail path
+            selecting = [False]
+            selected: dict[str, dict] = {}
+            tiles: dict[str, ui.column] = {}
+            with ui.row().classes("w-full items-center gap-2 no-wrap") as megastack_bar:
+                megastack_label = ui.label("").classes("text-sm flex-1 min-w-0")
+                megastack_start = ui.button(t("explorer_megastack_start"), icon="auto_awesome_motion") \
+                    .props("dense no-caps color=primary")
+            megastack_bar.set_visibility(False)
+
+            def _refresh_megastack_bar() -> None:
+                if not selected:
+                    megastack_label.set_text(t("explorer_megastack_hint"))
+                else:
+                    target = _target_name(next(iter(selected.values())))
+                    megastack_label.set_text(t("explorer_megastack_selected", count=len(selected), target=target))
+                megastack_start.set_enabled(len(selected) >= 2)
+
+            def _toggle_selecting() -> None:
+                selecting[0] = not selecting[0]
+                megastack_toggle.props(f"color={'primary' if selecting[0] else ''}")
+                if not selecting[0]:
+                    for path in list(selected):
+                        tiles[path].classes(remove="ring-4 ring-primary")
+                    selected.clear()
+                megastack_bar.set_visibility(selecting[0])
+                _refresh_megastack_bar()
+
+            megastack_toggle.on_click(_toggle_selecting)
+
+            def _toggle_entry(entry: dict) -> None:
+                path = entry.get("thumbnailPath") or ""
+                if path in selected:
+                    del selected[path]
+                    tiles[path].classes(remove="ring-4 ring-primary")
+                else:
+                    # A single capture only (not a mosaic or an earlier megastack)
+                    if not entry.get("astroImageDetails"):
+                        ui.notify(t("explorer_megastack_not_eligible"), type="warning")
+                        return
+                    if selected and _target_name(entry) != _target_name(next(iter(selected.values()))):
+                        ui.notify(t("explorer_megastack_other_target"), type="warning")
+                        return
+                    selected[path] = entry
+                    tiles[path].classes(add="ring-4 ring-primary")
+                _refresh_megastack_bar()
+
+            def _on_tile(entry: dict):
+                if selecting[0]:
+                    _toggle_entry(entry)
+                    return None
+                return open_dialog(entry)  # awaited by the click handler
+
+            def _confirm_megastack() -> None:
+                from components import megastack
+
+                entries = list(selected.values())
+                target = _target_name(entries[0])
+                folders = [megastack._session_folder(e) for e in entries]
+                with ui.dialog() as confirm, ui.card().classes("w-[min(90vw,480px)]"):
+                    ui.label(t("explorer_megastack_title", target=target)).classes("text-base font-medium")
+                    ui.label(t("explorer_megastack_confirm", count=len(folders))).classes("text-sm") \
+                        .style("white-space: pre-line")
+                    with ui.row().classes("w-full justify-end gap-2"):
+                        ui.button(t("cancel"), on_click=confirm.close).props("flat")
+
+                        def go() -> None:
+                            confirm.close()
+                            error = megastack.start(session, folders, target)
+                            if error:
+                                ui.notify(t("explorer_megastack_failed", error=error), type="negative", multi_line=True)
+                                return
+                            ui.navigate.to(f"/session/{dwarf_uid}")
+
+                        ui.button(t("explorer_megastack_start"), icon="auto_awesome_motion", on_click=go)
+                confirm.open()
+
+            megastack_start.on_click(_confirm_megastack)
 
             grid = ui.grid().classes("grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 w-full")
             spinner = ui.spinner(size="lg").classes("mx-auto")
@@ -383,8 +466,9 @@ def build_explorer_page() -> None:
                         if not thumb_path:
                             continue
                         with ui.column().classes(
-                            "gap-1 cursor-pointer"
-                        ).on("click", lambda e=entry: open_dialog(e)):
+                            "gap-1 cursor-pointer rounded"
+                        ).on("click", lambda e=entry: _on_tile(e)) as tile:
+                            tiles[thumb_path] = tile
                             ui.image(_thumbnail_url(session.config.dwarf_ip, thumb_path)).classes(
                                 "w-full aspect-square rounded"
                             ).props("fit=cover")

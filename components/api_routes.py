@@ -714,37 +714,10 @@ def register_api_routes() -> None:
             session = get_manager().get(dwarf_uid)
         except KeyError:
             return JSONResponse({"error": f"unknown dwarfUid {dwarf_uid!r}"}, status_code=404)
-        if not session.is_connected:
-            return JSONResponse({"error": "the Dwarf is not connected"}, status_code=409)
-        if scheduler_runner.is_running(dwarf_uid):
-            return JSONResponse({"error": "a program is running on this Dwarf"}, status_code=409)
-
-        target = str(body.get("target") or "").strip()
-        program = _blank_program(session.config)
-        cmd = program["command"]
-        for key, section in cmd.items():
-            if isinstance(section, dict) and "do_action" in section:
-                section["do_action"] = False
-        cmd["id_command"]["description"] = f"Megastack {target}".strip()
-        site_clock = site_now(session.config)
-        cmd["id_command"]["date"] = site_clock.strftime("%Y-%m-%d")
-        cmd["id_command"]["time"] = site_clock.strftime("%H:%M:%S")
-        cmd["id_command"]["max_retries"] = 1
-        cmd["megastack"] = {"do_action": True, "target": target, "sessions": sessions}
-
-        dirs = ensure_dirs(session)
-        filepath = os.path.join(dirs["TODO_DIR"], _filename_for(program).replace(".json", "-megastack.json"))
-        write_json_atomic(filepath, program)
-        try:
-            scheduler_runner.start_run(dwarf_uid, cmd, session, source_filepath=filepath)
-        except RuntimeError as e:
-            # Not left in ToDo: the scheduler would start it later, unasked
-            try:
-                os.remove(filepath)
-            except OSError:
-                pass
-            return JSONResponse({"error": str(e)}, status_code=409)
-        log.notice(f"[{dwarf_uid}] Megastack started: {len(sessions)} sessions of {target or '?'}")
+        from components import megastack
+        error = megastack.start(session, sessions, str(body.get("target") or "").strip())
+        if error:
+            return JSONResponse({"error": error}, status_code=409)
         return JSONResponse({"ok": True, "mode": "started"})
 
     @app.post("/api/program")

@@ -9,7 +9,8 @@ check, the start, then the follow-up until the Dwarf's task ends - shown
 and recorded like any program (steps, Results tab). The Dwarf is busy all
 along: nothing else can run on it meanwhile.
 
-Asked by Scope Archive's Explore (POST /api/megastack, api_routes.py)."""
+Asked by Scope Archive's Explore (POST /api/megastack, api_routes.py) or
+from this app's Explorer page (sessions ticked there) - both through start()."""
 from __future__ import annotations
 
 import time
@@ -43,6 +44,51 @@ _ALBUM_TRIES = 6
 _ALBUM_WAIT_S = 10
 
 _DONE_STATES = ("OPERATION_STATE_STOPPED", "OPERATION_STATE_IDLE")
+
+
+def start(session, sessions: list[str], target: str) -> str:
+    """Runs the megastack of these sessions (folder names or full paths on
+    the Dwarf) as a program now - saved in ToDo first like any program, so
+    it is tracked to Done / Error. "" when started, else why not (the Dwarf
+    offline or busy - nothing saved)."""
+    import os
+
+    from components import scheduler_runner
+    from components.json_files import write_json_atomic
+    from components.program_editor import _blank_program, _filename_for
+    from components.session_dirs import ensure_dirs
+    from components.site_time import site_now
+
+    if not session.is_connected:
+        return "the Dwarf is not connected"
+    if scheduler_runner.is_running(session.dwarf_uid):
+        return "a program is running on this Dwarf"
+    program = _blank_program(session.config)
+    cmd = program["command"]
+    for section in cmd.values():
+        if isinstance(section, dict) and "do_action" in section:
+            section["do_action"] = False
+    cmd["id_command"]["description"] = f"Megastack {target}".strip()
+    site_clock = site_now(session.config)
+    cmd["id_command"]["date"] = site_clock.strftime("%Y-%m-%d")
+    cmd["id_command"]["time"] = site_clock.strftime("%H:%M:%S")
+    cmd["id_command"]["max_retries"] = 1
+    cmd["megastack"] = {"do_action": True, "target": target, "sessions": list(sessions)}
+
+    dirs = ensure_dirs(session)
+    filepath = os.path.join(dirs["TODO_DIR"], _filename_for(program).replace(".json", "-megastack.json"))
+    write_json_atomic(filepath, program)
+    try:
+        scheduler_runner.start_run(session.dwarf_uid, cmd, session, source_filepath=filepath)
+    except RuntimeError as e:
+        # Not left in ToDo: the scheduler would start it later, unasked
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
+        return str(e)
+    log.notice(f"[{session.dwarf_uid}] Megastack started: {len(sessions)} sessions of {target or '?'}")
+    return ""
 
 
 def megastack_section(program: dict) -> dict | None:

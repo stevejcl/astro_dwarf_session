@@ -110,6 +110,12 @@ def _get_details(entry: dict) -> dict | None:
     return None
 
 
+def _megastack_eligible(entry: dict) -> bool:
+    """Can be megastacked: a single capture or a mosaic (their FITS in the
+    panels' subfolders), not an earlier megastack."""
+    return bool(entry.get("astroImageDetails") or entry.get("astroMosaicImageDetails"))
+
+
 def _target_name(entry: dict) -> str:
     details = _get_details(entry)
     if details and details.get("target"):
@@ -231,6 +237,9 @@ def build_explorer_page() -> None:
             selecting = [False]
             selected: dict[str, dict] = {}
             tiles: dict[str, ui.column] = {}
+            tile_entries: dict[str, dict] = {}
+            # Selection mode: a header per target above its sessions
+            target_headers: dict[str, ui.label] = {}
             with ui.row().classes("w-full items-center gap-2 no-wrap") as megastack_bar:
                 megastack_label = ui.label("").classes("text-sm flex-1 min-w-0")
                 megastack_start = ui.button(t("explorer_megastack_start"), icon="auto_awesome_motion") \
@@ -255,6 +264,50 @@ def build_explorer_page() -> None:
                     selected.clear()
                 megastack_bar.set_visibility(selecting[0])
                 _refresh_megastack_bar()
+                _arrange_tiles()
+
+            def _arrange_tiles() -> None:
+                """Selection mode (user-requested Oct 2026): only the sessions
+                that can be megastacked, grouped by target (A-Z, newest first
+                in each) under a header - by the tiles' CSS order, the grid
+                isn't rebuilt. Else every session, newest first."""
+                if not selecting[0]:
+                    for tile in tiles.values():
+                        tile.style("order: 0")
+                        tile.set_visibility(True)
+                    for header in target_headers.values():
+                        header.set_visibility(False)
+                    return
+                eligible = sorted(
+                    (e for e in tile_entries.values() if _megastack_eligible(e)),
+                    key=lambda e: (_target_name(e).casefold(), -(e.get("modificationTime") or 0)),
+                )
+                counts: dict[str, int] = {}
+                for entry in eligible:
+                    counts[_target_name(entry)] = counts.get(_target_name(entry), 0) + 1
+                order = 0
+                shown: set[str] = set()
+                for entry in eligible:
+                    target = _target_name(entry)
+                    if target not in shown:
+                        shown.add(target)
+                        header = target_headers.get(target)
+                        if header is None:
+                            with grid:
+                                header = ui.label("").classes("col-span-full text-sm font-medium mt-2")
+                            target_headers[target] = header
+                        header.set_text(f"{target} ({counts[target]})")
+                        header.style(f"order: {order}")
+                        header.set_visibility(True)
+                        order += 1
+                    tiles[entry["thumbnailPath"]].style(f"order: {order}")
+                    order += 1
+                eligible_paths = {e["thumbnailPath"] for e in eligible}
+                for path, tile in tiles.items():
+                    tile.set_visibility(path in eligible_paths)
+                for target, header in target_headers.items():
+                    if target not in shown:
+                        header.set_visibility(False)
 
             megastack_toggle.on_click(_toggle_selecting)
 
@@ -267,7 +320,7 @@ def build_explorer_page() -> None:
                     # Single captures, or mosaics (user-requested Oct 2026: their
                     # FITS in the panels' subfolders) - not mixed, not an
                     # earlier megastack
-                    if not (entry.get("astroImageDetails") or entry.get("astroMosaicImageDetails")):
+                    if not _megastack_eligible(entry):
                         ui.notify(t("explorer_megastack_not_eligible"), type="warning")
                         return
                     first = next(iter(selected.values()), None)
@@ -500,6 +553,7 @@ def build_explorer_page() -> None:
                             "gap-1 cursor-pointer rounded"
                         ).on("click", lambda e=entry: _on_tile(e)) as tile:
                             tiles[thumb_path] = tile
+                            tile_entries[thumb_path] = entry
                             ui.image(_thumbnail_url(session.config.dwarf_ip, thumb_path)).classes(
                                 "w-full aspect-square rounded"
                             ).props("fit=cover")
@@ -522,6 +576,9 @@ def build_explorer_page() -> None:
                                 "text-xs text-center text-grey-6 truncate w-full"
                             )
                             thumb_paths_to_prefetch.add(thumb_path)
+
+                # Selection mode turned on while the album loaded
+                _arrange_tiles()
 
                 # Fetches shotsInfo.json for every thumbnail above,
                 # bounded concurrency - a real capture can list 175+

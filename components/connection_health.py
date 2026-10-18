@@ -52,21 +52,17 @@ was in flight when the drop happened - only the link is re-established,
 never a replay of the interrupted action, to avoid risking a duplicate
 (e.g. a capture command firing twice on the device).
 
-The reconnect step itself is deliberately LIGHT: just
-perform_get_device_state_info() (which transparently re-runs
-init_socket() if needed), NOT a full perform_enter_astro_mode(). A
-network drop doesn't necessarily mean the device itself left astro mode
-or closed the camera - only that OUR socket died. Forcing a fresh
-SWITCH_SHOOTING_MODE/ENTER_CAMERA on every auto-reconnect risked
-disrupting a capture that might still be running fine on the device's
-side, for no benefit - dwarf_python_api currently decodes but discards
-shooting_mode from the state-info response (see perform_
-get_device_state_info()'s docstring/log line), so there's no cheap way
-to confirm "still in astro mode" before deciding whether re-entering it
-is actually necessary. The manual Reconnect button in pages/session.py
-still does the fuller connect_and_enter_astro_mode() - a human
-explicitly asking to reconnect is a reasonable point to also force a
-clean mode state, unlike an unattended background retry.
+The reconnect step itself: SET_TIME (opening the socket sends
+GET_DEVICE_STATE_INFO), timezone and location, then astro mode entered
+again only when nothing runs - no program of this app, no camera / motor
+/ focus operation reported by the device (_enter_astro_mode_if_idle()).
+A network drop doesn't necessarily mean the device left astro mode - a
+capture may still be running fine on its side, and switching modes then
+could disrupt it. But a Dwarf that restarted has its camera closed
+(user log, Oct 2026: the Mini powered off and back on, auto-reconnected,
+then its autofocus refused CAMERA_TELE_CLOSED until a manual Reconnect).
+The manual Reconnect button in pages/session.py does the full
+connect_and_enter_astro_mode() unconditionally.
 
 If all auto-reconnect attempts fail, the device is left in the existing
 "connection lost" state for the user to retry manually via pages/
@@ -175,9 +171,6 @@ _command_in_flight_caller: dict[str, str] = {}
 # failed in a row - stop auto-retrying until the user manually
 # reconnects (which clears this, see mark_just_connected()).
 _auto_reconnect_exhausted: set[str] = set()
-# uids connected at least once since this app started (manual or
-# automatic) - see _startup_enter_astro_mode().
-_connected_once: set[str] = set()
 _auto_reconnect_in_progress: set[str] = set()
 
 # uids where a HIGHER-PRIORITY acquire attempt is currently in flight -
@@ -426,33 +419,33 @@ def _device_busy(session: DwarfSession) -> bool:
     return False
 
 
-def _startup_enter_astro_mode(session: DwarfSession) -> None:
+def _enter_astro_mode_if_idle(session: DwarfSession) -> None:
     """Blocking (run.io_bound); the caller holds the command slot.
 
-    The FIRST automatic connection to a Dwarf since this app started
-    enters astro mode like the manual Connect does (user-reported Oct
-    2026: after the auto-connect at startup the Dwarf never got
-    SWITCH_SHOOTING_MODE / ENTER_CAMERA, so no RTSP live view until a
-    manual Disconnect / Connect). Later auto-reconnects stay light (see
-    the module docstring's AUTO-RECONNECT section). Skipped when a
-    program runs here or the device reports an operation in progress
-    (e.g. a capture left running by a previous app instance, resumed by
-    reconcile_orphaned_current_files() right after): switching modes
-    then could disrupt it. Best effort: a failure is logged, the
-    connection itself is not failed."""
+    An automatic connection enters astro mode like the manual Connect
+    does: at startup (user-reported Oct 2026: else no SWITCH_SHOOTING_MODE
+    / ENTER_CAMERA, so no RTSP live view until a manual Disconnect /
+    Connect) and after a reconnect - a Dwarf that restarted has its camera
+    closed (user log, Oct 2026: autofocus refused CAMERA_TELE_CLOSED).
+    Skipped when a program runs here or the device reports an operation in
+    progress (e.g. a capture going on through a network drop, or left
+    running by a previous app instance and resumed by
+    reconcile_orphaned_current_files() right after): switching modes then
+    could disrupt it. Best effort: a failure is logged, the connection
+    itself is not failed."""
     uid = session.dwarf_uid
     from components import scheduler_runner  # local import - imports this module
 
     if scheduler_runner.is_running(uid) or _device_busy(session):
-        log.notice(f"[{uid}] Startup connection: device busy, astro mode not entered.")
+        log.notice(f"[{uid}] Automatic connection: device busy, astro mode not entered.")
         return
     try:
         ok = perform_enter_astro_mode(session=session)
     except Exception as e:  # never break a connect over this
         ok = False
-        log.warning(f"[{uid}] Startup connection: entering astro mode failed: {e}")
+        log.warning(f"[{uid}] Automatic connection: entering astro mode failed: {e}")
     if ok is False:
-        log.warning(f"[{uid}] Startup connection: astro mode not entered.")
+        log.warning(f"[{uid}] Automatic connection: astro mode not entered.")
 
 
 async def _auto_reconnect(session: DwarfSession) -> None:
@@ -460,11 +453,9 @@ async def _auto_reconnect(session: DwarfSession) -> None:
     awaited by the poll loop, since a reconnect sequence can itself
     take a while per attempt.
 
-    Deliberately light: time / timezone / location only (no mode switch),
-    NOT connect_and_enter_astro_mode() - see the module docstring's AUTO-
-    RECONNECT section for why forcing a fresh mode switch on every
-    unattended retry is the wrong default. Except for the first
-    connection since the app started: see _startup_enter_astro_mode()."""
+    Time / timezone / location, then astro mode only when nothing runs
+    (_enter_astro_mode_if_idle()) - not connect_and_enter_astro_mode():
+    see the module docstring's AUTO-RECONNECT section."""
     uid = session.dwarf_uid
     if uid in _auto_reconnect_in_progress:
         return
@@ -497,8 +488,7 @@ async def _auto_reconnect(session: DwarfSession) -> None:
                     for label, func in (("timezone", perform_timezone), ("location", perform_set_location)):
                         if await run.io_bound(func, session=session) is False:
                             log.warning(f"[{uid}] Device {label} not synced.")
-                    if uid not in _connected_once:
-                        await run.io_bound(_startup_enter_astro_mode, session)
+                    await run.io_bound(_enter_astro_mode_if_idle, session)
                     # Reconciliation runs here, still holding the slot -
                     # see reconcile_after_reconnect()'s own docstring
                     # (user-reported Sep 2026: a force-stopped run's
@@ -648,4 +638,3 @@ def mark_just_connected(dwarf_uid: str) -> None:
     _last_check_at[dwarf_uid] = time.monotonic()
     _connected_at[dwarf_uid] = time.monotonic()
     _auto_reconnect_exhausted.discard(dwarf_uid)
-    _connected_once.add(dwarf_uid)

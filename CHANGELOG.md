@@ -69,6 +69,11 @@
     ### Explorer gallery: the target on each tile
     Above its date (was the date only).
   ### BugFix
+    ### Autofocus refused after the Dwarf restarted (CAMERA_TELE_CLOSED)
+    The Dwarf powered off and back on (user log, Mini): this app reconnected on its own, but only the first
+    connection since its start entered astro mode - the camera stayed closed until a manual Reconnect. An automatic
+    reconnect now enters astro mode too when nothing runs (no program here, no camera / motor / focus operation on
+    the Dwarf): a capture going on through a network drop is left alone.
     ### A megastack running on the Dwarf (started by the official app, even closed since)
     The Dwarf can do nothing else meanwhile: a program started then failed on its first commands. Known now from the
     Dwarf's task state (sent with each device state, dwarf_python_api 3.1.6): a due program waits in ToDo and starts

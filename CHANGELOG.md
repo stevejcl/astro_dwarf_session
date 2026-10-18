@@ -45,6 +45,8 @@
     steps and images stacked / processed so far and the total ("399/436 stacked, count 598", read from the result's
     shotsInfo.json - the rejected ones count as processed) and the stack's thumbnail as it grows on the device page, the result in the Results tab (View shows it). Nothing else runs on the Dwarf
     meanwhile.
+    Sessions whose FITS are no longer on the Dwarf (its folders listed over FTP) are named and refused before
+    anything is sent - the Dwarf's own check let them through, then refused the start (INVALID_DATA, user-seen).
     Also from this app: the Explorer page's Megastack button (top right) - tick sessions of a target (single
     captures; another target, a mosaic or a megastack result is refused), then Megastack: the same program, followed
     on the device page.

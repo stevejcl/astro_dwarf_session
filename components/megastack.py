@@ -179,6 +179,29 @@ def preview_url(session, result_dir: str) -> str:
     return f"http://{session.config.dwarf_ip}{quote(result_dir + 'stacked_thumbnail.jpg')}" if result_dir else ""
 
 
+def _raw_fits_count(names: list[str]) -> int:
+    """The session's own images: FITS other than its stacks / failed ones."""
+    return sum(
+        1 for n in names
+        if n.lower().endswith(".fits") and not n.lower().startswith(("stacked", "failed_"))
+    )
+
+
+def sessions_without_fits(session, folders: list[str]) -> list[str]:
+    """The sessions whose folder (listed over the Dwarf's FTP) holds no FITS
+    left - the Dwarf can't stack them (user-seen Oct 2026: its check passed,
+    the start answered CODE_ASTRO_RESTACK_INVALID_DATA, the FITS were gone).
+    A folder that can't be listed isn't counted: the Dwarf decides."""
+    from components import dwarf_media
+
+    missing = []
+    for folder in folders:
+        names = dwarf_media.list_session_files(session.config.dwarf_ip, folder.rstrip("/"))
+        if names and not _raw_fits_count(names):
+            missing.append(folder.rstrip("/").rsplit("/", 1)[-1])
+    return missing
+
+
 def _in_album(session, result_dir: str) -> bool:
     entries = perform_list_astro_sessions_http(session=session) or []
     return any((_session_folder(e) or "") == result_dir for e in entries)
@@ -204,6 +227,10 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
         raise RuntimeError("Megastack: at least 2 sessions are needed")
 
     log.notice(f"Megastack of {len(folders)} sessions: {folders}")
+    no_fits = sessions_without_fits(session, folders)
+    if no_fits:
+        step(STEP_CHECK, False, f"no FITS left in {len(no_fits)} session(s)")
+        raise RuntimeError(f"Megastack: no FITS left on the Dwarf in: {', '.join(no_fits)}")
     check = perform_check_restackable(folders, session=session)
     if check is None:
         step(STEP_CHECK, False, "no answer")
@@ -221,6 +248,8 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
     start = perform_start_restack(folders, session=session)
     if start is None or not start["ok"]:
         detail = "no answer" if start is None else start["code_name"]
+        if start is not None and start["code_name"] == "CODE_ASTRO_RESTACK_INVALID_DATA":
+            detail += " (the sessions' FITS may no longer be on the Dwarf)"
         step(STEP_START, False, detail)
         raise RuntimeError(f"Megastack not started: {detail}")
     # Its folder (the answer names its stacked.jpg)

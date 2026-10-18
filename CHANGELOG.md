@@ -42,14 +42,15 @@
     like the official app's megastack (its commands found by a capture, dwarf_python_api 3.1.6). Asked through
     POST /api/megastack (Scope Archive's Explore), run as a program: the Dwarf checks the sessions (refused with its
     reason: target, filter, binning, missing dark frames), starts, then is followed until its stack is in the album -
-    steps and images stacked / processed so far and the total ("399/436 stacked, count 598", read from the result's
-    shotsInfo.json - the rejected ones count as processed) and the stack's thumbnail as it grows on the device page, the result in the Results tab (View shows it). Nothing else runs on the Dwarf
-    meanwhile.
+    its steps, then its progress, shown alike on every screen - the home screen card, the device page's program,
+    the watch page (its banner and Tele card) - like a capture's: "Megastack in progress · 436/598 · 399 stacked"
+    (images processed / to stack, stacked so far - read from the result's shotsInfo.json, the rejected ones count as
+    processed); the result in the Results tab (View shows it). Nothing else runs on the Dwarf meanwhile.
     Sessions whose FITS are no longer on the Dwarf (its folders listed over FTP) are named and refused before
     anything is sent - the Dwarf's own check let them through, then refused the start (INVALID_DATA, user-seen).
-    On the home screen, the Dwarf's card - and on the device page, the Tele frame - show the stack as it grows instead
-    of the Tele preview (nothing to see there meanwhile), back to the Tele preview after it - for a megastack run by
-    this app or by the official app. The image is fetched by this app (its name read over FTP: stacked_thumbnail_
+    On the home screen, the Dwarf's card - and on the device and watch pages, the Tele frame - show the stack as it
+    grows instead of the Tele preview (nothing to see there meanwhile), back to the Tele preview after it - for a
+    megastack run by this app or by the official app. The image is fetched by this app (its name read over FTP: stacked_thumbnail_
     <target>_<filter>_<stamp>.jpg while it stacks) and only a complete one kept: read directly, the browser got
     half-written images while the Dwarf rewrote it (user-seen). Fetched again only once more images were
     processed (shotsInfo.json), a half-written one tried again at the next check.
@@ -57,15 +58,12 @@
     captures; another target, a mosaic or a megastack result is refused), then Megastack: the same program, followed
     on the device page.
   ### BugFix
-    ### A megastack's thumbnail never showed - only its loading spinner
-    The program view is rebuilt every second: the thumbnail was recreated each time and never finished loading.
-    One image now, its source changed only when more images are stacked.
     ### A megastack running on the Dwarf (started by the official app, even closed since)
     The Dwarf can do nothing else meanwhile: a program started then failed on its first commands. Known now from the
     Dwarf's task state (sent with each device state, dwarf_python_api 3.1.6): a due program waits in ToDo and starts
     after it (a manual start, a megastack asked meanwhile: refused with the reason), the end of the night does
     nothing (above all no power off in the middle of it), and the device card shows "Megastack running on the
-    Dwarf" with its progress (stacked / processed, total).
+    Dwarf" with its progress (as above).
     ### A program reopened in the editor kept its old date
     A result reopened with the pencil (to capture its target again) kept the date of its first run: easy to miss,
     the program then ran at once whatever its time. Opening a program whose date/time is past now moves the date

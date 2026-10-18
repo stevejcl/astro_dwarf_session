@@ -75,12 +75,57 @@ async def _read_progress(session, result_dir: str) -> None:
     await run.io_bound(megastack.refresh_preview, session, result_dir, counts[1] if counts else None)
 
 
+def _own_megastack(session):
+    """This app's running megastack program (its RunState), else None."""
+    from components import megastack, scheduler_runner
+
+    state = scheduler_runner.get_run_state(session.dwarf_uid)
+    if state is None or not state.running or not state.program:
+        return None
+    # RunState.program: the command part, or a whole program file's dict
+    return state if megastack.megastack_section(state.program.get("command", state.program)) else None
+
+
+def megastack_running(session) -> bool:
+    """A megastack runs on the Dwarf: this app's, or one for another app."""
+    task = running_task(session)
+    return _own_megastack(session) is not None or bool(task and task["megastack"])
+
+
+def megastack_counts(session) -> tuple[int, int, int] | None:
+    """(stacked, processed, to stack) of the megastack the Dwarf runs now:
+    this app's run (its RunState, components/megastack.py), else one it
+    runs for another app (progress()). None when none runs or nothing read
+    yet."""
+    state = _own_megastack(session)
+    if state is not None:
+        if not state.shots_taken:
+            return None
+        try:
+            total = int(state.requested_count_tele or 0)
+        except ValueError:
+            total = 0
+        return state.shots_stacked or 0, state.shots_taken, total
+    task = running_task(session)
+    return progress(session) if task and task["megastack"] else None
+
+
+def megastack_progress_text(counts: tuple[int, int, int]) -> str:
+    """"Megastack in progress · 12/409 · 12 stacked" - a capture's own
+    progress line (capture_progress_with_total), for every screen: the
+    home screen card, the device page's program, the watch page."""
+    from components.i18n import t
+
+    stacked, processed, total = counts
+    return t("megastack_progress", processed=processed, total=total, stacked=stacked)
+
+
 def megastack_preview_url(session) -> str:
     """The running megastack's stack thumbnail on the Dwarf, its progress as
     the cache key ("" when none runs): this app's run (RunState, components/
     megastack.py), else one the Dwarf runs for another app. Shown instead of
     the Tele preview (nothing to see there meanwhile): the home screen card,
-    the device page's Tele frame."""
+    the Tele frame of the device and watch pages."""
     from components import megastack, scheduler_runner
 
     state = scheduler_runner.get_run_state(session.dwarf_uid)

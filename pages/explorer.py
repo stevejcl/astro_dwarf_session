@@ -243,7 +243,8 @@ def build_explorer_page() -> None:
                 else:
                     target = _target_name(next(iter(selected.values())))
                     megastack_label.set_text(t("explorer_megastack_selected", count=len(selected), target=target))
-                megastack_start.set_enabled(len(selected) >= 2)
+                # One session too: the Dwarf restacks it (user-reported)
+                megastack_start.set_enabled(len(selected) >= 1)
 
             def _toggle_selecting() -> None:
                 selecting[0] = not selecting[0]
@@ -512,6 +513,11 @@ def build_explorer_page() -> None:
                             # sessions to warm _shots_info_cache for
                             # below (so the dialog opens with the data
                             # already there, no extra wait on click).
+                            # Its target above the date (user-requested Oct
+                            # 2026: not seen in the gallery)
+                            ui.label(_target_name(entry)).classes(
+                                "text-xs text-center font-medium truncate w-full"
+                            )
                             ui.label(_format_datetime(entry.get("modificationTime"))).classes(
                                 "text-xs text-center text-grey-6 truncate w-full"
                             )

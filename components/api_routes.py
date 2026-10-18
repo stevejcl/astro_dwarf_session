@@ -720,8 +720,8 @@ def register_api_routes() -> None:
         sessions = [str(s).strip() for s in body.get("sessions") or [] if str(s).strip()]
         if not dwarf_uid:
             return JSONResponse({"error": "dwarfUid is required"}, status_code=400)
-        if len(sessions) < 2:
-            return JSONResponse({"error": "at least 2 sessions are required"}, status_code=400)
+        if not sessions:  # one is enough: the Dwarf restacks it
+            return JSONResponse({"error": "at least 1 session is required"}, status_code=400)
         try:
             session = get_manager().get(dwarf_uid)
         except KeyError:

@@ -49,6 +49,12 @@
     captures; another target, a mosaic or a megastack result is refused), then Megastack: the same program, followed
     on the device page.
   ### BugFix
+    ### A megastack running on the Dwarf (started by the official app, even closed since)
+    The Dwarf can do nothing else meanwhile: a program started then failed on its first commands. Known now from the
+    Dwarf's task state (sent with each device state, dwarf_python_api 3.1.6): a due program waits in ToDo and starts
+    after it (a manual start, a megastack asked meanwhile: refused with the reason), the end of the night does
+    nothing (above all no power off in the middle of it), and the device card shows "Megastack running on the
+    Dwarf" with its progress (stacked / processed, total).
     ### A program reopened in the editor kept its old date
     A result reopened with the pencil (to capture its target again) kept the date of its first run: easy to miss,
     the program then ran at once whatever its time. Opening a program whose date/time is past now moves the date

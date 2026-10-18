@@ -23,7 +23,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_session import DwarfSession
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 
-from components import connection_health, current_activity, device_lock, scheduler_loop, scheduler_runner
+from components import connection_health, current_activity, device_lock, device_task, scheduler_loop, scheduler_runner
 from components.camera_stream import (
     build_dashboard_thumbnail,
     dashboard_thumbnail_refresh_source,
@@ -408,6 +408,8 @@ class DeviceCardView:
         # Program of this app or native schedule task running now (target
         # shown in the banner - see components/current_activity.py)
         activity = current_activity.current_activity(session, full_status) if session.is_connected else None
+        # A task of the Dwarf's own (a megastack, whoever started it)
+        device_task_now = device_task.running_task(session) if session.is_connected else None
 
         if error:
             kind = "error"
@@ -419,6 +421,8 @@ class DeviceCardView:
             # visible indicator at all before this, only showing up on
             # the Programs page's own step log at the bottom.
             kind = "program_running"
+        elif device_task_now is not None and not connection_lost:
+            kind = "device_task"
         elif connection_lost:
             kind = "connection_lost"
         elif not session.is_connected and connection_health.is_taken_over(session.dwarf_uid):
@@ -572,6 +576,10 @@ class DeviceCardView:
                     self._dynamic_label, self._dynamic_detail = self._build_dynamic_banner(
                         icon="schedule", css="bg-blue-50 text-blue-800", two_lines=True
                     )
+                elif kind == "device_task":
+                    self._dynamic_label, self._dynamic_detail = self._build_dynamic_banner(
+                        icon="auto_awesome_motion", css="bg-blue-50 text-blue-800", two_lines=True
+                    )
                 elif kind == "connection_lost":
                     status_banner(t("connection_lost"), kind="danger")
                 elif kind == "taken_over":
@@ -632,6 +640,17 @@ class DeviceCardView:
             self._dynamic_label.set_text(_activity_title(activity))
             if self._dynamic_detail is not None:
                 self._dynamic_detail.set_text(_schedule_detail(session, activity))
+        elif kind == "device_task" and self._dynamic_label is not None and device_task_now:
+            self._dynamic_label.set_text(
+                t("device_task_megastack") if device_task_now["megastack"]
+                else t("device_task_other", name=device_task_now["name"])
+            )
+            if self._dynamic_detail is not None:
+                counts = device_task.progress(session) if device_task_now["megastack"] else None
+                self._dynamic_detail.set_text(
+                    t("device_task_progress", stacked=counts[0], processed=counts[1], total=counts[2])
+                    if counts else t("device_task_wait")
+                )
         elif kind == "program_running" and self._dynamic_label is not None:
             run_state = scheduler_runner.get_run_state(self.dwarf_uid)
             name = (run_state.program_name if run_state else "") or t("program_untitled")

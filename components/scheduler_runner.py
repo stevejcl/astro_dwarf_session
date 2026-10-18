@@ -1172,6 +1172,14 @@ def _run_starting_blocking(
                 "refusing to start a new session."
             )
             return
+        # A task of the Dwarf's own (a megastack, maybe started by the
+        # official app): nothing else can run meanwhile
+        from components import device_task
+        reason = device_task.busy_reason(session)
+        if reason:
+            state.running = False
+            state.error = reason[0].upper() + reason[1:] + " - the program will start after it."
+            return
 
         acquired = connection_health.try_acquire_command_slot(
             dwarf_uid,

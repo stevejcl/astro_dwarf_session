@@ -63,6 +63,10 @@ def start(session, sessions: list[str], target: str) -> str:
         return "the Dwarf is not connected"
     if scheduler_runner.is_running(session.dwarf_uid):
         return "a program is running on this Dwarf"
+    from components import device_task
+    reason = device_task.busy_reason(session)
+    if reason:
+        return reason
     program = _blank_program(session.config)
     cmd = program["command"]
     for section in cmd.values():

@@ -265,7 +265,8 @@ def _has_raw_fits(dwarf_ip: str, folder: str, names: list[str]) -> bool:
     if _raw_fits_count(names):
         return True
     for name in names:
-        if name.lower().endswith(_FILE_EXTENSIONS):
+        # Its thumbnails' folder: no FITS, never a panel (user-requested)
+        if name.lower().endswith(_FILE_EXTENSIONS) or name.lower() == "thumbnail":
             continue
         if _raw_fits_count(dwarf_media.list_session_files(dwarf_ip, f"{folder}/{name}")):
             return True

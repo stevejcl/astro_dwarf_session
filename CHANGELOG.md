@@ -56,7 +56,8 @@
     processed (shotsInfo.json), a half-written one tried again at the next check.
     Also from this app: the Explorer page's Megastack button (top right) - tick sessions of a target (single
     captures, or mosaics - not mixed; another target or a megastack result is refused), then Megastack: the same
-    program, followed on the device page. A mosaic's FITS are in its panels' subfolders: looked for there too.
+    program, followed on the device page. A mosaic's FITS are in its panels' subfolders: looked for there too
+    (not in a thumbnail folder).
   ### BugFix
     ### A megastack running on the Dwarf (started by the official app, even closed since)
     The Dwarf can do nothing else meanwhile: a program started then failed on its first commands. Known now from the

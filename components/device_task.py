@@ -71,3 +71,21 @@ async def _read_progress(session, result_dir: str) -> None:
     counts = await run.io_bound(megastack._progress, session, result_dir)
     if counts is not None:
         _progress[session.dwarf_uid] = {"at": time.time(), "counts": counts}
+
+
+def megastack_preview_url(session) -> str:
+    """The running megastack's stack thumbnail on the Dwarf, its progress as
+    the cache key ("" when none runs): this app's run (RunState, components/
+    megastack.py), else one the Dwarf runs for another app. Shown instead of
+    the Tele preview (nothing to see there meanwhile): the home screen card,
+    the device page's Tele frame."""
+    from components import megastack, scheduler_runner
+
+    state = scheduler_runner.get_run_state(session.dwarf_uid)
+    if state is not None and state.running and state.preview_url:
+        return f"{state.preview_url}?v={state.preview_version}"
+    task = running_task(session)
+    if task and task["megastack"] and task["result_dir"]:
+        counts = progress(session)
+        return f"{megastack.preview_url(session, task['result_dir'])}?v={counts[1] if counts else 0}"
+    return ""

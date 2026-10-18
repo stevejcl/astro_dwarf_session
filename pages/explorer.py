@@ -74,6 +74,9 @@ def _fetch_shots_info(url: str) -> dict | None:
 
 
 def _format_duration(total_seconds: float) -> str:
+    # Under a second (the Sun's few ms, user-seen "0s"): its own value
+    if 0 < total_seconds < 1:
+        return f"{total_seconds:.3g}s"
     total_seconds = int(total_seconds)
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)

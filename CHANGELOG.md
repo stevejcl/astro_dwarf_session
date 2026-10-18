@@ -49,7 +49,9 @@
     processed); the result in the Results tab (View shows it). Nothing else runs on the Dwarf meanwhile.
     Its total exposure (the listing and shotsInfo.json have none) is read at its end from its stacked FITS, as Scope
     Archive does - EXPTIME of its header, only the header fetched; a mosaic's is the sum of its panels' - shown in
-    its last step, its Results tab card and the Explorer's view of a megastack result.
+    its last step, its Results tab card and the Explorer's view of a megastack result (under a second - the Sun's
+    - in ms, was "0s"). At its end, its counts and total exposure only: not the camera's settings of the moment
+    (the Sun's 1/10000 was shown as its exposure).
     Sessions whose FITS are no longer on the Dwarf (its folders listed over FTP) are named and refused before
     anything is sent - the Dwarf's own check let them through, then refused the start (INVALID_DATA, user-seen).
     On the home screen, the Dwarf's card - and on the device and watch pages, the Tele frame - show the stack as it

@@ -435,7 +435,8 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
             from pages.explorer import _format_duration
             exposure = total_exposure_s(session.config.dwarf_ip, result_dir)
             if exposure:
-                program.setdefault("id_command", {})["total_exposure_s"] = round(exposure)
+                # Not rounded to the second: the Sun's are a few ms (user-seen "0s")
+                program.setdefault("id_command", {})["total_exposure_s"] = round(exposure, 4)
             step(STEP_STACKING, True, f"done · total exposure {_format_duration(exposure)}" if exposure else "done")
             log.success(f"Megastack done: {result_dir}")
             return

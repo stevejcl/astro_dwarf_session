@@ -46,7 +46,7 @@ from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
 
 from components.camera_stream import build_camera_stream_section
 from components.camera_settings import ir_filter_display_label
-from components import current_activity, scheduler_runner
+from components import current_activity, device_task, scheduler_runner
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from components.i18n import t
 from components.pwa import add_pwa_head_tags
@@ -258,6 +258,15 @@ def build_watch_device_page() -> None:
                 tele_total = (run_state.requested_count_tele if run_state else "") or ""
                 wide_total = (run_state.requested_count_wide if run_state else "") or ""
 
+                # A megastack (this app's or another's): its progress in
+                # the banner and the Tele card, its stack in the Tele frame
+                # (camera_stream) - as on the device page and the card
+                megastack_on = device_task.megastack_running(session)
+                megastack_counts = device_task.megastack_counts(session) if megastack_on else None
+                if megastack_counts:
+                    tele_stacked, tele_current, total = megastack_counts
+                    tele_total = str(total) if total else ""
+
                 error = full_status.get("ErrorConnection")
                 capture_key = _capture_kind(full_status)
                 activity = current_activity.current_activity(session, full_status)
@@ -265,6 +274,12 @@ def build_watch_device_page() -> None:
                 with banner_col:
                     if error:
                         status_banner(t("error_with_detail", error=error), kind="danger")
+                    elif megastack_on:
+                        _activity_banner(
+                            device_task.megastack_progress_text(megastack_counts) if megastack_counts
+                            else t("device_task_megastack"),
+                            _activity_detail(session, activity),
+                        )
                     elif capture_key:
                         _activity_banner(t(capture_key), _activity_detail(session, activity))
                     elif scheduler_runner.is_running(dwarf_uid):

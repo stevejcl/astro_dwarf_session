@@ -659,9 +659,9 @@ class DeviceCardView:
                 else t("device_task_other", name=device_task_now["name"])
             )
             if self._dynamic_detail is not None:
-                counts = device_task.progress(session) if device_task_now["megastack"] else None
+                counts = device_task.megastack_counts(session) if device_task_now["megastack"] else None
                 self._dynamic_detail.set_text(
-                    t("device_task_progress", stacked=counts[0], processed=counts[1], total=counts[2])
+                    t("device_task_progress", progress=device_task.megastack_progress_text(counts))
                     if counts else t("device_task_wait")
                 )
         elif kind == "program_running" and self._dynamic_label is not None:
@@ -673,6 +673,10 @@ class DeviceCardView:
             self._dynamic_label.set_text(name)
             if self._dynamic_detail is not None:
                 last_step = run_state.steps[-1].label if run_state and run_state.steps else ""
+                # A megastack: its progress, as for one another app runs
+                megastack_counts = device_task.megastack_counts(session)
+                if megastack_counts:
+                    last_step = device_task.megastack_progress_text(megastack_counts)
                 if run_state and run_state.end_time_display:
                     end_bit = t("card_end_time", time=run_state.end_time_display)
                     last_step = f"{last_step} \u00b7 {end_bit}" if last_step else end_bit

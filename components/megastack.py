@@ -173,10 +173,12 @@ def _result_dir_of(program: dict) -> str:
 
 
 def preview_url(session, result_dir: str) -> str:
-    """The stack's thumbnail on the Dwarf (its HTTP server, port 80)."""
+    """The stack so far on the Dwarf (its HTTP server, port 80): stacked.jpg,
+    the image the Dwarf names when the megastack starts - its thumbnail
+    (stacked_thumbnail.jpg) didn't show meanwhile (user-seen Oct 2026)."""
     from urllib.parse import quote
 
-    return f"http://{session.config.dwarf_ip}{quote(result_dir + 'stacked_thumbnail.jpg')}" if result_dir else ""
+    return f"http://{session.config.dwarf_ip}{quote(result_dir + 'stacked.jpg')}" if result_dir else ""
 
 
 def _raw_fits_count(names: list[str]) -> int:

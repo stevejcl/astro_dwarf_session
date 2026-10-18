@@ -427,6 +427,20 @@ def build_programs_page() -> None:
                                                 f" \u00b7 {t('prog_mosaic')}"
                                             )
                                         ui.label(detail).classes("text-xs")
+                                    if id_command.get("total_exposure_s"):
+                                        # A megastack: its total exposure, from
+                                        # its FITS (components/megastack.py)
+                                        from pages.explorer import _format_duration
+                                        detail = (
+                                            f"{t('prog_total_exposure')}: "
+                                            f"{_format_duration(id_command['total_exposure_s'])}"
+                                        )
+                                        if not id_command.get("exposure_actual") and id_command.get("shots_taken"):
+                                            detail += (
+                                                f" \u00b7 {id_command.get('shots_stacked', 0)}/"
+                                                f"{id_command['shots_taken']} {t('prog_shots_stacked')}"
+                                            )
+                                        ui.label(detail).classes("text-xs")
                                     check_task = program_task(program, session.config)
                                     if not id_command.get("shots_taken") and check_task is not None:
                                         # Counts found by an earlier View / Check

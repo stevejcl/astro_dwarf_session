@@ -273,6 +273,57 @@ def _has_raw_fits(dwarf_ip: str, folder: str, names: list[str]) -> bool:
     return False
 
 
+# A FITS header: 2880-byte blocks of 80-character cards, up to END
+_FITS_BLOCK = 2880
+_FITS_HEAD_MAX = 20 * _FITS_BLOCK
+
+
+def _fits_exptime(header: bytes | None) -> float | None:
+    """EXPTIME of a FITS header's first cards, None when not found."""
+    for i in range(0, len(header or b"") - 79, 80):
+        card = header[i:i + 80].decode("ascii", "replace")
+        key = card[:8].strip()
+        if key == "END":
+            break
+        if key == "EXPTIME" and card[8:10] == "= ":
+            try:
+                return float(card[10:].split("/", 1)[0].strip().strip("'"))
+            except ValueError:
+                return None
+    return None
+
+
+def _stacked_fits(names: list[str]) -> str | None:
+    """The folder's stacked FITS: stacked-16_... first (the Dwarf's
+    16-bit one), else stacked.fits / any stacked*.fits."""
+    stacks = sorted(n for n in names if n.lower().startswith("stacked") and n.lower().endswith(".fits"))
+    return next((n for n in stacks if n.lower().startswith("stacked-16")), stacks[0] if stacks else None)
+
+
+def total_exposure_s(dwarf_ip: str, result_dir: str) -> float | None:
+    """Total exposure of a megastack (user-requested Oct 2026), read like
+    Scope Archive does: EXPTIME of its stacked FITS; a mosaic's is the sum
+    of its panels' (each in its subfolder, stacked-16_...fits). Only the
+    FITS headers are read. None when not readable."""
+    from components import dwarf_media
+
+    folder = result_dir.rstrip("/")
+    names = dwarf_media.list_session_files(dwarf_ip, folder)
+    stack = _stacked_fits(names)
+    if stack:
+        return _fits_exptime(dwarf_media.fetch_head(dwarf_ip, f"{folder}/{stack}", _FITS_HEAD_MAX))
+    total = None
+    for name in names:
+        if name.lower().endswith(_FILE_EXTENSIONS) or name.lower() == "thumbnail":
+            continue
+        panel = _stacked_fits(dwarf_media.list_session_files(dwarf_ip, f"{folder}/{name}"))
+        if panel:
+            exptime = _fits_exptime(dwarf_media.fetch_head(dwarf_ip, f"{folder}/{name}/{panel}", _FITS_HEAD_MAX))
+            if exptime is not None:
+                total = (total or 0.0) + exptime
+    return total
+
+
 def sessions_without_fits(session, folders: list[str]) -> list[str]:
     """The sessions whose folder (listed over the Dwarf's FTP) holds no FITS
     left - the Dwarf can't stack them (user-seen Oct 2026: its check passed,
@@ -379,7 +430,12 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
             counts = _progress(session, result_dir)
             if counts is not None:
                 _show_progress(session, program, counts)
-            step(STEP_STACKING, True, "done")
+            # Its total exposure, from its FITS (on the Results tab's card too)
+            from pages.explorer import _format_duration
+            exposure = total_exposure_s(session.config.dwarf_ip, result_dir)
+            if exposure:
+                program.setdefault("id_command", {})["total_exposure_s"] = round(exposure)
+            step(STEP_STACKING, True, f"done · total exposure {_format_duration(exposure)}" if exposure else "done")
             log.success(f"Megastack done: {result_dir}")
             return
         time.sleep(_ALBUM_WAIT_S)

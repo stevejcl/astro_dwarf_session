@@ -179,6 +179,7 @@ TRANSLATIONS: dict[str, str] = {
     "prog_camera":                  "Camera",
     "prog_camera_none":             "None",
     "prog_exposure":                "Exposure",
+    "prog_total_exposure":          "Total exposure",
     "prog_gain":                    "Gain",
     "prog_shots_stacked":           "stacked",
     "prog_count":                   "Count",

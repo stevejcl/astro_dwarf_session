@@ -121,3 +121,52 @@ def _fetch_ftp(dwarf_ip: str, path: str) -> bytes | None:
 def fetch(dwarf_ip: str, path: str) -> bytes | None:
     """The file's bytes, over HTTP then FTP, or None."""
     return _fetch_http(dwarf_ip, path) or _fetch_ftp(dwarf_ip, path)
+
+
+class _Enough(Exception):
+    pass
+
+
+def fetch_head(dwarf_ip: str, path: str, max_bytes: int) -> bytes | None:
+    """The file's first max_bytes (a FITS header, not its image), over
+    HTTP then FTP, or None."""
+    try:
+        with requests.get(f"http://{dwarf_ip}{path}", timeout=_FTP_TIMEOUT_S, stream=True) as response:
+            response.raise_for_status()
+            data = b""
+            for chunk in response.iter_content(chunk_size=16384):
+                data += chunk
+                if len(data) >= max_bytes:
+                    break
+            return data[:max_bytes]
+    except requests.RequestException as e:
+        log.debug(f"Dwarf HTTP: {path} unreadable ({e})")
+    host = dwarf_ip.split(":")[0]
+    try:
+        ftp = FTP()
+        ftp.connect(host, FTP_PORT, timeout=_FTP_TIMEOUT_S)
+        ftp.login("Anonymous", "")
+        ftp.set_pasv(True)
+    except all_errors as e:
+        log.debug(f"Dwarf FTP: no connection to {host} ({e})")
+        return None
+    chunks: list[bytes] = []
+
+    def _take(chunk: bytes) -> None:
+        chunks.append(chunk)
+        if sum(len(c) for c in chunks) >= max_bytes:
+            raise _Enough
+
+    try:
+        for candidate in _ftp_dir_candidates(posixpath.dirname(path)):
+            try:
+                ftp.retrbinary(f"RETR {posixpath.join(candidate, posixpath.basename(path))}", _take)
+            except _Enough:
+                return b"".join(chunks)[:max_bytes]
+            except all_errors:
+                chunks.clear()
+                continue
+            return b"".join(chunks)
+        return None
+    finally:
+        ftp.close()  # a transfer left unfinished: no polite QUIT

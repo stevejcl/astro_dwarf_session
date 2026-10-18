@@ -71,6 +71,8 @@ async def _read_progress(session, result_dir: str) -> None:
     counts = await run.io_bound(megastack._progress, session, result_dir)
     if counts is not None:
         _progress[session.dwarf_uid] = {"at": time.time(), "counts": counts}
+    # Its stack's last complete image too (megastack.refresh_preview)
+    await run.io_bound(megastack.refresh_preview, session, result_dir)
 
 
 def megastack_preview_url(session) -> str:
@@ -86,6 +88,7 @@ def megastack_preview_url(session) -> str:
         return f"{state.preview_url}?v={state.preview_version}"
     task = running_task(session)
     if task and task["megastack"] and task["result_dir"]:
-        counts = progress(session)
-        return f"{megastack.preview_url(session, task['result_dir'])}?v={counts[1] if counts else 0}"
+        progress(session)  # reads the progress and the image, every 30 s
+        url = megastack.preview_url(session)
+        return f"{url}?v={megastack.preview_version(session.dwarf_uid)}" if url else ""
     return ""

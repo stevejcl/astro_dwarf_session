@@ -692,6 +692,18 @@ def register_api_routes() -> None:
             "panels": panels,
         }, None
 
+    @app.get("/api/megastack/preview/{dwarf_uid}")
+    def api_megastack_preview(dwarf_uid: str):
+        """The running megastack's stack: its last complete image, fetched
+        from the Dwarf by components/megastack.py (refresh_preview)."""
+        from fastapi.responses import Response
+        from components import megastack
+
+        data = megastack.preview_bytes(dwarf_uid)
+        if not data:
+            return JSONResponse({"error": "no preview"}, status_code=404)
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
     @app.post("/api/megastack")
     async def api_megastack(request: Request):
         """Megastack (components/megastack.py), asked by Scope Archive's

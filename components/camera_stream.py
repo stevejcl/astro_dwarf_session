@@ -568,7 +568,7 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
                 preview.rtsp_image.set_source("")
 
             # Back to the Tele preview once a megastack (its thumbnail above) is over
-            back_from_megastack = "/RESTACKED/" in (preview.image.source or "")
+            back_from_megastack = "/api/megastack/preview/" in (preview.image.source or "")
             if not is_rtsp and (preview.stack_field in new_values or back_from_megastack):
                 preview.image.set_source(f"{preview.url}?t={time.monotonic()}")
 

@@ -62,6 +62,8 @@
     captures, or mosaics - not mixed; another target or a megastack result is refused), then Megastack: the same
     program, followed on the device page. A mosaic's FITS are in its panels' subfolders: looked for there too
     (not in a thumbnail folder).
+    Its selection mode shows only the sessions that can be megastacked (not a megastack result), grouped by
+    target (A-Z, a header with its count, newest first in each); back to the whole gallery after it.
     ### Explorer gallery: the target on each tile
     Above its date (was the date only).
   ### BugFix

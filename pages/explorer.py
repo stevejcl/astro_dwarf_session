@@ -263,12 +263,18 @@ def build_explorer_page() -> None:
                     del selected[path]
                     tiles[path].classes(remove="ring-4 ring-primary")
                 else:
-                    # A single capture only (not a mosaic or an earlier megastack)
-                    if not entry.get("astroImageDetails"):
+                    # Single captures, or mosaics (user-requested Oct 2026: their
+                    # FITS in the panels' subfolders) - not mixed, not an
+                    # earlier megastack
+                    if not (entry.get("astroImageDetails") or entry.get("astroMosaicImageDetails")):
                         ui.notify(t("explorer_megastack_not_eligible"), type="warning")
                         return
-                    if selected and _target_name(entry) != _target_name(next(iter(selected.values()))):
+                    first = next(iter(selected.values()), None)
+                    if first and _target_name(entry) != _target_name(first):
                         ui.notify(t("explorer_megastack_other_target"), type="warning")
+                        return
+                    if first and bool(entry.get("astroMosaicImageDetails")) != bool(first.get("astroMosaicImageDetails")):
+                        ui.notify(t("explorer_megastack_mixed"), type="warning")
                         return
                     selected[path] = entry
                     tiles[path].classes(add="ring-4 ring-primary")

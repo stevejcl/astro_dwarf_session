@@ -252,18 +252,40 @@ def _raw_fits_count(names: list[str]) -> int:
     )
 
 
+# A session folder's own files: not listed as subfolders
+_FILE_EXTENSIONS = (".fits", ".fit", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".json", ".txt", ".log", ".xisf")
+
+
+def _has_raw_fits(dwarf_ip: str, folder: str, names: list[str]) -> bool:
+    """FITS in the folder, else in its subfolders (a mosaic: one per panel,
+    user-reported Oct 2026) - any entry but a known file type is tried as
+    one (a file lists as nothing)."""
+    from components import dwarf_media
+
+    if _raw_fits_count(names):
+        return True
+    for name in names:
+        if name.lower().endswith(_FILE_EXTENSIONS):
+            continue
+        if _raw_fits_count(dwarf_media.list_session_files(dwarf_ip, f"{folder}/{name}")):
+            return True
+    return False
+
+
 def sessions_without_fits(session, folders: list[str]) -> list[str]:
     """The sessions whose folder (listed over the Dwarf's FTP) holds no FITS
     left - the Dwarf can't stack them (user-seen Oct 2026: its check passed,
-    the start answered CODE_ASTRO_RESTACK_INVALID_DATA, the FITS were gone).
-    A folder that can't be listed isn't counted: the Dwarf decides."""
+    the start answered CODE_ASTRO_RESTACK_INVALID_DATA, the FITS were gone);
+    a mosaic's are in its subfolders. A folder that can't be listed isn't
+    counted: the Dwarf decides."""
     from components import dwarf_media
 
     missing = []
     for folder in folders:
-        names = dwarf_media.list_session_files(session.config.dwarf_ip, folder.rstrip("/"))
-        if names and not _raw_fits_count(names):
-            missing.append(folder.rstrip("/").rsplit("/", 1)[-1])
+        folder = folder.rstrip("/")
+        names = dwarf_media.list_session_files(session.config.dwarf_ip, folder)
+        if names and not _has_raw_fits(session.config.dwarf_ip, folder, names):
+            missing.append(folder.rsplit("/", 1)[-1])
     return missing
 
 

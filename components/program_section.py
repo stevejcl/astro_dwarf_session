@@ -23,6 +23,8 @@ from __future__ import annotations
 from nicegui import events, ui
 
 from components import device_task, scheduler_runner
+from components.megastack import megastack_section
+from pages.explorer import _format_duration
 from components.i18n import t
 
 _STATUS_ICON = {"success": "check_circle", "failed": "cancel"}
@@ -123,10 +125,23 @@ def build_program_section(session) -> None:
                 # (device_task.megastack_progress_text), not a capture's
                 # counts
                 megastack_counts = device_task.megastack_counts(session)
+                command = (state.program or {}).get("command", state.program or {})
+                is_megastack = bool(megastack_section(command))
                 if megastack_counts:
                     ui.label(device_task.megastack_progress_text(megastack_counts)).classes(
                         "text-xs text-grey-6"
                     )
+                elif is_megastack:
+                    # Done: its counts and total exposure (its FITS), no
+                    # camera settings - none were used
+                    bits = []
+                    if state.shots_taken:
+                        bits.append(f"{state.shots_stacked or 0}/{state.shots_taken} {t('prog_shots_stacked')}")
+                    exposure = (command.get("id_command") or {}).get("total_exposure_s")
+                    if exposure:
+                        bits.append(f"{t('prog_total_exposure')}: {_format_duration(exposure)}")
+                    if bits:
+                        ui.label(" \u00b7 ".join(bits)).classes("text-xs text-grey-6")
                 elif state.shots_taken:
                     ui.label(
                         f"{state.shots_stacked or 0}/{state.shots_taken} {t('prog_shots_stacked')}"
@@ -139,7 +154,7 @@ def build_program_section(session) -> None:
                 # this program's setup_camera/setup_wide_camera do_
                 # action actually was).
                 total = state.requested_count_tele or state.requested_count_wide
-                if not megastack_counts and (
+                if not megastack_counts and not is_megastack and (
                     state.exposure_actual or state.gain_actual or state.ir_filter_actual or total
                 ):
                     bits = []

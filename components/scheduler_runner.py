@@ -1365,14 +1365,22 @@ def _run_blocking(
             id_command["result"] = True
             id_command["message"] = "Session completed successfully"
             _set_dwarf_field(id_command, session)
-            _capture_actual_camera_settings(
-                id_command, session,
-                is_wide=bool(program.get("setup_wide_camera", {}).get("do_action")),
-            )
-            _capture_eq_solving_result(id_command, session)
-            _capture_shots_result(id_command, session)
-            id_command["count_info"] = state.requested_count_tele if state.requested_count_tele else state.requested_count_wide
-            id_command["mosaic_info"] =  program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action")
+            from components.megastack import megastack_section
+            if megastack_section(program):
+                # A megastack: no capture - its counts (and total exposure)
+                # are already in id_command (components/megastack.py), not
+                # the camera's settings of the moment (user-seen: the Sun's
+                # 1/10000 shown as its exposure)
+                pass
+            else:
+                _capture_actual_camera_settings(
+                    id_command, session,
+                    is_wide=bool(program.get("setup_wide_camera", {}).get("do_action")),
+                )
+                _capture_eq_solving_result(id_command, session)
+                _capture_shots_result(id_command, session)
+                id_command["count_info"] = state.requested_count_tele if state.requested_count_tele else state.requested_count_wide
+                id_command["mosaic_info"] =  program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action")
             state.shots_taken = id_command.get("shots_taken")
             state.shots_stacked = id_command.get("shots_stacked")
             state.exposure_actual = id_command.get("exposure_actual") or ""

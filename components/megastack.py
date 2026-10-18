@@ -361,9 +361,10 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
     if missing:
         step(STEP_CHECK, False, f"{len(missing)} not on the Dwarf")
         raise RuntimeError(f"Megastack: sessions not found on the Dwarf: {', '.join(missing)}")
-    if len(folders) < 2:
-        step(STEP_CHECK, False, "at least 2 sessions")
-        raise RuntimeError("Megastack: at least 2 sessions are needed")
+    # One session too: the Dwarf restacks it (user-reported Oct 2026)
+    if not folders:
+        step(STEP_CHECK, False, "no session")
+        raise RuntimeError("Megastack: no session given")
 
     log.notice(f"Megastack of {len(folders)} sessions: {folders}")
     no_fits = sessions_without_fits(session, folders)

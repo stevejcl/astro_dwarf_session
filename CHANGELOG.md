@@ -38,8 +38,9 @@
     the field, for both cameras.
 
     ### Megastack (asked by Scope Archive)
-    The Dwarf stacks several of its sessions of a target together (FITS still on its disk) into Astronomy/RESTACKED/,
-    like the official app's megastack (its commands found by a capture, dwarf_python_api 3.1.6). Asked through
+    The Dwarf stacks several of its sessions of a target together - or restacks a single one - (FITS still on its
+    disk) into Astronomy/RESTACKED/, like the official app's megastack (its commands found by a capture,
+    dwarf_python_api 3.1.6). Asked through
     POST /api/megastack (Scope Archive's Explore), run as a program: the Dwarf checks the sessions (refused with its
     reason: target, filter, binning, missing dark frames), starts, then is followed until its stack is in the album -
     its steps, then its progress, shown alike on every screen - the home screen card, the device page's program,
@@ -61,6 +62,8 @@
     captures, or mosaics - not mixed; another target or a megastack result is refused), then Megastack: the same
     program, followed on the device page. A mosaic's FITS are in its panels' subfolders: looked for there too
     (not in a thumbnail folder).
+    ### Explorer gallery: the target on each tile
+    Above its date (was the date only).
   ### BugFix
     ### A megastack running on the Dwarf (started by the official app, even closed since)
     The Dwarf can do nothing else meanwhile: a program started then failed on its first commands. Known now from the

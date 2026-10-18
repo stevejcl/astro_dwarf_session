@@ -438,6 +438,14 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
         continue_action = perform_GoLive(session=session)
         verify_action(continue_action, "step_1a", progress_callback=progress_callback)
 
+        # Megastack (components/megastack.py): the Dwarf stacks sessions it
+        # holds - none of the capture steps below
+        if session is not None:
+            from components import megastack
+            if megastack.megastack_section(program):
+                megastack.run(program, session, interrupted, progress_callback)
+                return
+
         # V3: switch the device into the right shooting mode + technique
         # (SWITCH_SHOOTING_MODE/ENTER_CAMERA/SWITCH_SHOOTING_TECH,
         # confirmed on real hardware) - without this, CMD_ASTRO_START_GOTO_DSO

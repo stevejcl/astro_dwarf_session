@@ -72,10 +72,24 @@ def build_program_section(session) -> None:
         running_name_label.set_visibility(False)
 
         progress_container = ui.column().classes("w-full gap-1 mt-2")
+        # A megastack's stack so far (components/megastack.py): one image, its
+        # source changed only when more images are stacked - rebuilt with the
+        # list above every second, it never finished loading (user-seen: only
+        # its spinner)
+        preview_image = ui.image("").classes("w-full max-w-md rounded")
+        preview_image.set_visibility(False)
 
         def render_progress() -> None:
             progress_container.clear()
             state = scheduler_runner.get_run_state(dwarf_uid)
+
+            preview = (
+                f"{state.preview_url}?v={state.preview_version}"
+                if state is not None and state.running and state.preview_url else ""
+            )
+            if preview and preview_image.source != preview:
+                preview_image.set_source(preview)
+            preview_image.set_visibility(bool(preview))
 
             if state is not None and state.program_name:
                 running_name_label.set_text(t("program_name_label", name=state.program_name))
@@ -119,10 +133,6 @@ def build_program_section(session) -> None:
                     ui.label(
                         f"{state.shots_stacked or 0}/{state.shots_taken} {t('prog_shots_stacked')}"
                     ).classes("text-xs text-grey-6")
-                # A megastack's stack so far (components/megastack.py), re-read
-                # when more images are stacked
-                if state.running and state.preview_url:
-                    ui.image(f"{state.preview_url}?v={state.preview_version}").classes("w-full max-w-md rounded")
                 # Same reasoning as shots_taken/shots_stacked above -
                 # exposure/gain (user-reported Sep 2026 gap) plus the
                 # requested total, from the SAME RunState fields

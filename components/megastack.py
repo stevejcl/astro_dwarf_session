@@ -165,7 +165,7 @@ def _show_progress(session, program: dict, counts: tuple[int, int, int]) -> None
         state.requested_count_tele = str(total)
         # The stack's thumbnail, rewritten as it goes (user-seen): its last
         # complete version, served by this app (refresh_preview)
-        refresh_preview(session, _result_dir_of(program))
+        refresh_preview(session, _result_dir_of(program), processed)
         state.preview_url = preview_url(session)
         state.preview_version = preview_version(session.dwarf_uid)
 
@@ -198,9 +198,12 @@ def _complete_jpeg(data: bytes | None) -> bool:
     return bool(data) and data[:2] == b"\xff\xd8" and data.rstrip(b"\x00")[-2:] == b"\xff\xd9"
 
 
-def refresh_preview(session, result_dir: str) -> None:
-    """Blocking (FTP / HTTP): fetches the stack's image again, kept when
-    it is a complete JPEG and new."""
+def refresh_preview(session, result_dir: str, processed: int | None = None) -> None:
+    """Blocking (FTP / HTTP): fetches the stack's image again once more
+    images were processed (user-requested Oct 2026: it only changes then) -
+    processed: the count read from shotsInfo.json (None: fetch anyway).
+    Kept when it is a complete JPEG; a half-written one (the Dwarf rewriting
+    it) is tried again at the next call."""
     from components import dwarf_media
 
     if not result_dir:
@@ -208,13 +211,18 @@ def refresh_preview(session, result_dir: str) -> None:
     uid = session.dwarf_uid
     entry = _previews.get(uid)
     if entry is None or entry["dir"] != result_dir:
-        entry = _previews[uid] = {"dir": result_dir, "name": None, "data": None, "version": 0}
+        entry = _previews[uid] = {"dir": result_dir, "name": None, "data": None, "version": 0, "processed": None}
+    if processed is not None and entry["data"] is not None and processed == entry["processed"]:
+        return  # no new image stacked since the last complete one
     if entry["name"] is None:
         entry["name"] = _preview_name(dwarf_media.list_session_files(session.config.dwarf_ip, result_dir.rstrip("/")))
         if entry["name"] is None:
             return
     data = dwarf_media.fetch(session.config.dwarf_ip, result_dir + entry["name"])
-    if _complete_jpeg(data) and data != entry["data"]:
+    if not _complete_jpeg(data):
+        return  # half-written: tried again next time
+    entry["processed"] = processed
+    if data != entry["data"]:
         entry["data"] = data
         entry["version"] += 1
 

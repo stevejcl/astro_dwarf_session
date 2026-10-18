@@ -72,7 +72,7 @@ async def _read_progress(session, result_dir: str) -> None:
     if counts is not None:
         _progress[session.dwarf_uid] = {"at": time.time(), "counts": counts}
     # Its stack's last complete image too (megastack.refresh_preview)
-    await run.io_bound(megastack.refresh_preview, session, result_dir)
+    await run.io_bound(megastack.refresh_preview, session, result_dir, counts[1] if counts else None)
 
 
 def megastack_preview_url(session) -> str:

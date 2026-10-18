@@ -51,7 +51,8 @@
     of the Tele preview (nothing to see there meanwhile), back to the Tele preview after it - for a megastack run by
     this app or by the official app. The image is fetched by this app (its name read over FTP: stacked_thumbnail_
     <target>_<filter>_<stamp>.jpg while it stacks) and only a complete one kept: read directly, the browser got
-    half-written images while the Dwarf rewrote it (user-seen).
+    half-written images while the Dwarf rewrote it (user-seen). Fetched again only once more images were
+    processed (shotsInfo.json), a half-written one tried again at the next check.
     Also from this app: the Explorer page's Megastack button (top right) - tick sessions of a target (single
     captures; another target, a mosaic or a megastack result is refused), then Megastack: the same program, followed
     on the device page.

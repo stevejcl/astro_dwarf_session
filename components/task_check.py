@@ -151,7 +151,18 @@ def summarize(session, task: dict) -> dict:
     return out
 
 
-async def open_task_check(session, task: dict, make_dialog=ui.dialog, on_result=None) -> None:
+def _page_level_dialog() -> ui.dialog:
+    """A dialog attached to the page, not to the list whose button opened
+    it (user-reported Oct 2026: View / Check showed nothing on the Programs
+    page - on_result re-rendered the Results list, deleting the dialog
+    inside it as the result came in)."""
+    with ui.context.client.content:
+        dialog = ui.dialog()
+    dialog.on("hide", dialog.delete)  # one per click: not left on the page
+    return dialog
+
+
+async def open_task_check(session, task: dict, make_dialog=_page_level_dialog, on_result=None) -> None:
     """Dialog with what the Dwarf saved for this task. make_dialog: the
     caller's dialog factory (the device page attaches its dialogs to the
     page, see pages/session.py's _page_dialog()). on_result: called once
@@ -167,6 +178,8 @@ async def open_task_check(session, task: dict, make_dialog=ui.dialog, on_result=
     dialog.open()
 
     result = await run.io_bound(summarize, session, task)
+    if dialog.is_deleted:
+        return  # the page was left meanwhile
     if on_result is not None:
         on_result()
     body.clear()

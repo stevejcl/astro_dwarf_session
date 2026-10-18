@@ -47,6 +47,9 @@
     the program's scheduled date: a program run again from an older file (dated the day before) found "end time
     06:40 reached" at 03:22 and stopped the capture. It is now taken from the program's actual start, and an end
     more than 12 h past is never this run's (the next one is).
+    ### View / Check showed nothing on the Programs page
+    The Results tab's View / Check dialog was inside the list it refreshes when the result comes in: it vanished
+    before showing anything. It now opens on the page.
     ### The same run in Done and in Error after a network drop
     A connection lost during a program marked it failed (Error), then the reconnection resumed following the
     capture and recorded it again (Done). The interrupted program now stays in Current until the reconnection

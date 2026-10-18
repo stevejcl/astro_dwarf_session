@@ -40,13 +40,13 @@
     ### Megastack (asked by Scope Archive)
     The Dwarf stacks several of its sessions of a target together - or restacks a single one - (FITS still on its
     disk) into Astronomy/RESTACKED/, like the official app's megastack (its commands found by a capture,
-    dwarf_python_api 3.1.6). Asked through
-    POST /api/megastack (Scope Archive's Explore), run as a program: the Dwarf checks the sessions (refused with its
-    reason: target, filter, binning, missing dark frames), starts, then is followed until its stack is in the album -
-    its steps, then its progress, shown alike on every screen - the home screen card, the device page's program,
-    the watch page (its banner and Tele card) - like a capture's: "Megastack in progress · 436/598 · 399 stacked"
-    (images processed / to stack, stacked so far - read from the result's shotsInfo.json, the rejected ones count as
-    processed); the result in the Results tab (View shows it). Nothing else runs on the Dwarf meanwhile.
+    dwarf_python_api 3.1.6). Asked through POST /api/megastack (Scope Archive's Explore), run as a program: the
+    Dwarf checks the sessions (refused with its reason: target, binning, missing dark frames - mixed filters it
+    takes, e.g. Duo-Band with Astro), starts, then is followed until its stack is in the album - its steps, then its
+    progress, shown alike on every screen - the home screen card, the device page's program, the watch page (its
+    banner and Tele card) - like a capture's: "Megastack in progress · 436/598 · 399 stacked" (images processed / to
+    stack, stacked so far - read from the result's shotsInfo.json, the rejected ones count as processed); the result
+    in the Results tab (View shows it). Nothing else runs on the Dwarf meanwhile.
     Its total exposure (the listing and shotsInfo.json have none) is read at its end from its stacked FITS, as Scope
     Archive does - EXPTIME of its header, only the header fetched; a mosaic's is the sum of its panels' - shown in
     its last step, its Results tab card and the Explorer's view of a megastack result (under a second - the Sun's

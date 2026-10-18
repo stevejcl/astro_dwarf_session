@@ -144,6 +144,22 @@ def _schedule_detail(session: DwarfSession, activity: dict) -> str:
     return f"{text} \u00b7 {window}" if window else text
 
 
+
+def _megastack_preview(session) -> str:
+    """The running megastack's stack thumbnail on the Dwarf, its progress as
+    the cache key ("" when none runs): this app's run (RunState, components/
+    megastack.py), else one the Dwarf runs for another app (device_task)."""
+    state = scheduler_runner.get_run_state(session.dwarf_uid)
+    if state is not None and state.running and state.preview_url:
+        return f"{state.preview_url}?v={state.preview_version}"
+    task = device_task.running_task(session)
+    if task and task["megastack"] and task["result_dir"]:
+        from components import megastack
+
+        counts = device_task.progress(session)
+        return f"{megastack.preview_url(session, task['result_dir'])}?v={counts[1] if counts else 0}"
+    return ""
+
 class DeviceCardView:
     """One card per DwarfSession, built once. Call update(session) on
     every poll instead of recreating the card."""
@@ -452,7 +468,8 @@ class DeviceCardView:
         # "Mission control" row: ALWAYS visible - one of THREE alternate
         # contents (see constructor's own note for the full reasoning).
         # No sub-row is ever recreated, only toggled/updated in place.
-        active_session = kind in ("capturing", "program_running")
+        # A megastack run by the Dwarf (any app) shows its stack too
+        active_session = kind in ("capturing", "program_running", "device_task")
         self._disconnected_content.set_visibility(not session.is_connected)
         self._idle_content.set_visibility(session.is_connected and not active_session)
         self._active_content.set_visibility(session.is_connected and active_session)
@@ -542,13 +559,24 @@ class DeviceCardView:
             # active_session is already True here (this branch is only
             # reached in that case) - only camera availability itself
             # gates the thumbnail now.
-            show_thumbnail = dashboard_thumbnail_should_show(session)
-            if self._thumbnail is not None:
-                self._thumbnail.set_visibility(show_thumbnail)
-                if show_thumbnail:
-                    dashboard_thumbnail_refresh_source(session, self._thumbnail, new_values)
-            if self._thumbnail_open_button is not None:
-                self._thumbnail_open_button.set_visibility(show_thumbnail)
+            # A megastack: its stack's thumbnail instead of the Tele preview
+            # (nothing to see there meanwhile), re-read on progress
+            megastack_thumb = _megastack_preview(session)
+            if megastack_thumb:
+                if self._thumbnail is not None:
+                    self._thumbnail.set_visibility(True)
+                    if self._thumbnail.source != megastack_thumb:
+                        self._thumbnail.set_source(megastack_thumb)
+                if self._thumbnail_open_button is not None:
+                    self._thumbnail_open_button.set_visibility(False)
+            else:
+                show_thumbnail = dashboard_thumbnail_should_show(session)
+                if self._thumbnail is not None:
+                    self._thumbnail.set_visibility(show_thumbnail)
+                    if show_thumbnail:
+                        dashboard_thumbnail_refresh_source(session, self._thumbnail, new_values)
+                if self._thumbnail_open_button is not None:
+                    self._thumbnail_open_button.set_visibility(show_thumbnail)
 
         if kind != self._banner_kind:
             self._banner_kind = kind

@@ -109,6 +109,20 @@ def _show_progress(session, program: dict, counts: tuple[int, int]) -> None:
     state = scheduler_runner.get_run_state(session.dwarf_uid)
     if state is not None and state.running:
         state.shots_stacked, state.shots_taken = stacked, total
+        # The stack's thumbnail is rewritten as it goes (user-seen)
+        state.preview_url = preview_url(session, _result_dir_of(program))
+        state.preview_version = stacked
+
+
+def _result_dir_of(program: dict) -> str:
+    return (program.get("megastack") or {}).get("result_dir") or ""
+
+
+def preview_url(session, result_dir: str) -> str:
+    """The stack's thumbnail on the Dwarf (its HTTP server, port 80)."""
+    from urllib.parse import quote
+
+    return f"http://{session.config.dwarf_ip}{quote(result_dir + 'stacked_thumbnail.jpg')}" if result_dir else ""
 
 
 def _in_album(session, result_dir: str) -> bool:

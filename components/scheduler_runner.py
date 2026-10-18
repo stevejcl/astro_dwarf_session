@@ -149,6 +149,11 @@ class RunState:
     # cover that.
     exposure_actual: str = ""
     gain_actual: str = ""
+    # A megastack's stack so far (components/megastack.py): its thumbnail
+    # on the Dwarf, re-read when preview_version (the images stacked)
+    # changes - "" for a capture
+    preview_url: str = ""
+    preview_version: int = 0
     # Filled LIVE from on_progress()'s own "Exposure:"/"Gain:"/"IR
     # Filter:" parsing below (user-requested Sep 2026: "les parametres
     # affiches ne sont pas bon, il se rafraichissent juste a la fin" -

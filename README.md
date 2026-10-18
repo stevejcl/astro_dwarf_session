@@ -139,6 +139,11 @@ Separate from this app's own program scheduler above, a Dwarf can also hold its 
 ### Session explorer
 Each device's control page links to an **Astro Sessions** explorer: a grid of thumbnails pulled directly from the Dwarf's own on-device album (no separate app or cloud account needed), sorted most-recent-first. Click a thumbnail for a large view with the session's target, capture date, exposure, gain, and IR filter, a JPG / PNG download menu (the stacked.jpg, or the Dwarf's own 16-bit PNG when present — in the native window a Save dialog), and an **Archive in Dwarfium Scope Archive** button.
 
+### Megastack
+The Dwarf stacks several of its own sessions of a target together — or restacks a single one — into `Astronomy/RESTACKED/`, like the official app's megastack: its raw FITS must still be on the Dwarf. Start it from the explorer's **Megastack** button (top right): only the sessions that can be stacked are shown, grouped by target; tick one or more of a target (single captures or mosaics, not mixed — filters can be mixed), then **Megastack**. [Dwarfium Scope Archive](https://github.com/stevejcl/dwarfium-scope-archive) asks for it the same way (its Explore page, `POST /api/megastack`).
+
+It runs as a program: the sessions' FITS are checked over FTP (a mosaic's in its panels' subfolders), then the Dwarf's own check (binning, dark frames — its refusal shown with the reason), then it is followed to its end — "Megastack in progress · 436/598 · 399 stacked" on the home screen card, the device page and the watch page, the stack growing in the Tele view — and its total exposure is read from the result's FITS. The Dwarf does nothing else meanwhile: a due program waits, the end of the night does nothing, also for a megastack started by the official app.
+
 ### View / Check: what the Dwarf saved
 For a finished program or native schedule task, **View** (success) or **Check** (failure) finds the session in the Dwarf's album (target name and time window) and reads its `shotsInfo.json`: images stacked / taken, integration time, stacked thumbnail. Nothing is polled: one album listing and one small JSON over HTTP, on click only. The result is kept (`task_check_cache.json`), so the stacked / taken counts then show directly in the device page's task list, the Programs page and the Program page.
 

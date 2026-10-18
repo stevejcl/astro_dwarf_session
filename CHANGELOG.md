@@ -47,6 +47,10 @@
     the program's scheduled date: a program run again from an older file (dated the day before) found "end time
     06:40 reached" at 03:22 and stopped the capture. It is now taken from the program's actual start, and an end
     more than 12 h past is never this run's (the next one is).
+    ### The same run in Done and in Error after a network drop
+    A connection lost during a program marked it failed (Error), then the reconnection resumed following the
+    capture and recorded it again (Done). The interrupted program now stays in Current until the reconnection
+    resumes it: one result, Done or Error depending on how the capture ends.
     ### Initial position not saved after a calibration
     A calibration doesn't always reset the Dwarf's motors: reading the position after it answered NEED RESET and
     nothing was saved. Before a program's EQ Solving and calibration (before the EQ when there is one: a reset after

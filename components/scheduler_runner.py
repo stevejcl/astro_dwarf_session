@@ -440,13 +440,28 @@ def check_stuck_runs() -> None:
     # recover on its own via the normal WebSocket layer.
     _DISCONNECTED_GRACE_SECONDS = 15
 
-    def _force_stop(dwarf_uid: str, state: RunState, reason: str) -> None:
+    def _force_stop(dwarf_uid: str, state: RunState, reason: str, keep_in_current: bool = False) -> None:
         log.warning(f"[{dwarf_uid}] Run force-stopped: {reason}")
         state.running = False
         state.finished_ok = False
         state.error = f"Run force-stopped: {reason}"
         state.force_stopped = True
         connection_health.release_command_slot(dwarf_uid)
+
+        if keep_in_current and state.program is not None and state.current_path is not None \
+                and os.path.exists(state.current_path):
+            # A network drop: the Dwarf goes on capturing. Left in Current/,
+            # the reconnection resumes following it (reconcile_orphaned_
+            # current_files) and records it once - written to Error/ here,
+            # the resume then wrote it to Done/ too (user-seen Oct 2026: the
+            # same run in Done and in Error).
+            id_command = state.program.setdefault("id_command", {})
+            id_command["message"] = f"Connection lost: {reason}"
+            try:
+                _write_json(state.current_path, {"command": state.program})
+            except OSError:
+                log.warning(f"[{dwarf_uid}] Could not update the interrupted run's file in Current/.")
+            return
 
         # The worker thread's own finally block normally does the Current->
         # Error file move (see _run_blocking()) - but a force-stopped run's
@@ -506,6 +521,7 @@ def check_stuck_runs() -> None:
                 state,
                 f"session disconnected and slot still held {duration:.0f}s later "
                 "(likely a leaked thread after a network drop).",
+                keep_in_current=True,
             )
             continue
 
@@ -1247,7 +1263,9 @@ def _run_blocking(
         label = STEP_DESCRIPTIONS.get(step_key, step_key)
         state.steps.append(StepEvent(key=step_key, label=label, status=status, seq=seq))
 
-        if current_path is not None:
+        # Not after a force-stop: the stuck call returning late recreated
+        # the file in Current/, and it was resumed and recorded a second time
+        if current_path is not None and not state.force_stopped:
             id_command["last_step"] = label
             id_command["last_step_time"] = session_now(session).strftime("%Y-%m-%d %H:%M:%S")
             try:

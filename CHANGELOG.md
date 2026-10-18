@@ -38,6 +38,11 @@
     the field, for both cameras.
 
   ### BugFix
+    ### A resumed capture stopped hours before its end time
+    After a reconnection the app resumes following the program the Dwarf is capturing. Its end time was taken from
+    the program's scheduled date: a program run again from an older file (dated the day before) found "end time
+    06:40 reached" at 03:22 and stopped the capture. It is now taken from the program's actual start, and an end
+    more than 12 h past is never this run's (the next one is).
     ### Initial position not saved after a calibration
     A calibration doesn't always reset the Dwarf's motors: reading the position after it answered NEED RESET and
     nothing was saved. Before a program's EQ Solving and calibration (before the EQ when there is one: a reset after

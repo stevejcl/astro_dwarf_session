@@ -622,24 +622,34 @@ _RESUME_BUSY_CHECK_EVERY_S = 20  # how often to cross-check with a FRESH device 
 _RESUME_ACQUIRE_ATTEMPTS = 3
 _RESUME_ACQUIRE_DELAY_S = 3
 
-def _program_end_time(program: dict, camera_key: str) -> datetime | None:
+def _program_end_time(program: dict, camera_key: str, now: datetime | None = None) -> datetime | None:
     """End time of a resumed program (user-reported Oct 2026: not applied
     after a restart, so a capture could run long past it). Anchored on the
-    program's own start date/time - not "the next HH:MM from now" like
+    program's actual start (starting_date, written when it was launched),
+    else its scheduled date/time - not "the next HH:MM from now" like
     dwarf_session._parse_end_time(), which would push an end time already
     past to the next day: end_time "06:10" for a start at 22:39 is 06:10
-    the next morning. None when blank or unparseable."""
+    the next morning.
+
+    A program run again from an older file keeps its old date/time (user-
+    seen Oct 2026: a capture stopped at 03:22, "end time 06:40 reached" -
+    the 06:40 of the day before): an end more than 12 h past is not this
+    run's, the next HH:MM is. None when blank or unparseable."""
     value = (program.get(camera_key) or {}).get("end_time") or ""
     id_command = program.get("id_command") or {}
+    anchor = id_command.get("starting_date") or f"{id_command.get('date', '')} {id_command.get('time', '')}".strip()
     try:
         hour, minute = str(value).strip().split(":")
-        start = datetime.strptime(
-            f"{id_command.get('date', '')} {id_command.get('time', '')}".strip(), "%Y-%m-%d %H:%M:%S"
-        )
+        start = datetime.strptime(anchor, "%Y-%m-%d %H:%M:%S")
         end = start.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
         return None
-    return end + timedelta(days=1) if end <= start else end
+    if end <= start:
+        end += timedelta(days=1)
+    if now is not None:
+        while now - end > timedelta(hours=12):
+            end += timedelta(days=1)
+    return end
 
 
 def _normalized_name(name) -> str:
@@ -765,7 +775,7 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
         try:
             if take_photo:
                 requested = _parse_requested_count(state.requested_count_tele)
-                end_time = _program_end_time(program, "setup_camera")
+                end_time = _program_end_time(program, "setup_camera", session_now(session))
                 final_count = _wait_for_resumed_capture(session, "Tele", requested, interrupted, end_time)
                 if interrupted():
                     perform_stopAstroPhoto(session=session)
@@ -779,7 +789,7 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
 
             if success and take_widephoto:
                 requested = _parse_requested_count(state.requested_count_wide)
-                end_time = _program_end_time(program, "setup_wide_camera")
+                end_time = _program_end_time(program, "setup_wide_camera", session_now(session))
                 final_count = _wait_for_resumed_capture(session, "Wide", requested, interrupted, end_time)
                 if interrupted():
                     perform_stopAstroWidePhoto(session=session)

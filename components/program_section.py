@@ -119,6 +119,10 @@ def build_program_section(session) -> None:
                     ui.label(
                         f"{state.shots_stacked or 0}/{state.shots_taken} {t('prog_shots_stacked')}"
                     ).classes("text-xs text-grey-6")
+                # A megastack's stack so far (components/megastack.py), re-read
+                # when more images are stacked
+                if state.running and state.preview_url:
+                    ui.image(f"{state.preview_url}?v={state.preview_version}").classes("w-full max-w-md rounded")
                 # Same reasoning as shots_taken/shots_stacked above -
                 # exposure/gain (user-reported Sep 2026 gap) plus the
                 # requested total, from the SAME RunState fields

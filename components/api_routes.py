@@ -692,6 +692,61 @@ def register_api_routes() -> None:
             "panels": panels,
         }, None
 
+    @app.post("/api/megastack")
+    async def api_megastack(request: Request):
+        """Megastack (components/megastack.py), asked by Scope Archive's
+        Explore: {"dwarfUid", "sessions": [session folder names on the Dwarf,
+        2 or more], "target": name shown}. Run now as a program - saved in
+        ToDo first like /api/program, so it is tracked to Done / Error.
+        {"ok": true, "mode": "started"} or {"error"} (409: the Dwarf is
+        offline or busy - nothing saved)."""
+        try:
+            body = await request.json()
+        except json.JSONDecodeError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        dwarf_uid = body.get("dwarfUid")
+        sessions = [str(s).strip() for s in body.get("sessions") or [] if str(s).strip()]
+        if not dwarf_uid:
+            return JSONResponse({"error": "dwarfUid is required"}, status_code=400)
+        if len(sessions) < 2:
+            return JSONResponse({"error": "at least 2 sessions are required"}, status_code=400)
+        try:
+            session = get_manager().get(dwarf_uid)
+        except KeyError:
+            return JSONResponse({"error": f"unknown dwarfUid {dwarf_uid!r}"}, status_code=404)
+        if not session.is_connected:
+            return JSONResponse({"error": "the Dwarf is not connected"}, status_code=409)
+        if scheduler_runner.is_running(dwarf_uid):
+            return JSONResponse({"error": "a program is running on this Dwarf"}, status_code=409)
+
+        target = str(body.get("target") or "").strip()
+        program = _blank_program(session.config)
+        cmd = program["command"]
+        for key, section in cmd.items():
+            if isinstance(section, dict) and "do_action" in section:
+                section["do_action"] = False
+        cmd["id_command"]["description"] = f"Megastack {target}".strip()
+        site_clock = site_now(session.config)
+        cmd["id_command"]["date"] = site_clock.strftime("%Y-%m-%d")
+        cmd["id_command"]["time"] = site_clock.strftime("%H:%M:%S")
+        cmd["id_command"]["max_retries"] = 1
+        cmd["megastack"] = {"do_action": True, "target": target, "sessions": sessions}
+
+        dirs = ensure_dirs(session)
+        filepath = os.path.join(dirs["TODO_DIR"], _filename_for(program).replace(".json", "-megastack.json"))
+        write_json_atomic(filepath, program)
+        try:
+            scheduler_runner.start_run(dwarf_uid, cmd, session, source_filepath=filepath)
+        except RuntimeError as e:
+            # Not left in ToDo: the scheduler would start it later, unasked
+            try:
+                os.remove(filepath)
+            except OSError:
+                pass
+            return JSONResponse({"error": str(e)}, status_code=409)
+        log.notice(f"[{dwarf_uid}] Megastack started: {len(sessions)} sessions of {target or '?'}")
+        return JSONResponse({"ok": True, "mode": "started"})
+
     @app.post("/api/program")
     async def api_program(request: Request):
         try:

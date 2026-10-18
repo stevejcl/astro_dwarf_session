@@ -504,7 +504,12 @@ def _is_busy(session) -> bool:
     from components import scheduler_runner
     from components.scheduler_loop import _is_capturing
 
-    return scheduler_runner.is_running(session.dwarf_uid) or _is_capturing(session)
+    from components import device_task
+
+    # A task of the Dwarf's own (a megastack): busy too - above all, not
+    # powered off in the middle of it
+    return (scheduler_runner.is_running(session.dwarf_uid) or _is_capturing(session)
+            or device_task.running_task(session) is not None)
 
 
 def _on_end(session, now: float) -> None:

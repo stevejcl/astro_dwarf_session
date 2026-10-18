@@ -115,6 +115,11 @@ def check_all(manager) -> None:
             continue
         if scheduler_runner.is_running(uid):
             continue
+        # The Dwarf busy with a task of its own (a megastack): the due
+        # program waits in ToDo, started at the next tick after it
+        from components import device_task
+        if device_task.running_task(session) is not None:
+            continue
 
         dirs = session_dirs_for(session)
         filepath = _next_due_file(dirs["TODO_DIR"], site_now(session.config))

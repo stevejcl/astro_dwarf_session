@@ -377,6 +377,19 @@ def build_explorer_page() -> None:
                     _shots_info_cache[thumb_path] = await run.io_bound(_fetch_shots_info, url)
                 return _shots_info_cache[thumb_path]
 
+            _total_exposure_cache: dict[str, float | None] = {}
+
+            async def _ensure_total_exposure(thumb_path: str) -> float | None:
+                """A megastack result's total exposure (components/
+                megastack.py: its FITS headers), read once per session."""
+                from components import megastack
+
+                if thumb_path not in _total_exposure_cache:
+                    _total_exposure_cache[thumb_path] = await run.io_bound(
+                        megastack.total_exposure_s, session.config.dwarf_ip, thumb_path.rsplit("/", 1)[0]
+                    )
+                return _total_exposure_cache[thumb_path]
+
             current_path: list[str] = [""]
             current_png: list[str | None] = [None]
 
@@ -452,6 +465,17 @@ def build_explorer_page() -> None:
                     info = await _ensure_shots_info(thumb_path)
                     if info:
                         dialog_shots_label.set_text(_shots_info_caption(info))
+                    # A megastack's result: its total exposure, from its FITS
+                    # (no exposure in its listing nor its shotsInfo.json)
+                    if entry.get("astroMultiImageDetails"):
+                        exposure = await _ensure_total_exposure(thumb_path)
+                        if exposure:
+                            caption = dialog_shots_label.text
+                            bits = [caption] if caption else []
+                            if not caption and info and info.get("shotsStacked") is not None:
+                                bits.append(f"{info['shotsStacked']} {t('prog_shots_stacked')}")
+                            bits.append(f"{t('prog_total_exposure')}: {_format_duration(exposure)}")
+                            dialog_shots_label.set_text(" \u00b7 ".join(bits))
 
             async def load() -> None:
                 sessions = await run.io_bound(perform_list_astro_sessions_http, session=session)

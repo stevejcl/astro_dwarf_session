@@ -152,6 +152,7 @@ TRANSLATIONS: dict[str, str] = {
     # -- Program editor -------------------------------------------------
     "prog_description":             "Description",
     "prog_date":                    "Date",
+    "prog_date_refreshed":          "Sa date était passée : mise au {date} (heure gardée) - vérifie-la avant d'enregistrer",
     "prog_time":                    "Heure",
     "prog_max_retries":             "Tentatives max",
     "prog_wait_before":             "Attente avant (s)",

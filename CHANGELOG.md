@@ -38,6 +38,10 @@
     the field, for both cameras.
 
   ### BugFix
+    ### A program reopened in the editor kept its old date
+    A result reopened with the pencil (to capture its target again) kept the date of its first run: easy to miss,
+    the program then ran at once whatever its time. Opening a program whose date/time is past now moves the date
+    to the next occurrence of its time (the time is kept), with a notice.
     ### A resumed capture stopped hours before its end time
     After a reconnection the app resumes following the program the Dwarf is capturing. Its end time was taken from
     the program's scheduled date: a program run again from an older file (dated the day before) found "end time

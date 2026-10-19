@@ -68,6 +68,18 @@
     target (A-Z, a header with its count, newest first in each); back to the whole gallery after it.
     ### Explorer gallery: the target on each tile
     Above its date (was the date only).
+    ### Wake up a Dwarf from the phone (hotspot)
+    A Dwarf mini no longer answered on the home Wi-Fi, the official app couldn't reach it either: switched to its
+    own hotspot it woke up, then joined the home Wi-Fi again (user-seen). New page /wake-dwarf, opened on the phone
+    close to the Dwarf - the PC is often too far from the garden for its own Bluetooth (Force Bluetooth): over the
+    phone's Bluetooth (Web Bluetooth) it checks the Bluetooth password, switches the Dwarf to hotspot mode (2.4 or
+    5 GHz, not kept at the next start) and shows its hotspot's name and password; a second button sends it back to
+    the home Wi-Fi (STA, the network saved at pairing) if it doesn't go back by itself, and says if its IP changed.
+    Reached from Settings ("Wake up from the phone", with a QR code - the device's Settings page opened on the phone
+    too); not from the watch pages, which never send anything to a Dwarf.
+    Android: Chrome allows Bluetooth over http only for an address added in chrome://flags ("Insecure origins
+    treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
+    Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
     ### Autofocus refused after the Dwarf restarted (CAMERA_TELE_CLOSED)
     The Dwarf powered off and back on (user log, Mini): this app reconnected on its own, but only the first

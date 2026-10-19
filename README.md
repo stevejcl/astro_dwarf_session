@@ -118,6 +118,10 @@ Open a paired device from the dashboard to reach its control page: camera settin
 
 The camera previews have a **Stacked / Last frame** switch (the official app's own toggle, read back from the Dwarf when it connects). The light and power-indicator buttons, like this switch, also work while a program is capturing. EQ Solving's correction readout shows which way to turn the azimuth / altitude knobs, with the same convention on every model. A **Shut down** button, at the far right of Disconnect, powers the Dwarf off after a confirmation.
 
+### Waking up a Dwarf from the phone
+When a Dwarf no longer answers on the home Wi-Fi (even to the official app), switching it to its own hotspot over Bluetooth wakes it up; it then joins the home Wi-Fi again. If the PC is too far from the Dwarf for its Bluetooth, open `/wake-dwarf` on the phone, close to the Dwarf (Settings → "Wake up from the phone" has its QR code and link): **Wake up (hotspot)**, then if needed **Back to the home Wi-Fi**. Close the official app first (one Bluetooth connection at a time).
+The page uses the phone browser's Bluetooth (Web Bluetooth), which needs a secure page: on Android, open `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in Chrome, enable it, add the app's address (e.g. `http://192.168.1.10:8080`, shown on the page) and relaunch Chrome — once per phone. On iPhone, Safari has no Web Bluetooth: use the Bluefy browser.
+
 ### Programs
 The program editor builds a JSON session file — the same format the scheduler consumes — covering goto (solar/manual/none), calibration, EQ Solving, camera setup, capture duration, an optional scheduled end time (stop the capture at a given time if the requested count isn't reached yet — handles crossing midnight correctly), and Mosaic (framing scale on each axis, shots per panel). Save a program to run it immediately, or schedule it for a specific date/time (with a calendar/clock picker, and a "now + 5 min" shortcut on schedule editing); the scheduler runs in the background regardless of which page you're looking at, and retries a failed step a configurable number of times before giving up.
 

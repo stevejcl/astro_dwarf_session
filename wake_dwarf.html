@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dwarf - Wake up (hotspot)</title>
+<!-- Wakes up a Dwarf that no longer answers on the home Wi-Fi (STA mode)
+     (user-requested Oct 2026: the official app couldn't reach a Dwarf
+     mini either; switching it to its own hotspot woke it up, then it
+     joined the home Wi-Fi again). Bluetooth from the PHONE's browser
+     (Web Bluetooth), since the PC running this app is usually too far
+     from a Dwarf in the garden:
+       1. Bluetooth: Get config (cmd 1) - checks the Bluetooth password
+       2. Bluetooth: hotspot mode (ReqAp, cmd 2)
+       3. optional: back to the home Wi-Fi (ReqSta, cmd 3)
+     Same frames as dwarf_ble_connect (dwarf_protocol_ble.py): aa 01 cmd
+     00 01 00 00 len16 <protobuf> crc16 0d, the few protobuf fields of
+     ble.proto encoded by hand below.
+     Web Bluetooth needs a secure context: over http://<PC IP> Chrome
+     Android has to be told to trust this address (chrome://flags), Safari
+     has no Web Bluetooth at all (Bluefy on iPhone) - the page says so.
+     Served by components/api_routes.py's /wake-dwarf route, which sets
+     the page language and the known Dwarfs (window.WD_DEVICES). -->
+<style>
+  :root {
+    --bg: #0f1115; --card: #1a1d24; --border: #2a2e38; --text: #e6e8ec;
+    --muted: #9aa1ad; --accent: #4da3ff; --ok: #35c46a; --warn: #e0a83c; --err: #e05c5c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 16px; }
+  .wrap { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 0.85rem; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .card p { margin: 6px 0; font-size: 0.9rem; }
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin: 10px 0 4px; }
+  select, input[type=text], input[type=password] {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 0.95rem;
+  }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: 0.9rem; margin-top: 12px; }
+  .warn { border-color: var(--warn); }
+  .warn h2 { color: var(--warn); }
+  code { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; word-break: break-all; }
+  button.send { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 1rem; cursor: pointer; margin-top: 12px; }
+  button.send:disabled { opacity: 0.5; cursor: default; }
+  button.small { background: none; border: 1px solid var(--border); color: var(--accent); border-radius: 6px; padding: 4px 10px; cursor: pointer; margin-left: 6px; }
+  #log { margin-top: 12px; font-size: 0.9rem; white-space: pre-line; }
+  #log .ok { color: var(--ok); } #log .err { color: var(--err); } #log .info { color: var(--text); }
+  .hotspot { margin-top: 10px; padding: 10px; border: 1px solid var(--ok); border-radius: 8px; font-size: 0.9rem; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 data-i="title"></h1>
+  <div class="sub" data-i="subtitle"></div>
+
+  <div class="card warn hidden" id="no-ble">
+    <h2 data-i="no_ble_title"></h2>
+    <p data-i="no_ble_android"></p>
+    <p><code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code></p>
+    <p><span data-i="no_ble_origin"></span> <code id="origin"></code><button class="small" id="copy-origin" data-i="copy"></button></p>
+    <p data-i="no_ble_relaunch"></p>
+    <p data-i="no_ble_ios"></p>
+  </div>
+
+  <div class="card">
+    <h2 data-i="dwarf"></h2>
+    <select id="dwarf"></select>
+    <label data-i="ble_psd"></label>
+    <input type="text" id="ble-psd" autocomplete="off">
+    <label data-i="band"></label>
+    <select id="band">
+      <option value="1" data-i="band_24"></option>
+      <option value="0" data-i="band_5"></option>
+    </select>
+    <p class="sub" data-i="close_app"></p>
+    <button class="send" id="wake" data-i="wake_button"></button>
+    <div class="hotspot hidden" id="hotspot"></div>
+  </div>
+
+  <div class="card">
+    <h2 data-i="sta_title"></h2>
+    <p class="sub" data-i="sta_hint"></p>
+    <label data-i="ssid"></label>
+    <input type="text" id="ssid" autocomplete="off">
+    <label data-i="pwd"></label>
+    <input type="password" id="pwd" autocomplete="off">
+    <button class="send" id="sta" data-i="sta_button"></button>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<script>
+const LANG = window.WD_LANG === "fr" ? "fr" : "en";
+const DEVICES = Array.isArray(window.WD_DEVICES) ? window.WD_DEVICES : [];
+const TEXTS = {
+  en: {
+    title: "Wake up a Dwarf (hotspot)",
+    subtitle: "When the Dwarf no longer answers on the home Wi-Fi: from this phone, close to the Dwarf, Bluetooth switches it to its own Wi-Fi hotspot, which wakes it up - it then joins the home Wi-Fi again (or use the second step).",
+    no_ble_title: "Bluetooth not available in this browser",
+    no_ble_android: "Android (Chrome): Bluetooth is only allowed on a secure page. Open this address in a new tab:",
+    no_ble_origin: "enable the option and add this address:",
+    no_ble_relaunch: "then tap Relaunch and come back to this page. Done once for this phone.",
+    no_ble_ios: "iPhone: Safari has no Bluetooth for web pages - open this page in the Bluefy browser (App Store).",
+    copy: "Copy",
+    copied: "Copied",
+    dwarf: "Dwarf",
+    any_dwarf: "Any Dwarf (choose in the Bluetooth list)",
+    ble_psd: "Bluetooth password",
+    band: "Hotspot Wi-Fi band",
+    band_24: "2.4 GHz (longer range)",
+    band_5: "5 GHz",
+    close_app: "Close the official Dwarf app first: the Dwarf accepts only one Bluetooth connection.",
+    wake_button: "Wake up (hotspot)",
+    sta_title: "Back to the home Wi-Fi (optional)",
+    sta_hint: "If the Dwarf doesn't join the home Wi-Fi again by itself after a minute: sends it the network below (STA mode), like the Bluetooth pairing.",
+    ssid: "Wi-Fi network (SSID)",
+    pwd: "Wi-Fi password",
+    sta_button: "Back to the home Wi-Fi",
+    choose: "Choose the Dwarf in the Bluetooth list...",
+    expected: "expected: {name}",
+    connecting: "Connecting to {name}...",
+    connected: "Bluetooth connected.",
+    config: "Current mode: {mode}{ssid}{ip}",
+    mode_sta: "home Wi-Fi (STA)",
+    mode_ap: "hotspot",
+    mode_unknown: "not configured",
+    bad_psd: "Refused by the Dwarf (code {code}) - check the Bluetooth password.",
+    sending_ap: "Switching to hotspot mode...",
+    ap_ok: "Hotspot on - the Dwarf is awake.",
+    hotspot: "Its Wi-Fi: {ssid}{pwd}. If needed, join it from this phone's Wi-Fi settings to finish waking it up, then come back to the home Wi-Fi.",
+    hotspot_pwd: " - password {pwd}",
+    ap_err: "Hotspot mode refused (code {code}).",
+    sending_sta: "Sending the home Wi-Fi...",
+    sta_ok: "Back on the home Wi-Fi - IP {ip}.",
+    sta_ip_changed: "The IP changed (was {old}): update it in Dwarfium Lite (Settings > Manually update IP) or use Force Bluetooth from the PC.",
+    sta_err: "Home Wi-Fi refused (code {code}) - check the network name and password.",
+    sta_missing: "Enter the Wi-Fi network and its password.",
+    timeout: "No answer from the Dwarf.",
+    cancelled: "No Dwarf chosen.",
+    error: "Bluetooth error: {error}",
+    done: "Bluetooth disconnected. Reconnect from Dwarfium Lite in a minute.",
+  },
+  fr: {
+    title: "Réveiller un Dwarf (hotspot)",
+    subtitle: "Quand le Dwarf ne répond plus sur le Wi-Fi de la maison : depuis ce téléphone, près du Dwarf, le Bluetooth le bascule sur son propre hotspot Wi-Fi, ce qui le réveille - il rejoint ensuite le Wi-Fi de la maison (sinon, deuxième étape).",
+    no_ble_title: "Bluetooth indisponible dans ce navigateur",
+    no_ble_android: "Android (Chrome) : le Bluetooth n'est permis que sur une page sécurisée. Ouvrez cette adresse dans un nouvel onglet :",
+    no_ble_origin: "activez l'option et ajoutez cette adresse :",
+    no_ble_relaunch: "puis touchez Relancer et revenez sur cette page. À faire une seule fois pour ce téléphone.",
+    no_ble_ios: "iPhone : Safari n'a pas de Bluetooth pour les pages web - ouvrez cette page dans le navigateur Bluefy (App Store).",
+    copy: "Copier",
+    copied: "Copié",
+    dwarf: "Dwarf",
+    any_dwarf: "N'importe quel Dwarf (choix dans la liste Bluetooth)",
+    ble_psd: "Mot de passe Bluetooth",
+    band: "Bande Wi-Fi du hotspot",
+    band_24: "2,4 GHz (meilleure portée)",
+    band_5: "5 GHz",
+    close_app: "Fermez d'abord l'application officielle Dwarf : le Dwarf n'accepte qu'une connexion Bluetooth.",
+    wake_button: "Réveiller (hotspot)",
+    sta_title: "Retour au Wi-Fi de la maison (optionnel)",
+    sta_hint: "Si le Dwarf ne rejoint pas tout seul le Wi-Fi de la maison au bout d'une minute : lui envoie le réseau ci-dessous (mode STA), comme l'appairage Bluetooth.",
+    ssid: "Réseau Wi-Fi (SSID)",
+    pwd: "Mot de passe Wi-Fi",
+    sta_button: "Retour au Wi-Fi de la maison",
+    choose: "Choisissez le Dwarf dans la liste Bluetooth...",
+    expected: "attendu : {name}",
+    connecting: "Connexion à {name}...",
+    connected: "Bluetooth connecté.",
+    config: "Mode actuel : {mode}{ssid}{ip}",
+    mode_sta: "Wi-Fi de la maison (STA)",
+    mode_ap: "hotspot",
+    mode_unknown: "non configuré",
+    bad_psd: "Refusé par le Dwarf (code {code}) - vérifiez le mot de passe Bluetooth.",
+    sending_ap: "Passage en mode hotspot...",
+    ap_ok: "Hotspot activé - le Dwarf est réveillé.",
+    hotspot: "Son Wi-Fi : {ssid}{pwd}. Si besoin, connectez-y ce téléphone depuis ses réglages Wi-Fi pour finir de le réveiller, puis revenez sur le Wi-Fi de la maison.",
+    hotspot_pwd: " - mot de passe {pwd}",
+    ap_err: "Mode hotspot refusé (code {code}).",
+    sending_sta: "Envoi du Wi-Fi de la maison...",
+    sta_ok: "De retour sur le Wi-Fi de la maison - IP {ip}.",
+    sta_ip_changed: "L'IP a changé (avant : {old}) : mettez-la à jour dans Dwarfium Lite (Réglages > Mettre à jour l'IP manuellement) ou utilisez Forcer Bluetooth depuis le PC.",
+    sta_err: "Wi-Fi de la maison refusé (code {code}) - vérifiez le nom du réseau et le mot de passe.",
+    sta_missing: "Indiquez le réseau Wi-Fi et son mot de passe.",
+    timeout: "Pas de réponse du Dwarf.",
+    cancelled: "Aucun Dwarf choisi.",
+    error: "Erreur Bluetooth : {error}",
+    done: "Bluetooth déconnecté. Reconnectez-le depuis Dwarfium Lite dans une minute.",
+  },
+};
+function t(key, vars) {
+  let s = (TEXTS[LANG][key] ?? TEXTS.en[key] ?? key);
+  for (const [k, v] of Object.entries(vars || {})) s = s.replaceAll("{" + k + "}", v);
+  return s;
+}
+document.documentElement.lang = LANG;
+document.title = "Dwarf - " + t("title");
+document.querySelectorAll("[data-i]").forEach(el => { el.textContent = t(el.dataset.i); });
+
+// --- Bluetooth frames (dwarf_ble_connect/lib/dwarf_protocol_ble.py) ---------
+const CHARACTERISTIC = "00009999-0000-1000-8000-00805f9b34fb";
+const SERVICES = [
+  "0000daf2-0000-1000-8000-00805f9b34fb",   // Dwarf II
+  "0000daf3-0000-1000-8000-00805f9b34fb",   // Dwarf 3
+  "0000daf5-0000-1000-8000-00805f9b34fb",   // Dwarf mini
+];
+
+function crc16(bytes) {
+  let crc = 0xffff;
+  for (const b of bytes) {
+    crc ^= b;
+    for (let i = 0; i < 8; i++) crc = (crc & 1) ? (crc >>> 1) ^ 0xa001 : crc >>> 1;
+  }
+  return crc;
+}
+function varint(n) {
+  const out = [];
+  n = n >>> 0;
+  while (n > 0x7f) { out.push((n & 0x7f) | 0x80); n >>>= 7; }
+  out.push(n);
+  return out;
+}
+// fields: [[number, value]...] - an int or a string; proto3 leaves out 0 / "".
+function protobuf(fields) {
+  const out = [];
+  for (const [num, value] of fields) {
+    if (typeof value === "string") {
+      if (!value) continue;
+      const bytes = new TextEncoder().encode(value);
+      out.push(...varint((num << 3) | 2), ...varint(bytes.length), ...bytes);
+    } else {
+      if (!value) continue;
+      out.push(...varint(num << 3), ...varint(value));
+    }
+  }
+  return out;
+}
+function packet(cmd, fields) {
+  const data = protobuf(fields);
+  const buf = [0xaa, 0x01, cmd, 0x00, 0x01, 0x00, 0x00, (data.length >> 8) & 0xff, data.length & 0xff, ...data];
+  const crc = crc16(buf);
+  buf.push((crc >> 8) & 0xff, crc & 0xff, 0x0d);
+  return new Uint8Array(buf);
+}
+// Answer protobuf -> {fieldNumber: value} (varints and strings only, all ble.proto has)
+function decode(bytes) {
+  const out = {};
+  let i = 0;
+  const readVarint = () => {
+    let n = 0, shift = 0, b;
+    do { b = bytes[i++]; n += (b & 0x7f) * 2 ** shift; shift += 7; } while (b & 0x80 && i < bytes.length);
+    return n;
+  };
+  while (i < bytes.length) {
+    const key = readVarint();
+    const num = Math.floor(key / 8), wire = key & 7;
+    if (wire === 0) out[num] = readVarint();
+    else if (wire === 2) { const len = readVarint(); out[num] = new TextDecoder().decode(new Uint8Array(bytes.slice(i, i + len))); i += len; }
+    else break;
+  }
+  return out;
+}
+
+// --- Bluetooth link ----------------------------------------------------------
+let device = null, characteristic = null, rx = [], waiter = null;
+
+function onNotify(event) {
+  const v = event.target.value;
+  for (let i = 0; i < v.byteLength; i++) rx.push(v.getUint8(i));
+  while (rx.length && rx[0] !== 0xaa) rx.shift();
+  if (rx.length < 9) return;
+  const total = 9 + rx[7] * 256 + rx[8] + 3;
+  if (rx.length < total) return;
+  const frame = rx.slice(0, total);
+  rx = rx.slice(total);
+  const answer = { cmd: frame[2], fields: decode(frame.slice(9, total - 3)) };
+  if (waiter) { const w = waiter; waiter = null; w(answer); }
+}
+// An error already worded for the user (not a Bluetooth exception)
+function dwarfError(message) {
+  const e = new Error(message);
+  e.fromDwarf = true;
+  return e;
+}
+function send(cmd, fields, timeoutMs = 15000) {
+  return new Promise(async (resolve, reject) => {
+    const timer = setTimeout(() => { waiter = null; reject(dwarfError(t("timeout"))); }, timeoutMs);
+    waiter = answer => { clearTimeout(timer); resolve(answer); };
+    try {
+      const frame = packet(cmd, fields);
+      if (characteristic.properties.write) await characteristic.writeValueWithResponse(frame);
+      else await characteristic.writeValueWithoutResponse(frame);
+    } catch (e) { clearTimeout(timer); waiter = null; reject(e); }
+  });
+}
+async function connect() {
+  if (device && device.gatt.connected && characteristic) return;
+  const dev = selectedDevice();
+  log(dev ? t("choose") + " (" + t("expected", { name: dev.dwarfUid }) + ")" : t("choose"));
+  device = await navigator.bluetooth.requestDevice({
+    filters: [{ namePrefix: "DWARF" }],
+    optionalServices: SERVICES,
+  });
+  log(t("connecting", { name: device.name || "?" }));
+  const server = await device.gatt.connect();
+  let service = null;
+  for (const uuid of SERVICES) {
+    try { service = await server.getPrimaryService(uuid); break; } catch (e) { /* other model */ }
+  }
+  if (!service) throw new Error("DWARF service not found");
+  characteristic = await service.getCharacteristic(CHARACTERISTIC);
+  rx = [];
+  characteristic.addEventListener("characteristicvaluechanged", onNotify);
+  await characteristic.startNotifications();
+  device.addEventListener("gattserverdisconnected", () => { characteristic = null; });
+  log(t("connected"), "ok");
+}
+function disconnect() {
+  try { if (device && device.gatt.connected) device.gatt.disconnect(); } catch (e) { /* already gone */ }
+  characteristic = null;
+}
+// cmd 0 = ResReceiveDataError, otherwise the field 2 of every answer is its code
+function answerCode(answer, cmd) {
+  if (answer.cmd === 0) return answer.fields[1] ?? -1;
+  if (answer.cmd !== cmd) return -1;
+  return answer.fields[2] ?? 0;
+}
+async function checkConfig(psd) {
+  const answer = await send(1, [[1, 1], [2, psd]]);                // ReqGetconfig
+  const code = answerCode(answer, 1);
+  if (code !== 0) throw dwarfError(t("bad_psd", { code }));
+  const f = answer.fields;                                           // ResGetconfig
+  const mode = f[4] === 2 ? t("mode_sta") : f[4] === 1 ? t("mode_ap") : t("mode_unknown");
+  log(t("config", { mode, ssid: f[8] ? " - " + f[8] : "", ip: f[10] ? " - " + f[10] : "" }));
+}
+
+// --- Page --------------------------------------------------------------------
+const logEl = document.getElementById("log");
+function log(text, kind = "info") {
+  const line = document.createElement("div");
+  line.className = kind;
+  line.textContent = text;
+  logEl.appendChild(line);
+}
+function selectedDevice() {
+  return DEVICES.find(d => d.dwarfUid === document.getElementById("dwarf").value) || null;
+}
+function fillFromDevice() {
+  const d = selectedDevice();
+  document.getElementById("ble-psd").value = (d && d.blePsd) || "DWARF_12345678";
+  document.getElementById("ssid").value = (d && d.ssid) || "";
+  document.getElementById("pwd").value = (d && d.pwd) || "";
+}
+
+const dwarfSelect = document.getElementById("dwarf");
+for (const d of DEVICES) {
+  const opt = document.createElement("option");
+  opt.value = d.dwarfUid;
+  opt.textContent = d.name && d.name !== d.dwarfUid ? `${d.name} (${d.dwarfUid})` : d.dwarfUid;
+  dwarfSelect.appendChild(opt);
+}
+const anyOpt = document.createElement("option");
+anyOpt.value = "";
+anyOpt.textContent = t("any_dwarf");
+dwarfSelect.appendChild(anyOpt);
+const wantedUid = new URLSearchParams(location.search).get("uid");
+if (wantedUid && DEVICES.some(d => d.dwarfUid === wantedUid)) dwarfSelect.value = wantedUid;
+dwarfSelect.addEventListener("change", fillFromDevice);
+fillFromDevice();
+
+const wakeBtn = document.getElementById("wake"), staBtn = document.getElementById("sta");
+if (!navigator.bluetooth) {
+  document.getElementById("no-ble").classList.remove("hidden");
+  document.getElementById("origin").textContent = location.origin;
+  wakeBtn.disabled = staBtn.disabled = true;
+}
+document.getElementById("copy-origin").addEventListener("click", async e => {
+  try { await navigator.clipboard.writeText(location.origin); e.target.textContent = t("copied"); } catch (err) { /* not allowed over http */ }
+});
+
+async function run(action) {
+  wakeBtn.disabled = staBtn.disabled = true;
+  try {
+    await connect();
+    await checkConfig(document.getElementById("ble-psd").value || "DWARF_12345678");
+    await action(document.getElementById("ble-psd").value || "DWARF_12345678");
+  } catch (e) {
+    if (e && e.name === "NotFoundError") log(t("cancelled"), "err");
+    else log(e && e.fromDwarf ? e.message : t("error", { error: (e && e.message) || e }), "err");
+  } finally {
+    disconnect();
+    wakeBtn.disabled = staBtn.disabled = false;
+  }
+}
+
+wakeBtn.addEventListener("click", () => run(async psd => {
+  log(t("sending_ap"));
+  const band = parseInt(document.getElementById("band").value, 10);
+  // ReqAp: wifi_type (0 = 5G, 1 = 2.4G), auto_start 0 = the Dwarf doesn't
+  // boot in hotspot mode (back to the home Wi-Fi next time), no country.
+  const answer = await send(2, [[1, 2], [2, band], [3, 0], [4, 0], [6, psd]], 20000);
+  const code = answerCode(answer, 2);
+  if (code !== 0) { log(t("ap_err", { code }), "err"); return; }
+  log(t("ap_ok"), "ok");
+  const f = answer.fields;                                           // ResAp
+  if (f[4]) {
+    const box = document.getElementById("hotspot");
+    box.textContent = t("hotspot", { ssid: f[4], pwd: f[5] ? t("hotspot_pwd", { pwd: f[5] }) : "" });
+    box.classList.remove("hidden");
+  }
+  log(t("done"));
+}));
+
+staBtn.addEventListener("click", () => {
+  const ssid = document.getElementById("ssid").value.trim(), pwd = document.getElementById("pwd").value;
+  if (!ssid || !pwd) { log(t("sta_missing"), "err"); return; }
+  run(async psd => {
+    log(t("sending_sta"));
+    // ReqSta: auto_start 1 = the Dwarf joins this network at boot
+    const answer = await send(3, [[1, 3], [2, 1], [3, psd], [4, ssid], [5, pwd]], 45000);
+    const code = answerCode(answer, 3);
+    if (code !== 0) { log(t("sta_err", { code }), "err"); return; }
+    const ip = answer.fields[5] || "?";                              // ResSta
+    log(t("sta_ok", { ip }), "ok");
+    const d = selectedDevice();
+    if (d && d.ip && ip !== "?" && ip !== d.ip) log(t("sta_ip_changed", { old: d.ip }), "err");
+    log(t("done"));
+  });
+});
+</script>
+</body>
+</html>

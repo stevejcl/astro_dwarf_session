@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import socket
+from urllib.parse import quote
 
 from nicegui import app
 
@@ -40,6 +41,23 @@ def watch_url() -> str:
     return f"http://{get_local_ip()}:{get_lan_port()}/watch"
 
 
+def wake_url(dwarf_uid: str = "") -> str:
+    """The phone's Bluetooth wake-up page (/wake-dwarf, wake_dwarf.html)."""
+    url = f"http://{get_local_ip()}:{get_lan_port()}/wake-dwarf"
+    return f"{url}?uid={quote(dwarf_uid)}" if dwarf_uid else url
+
+
+def qr_svg(url: str) -> str:
+    """Any URL as an inline SVG QR code - see watch_qr_svg() below."""
+    import qrcode
+    import qrcode.image.svg
+
+    img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage)
+    buf = io.BytesIO()
+    img.save(buf)
+    return buf.getvalue().decode()
+
+
 def watch_qr_svg() -> str:
     """Renders watch_url() as an inline SVG string (user-requested Sep
     2026: a QR code on the dashboard, to open Watch mode on a phone
@@ -48,10 +66,4 @@ def watch_qr_svg() -> str:
     external QR-generation API/service, which matters here: the whole
     point of Watch mode is working on a local network at an observing
     site that may well have no internet access at all."""
-    import qrcode
-    import qrcode.image.svg
-
-    img = qrcode.make(watch_url(), image_factory=qrcode.image.svg.SvgPathImage)
-    buf = io.BytesIO()
-    img.save(buf)
-    return buf.getvalue().decode()
+    return qr_svg(watch_url())

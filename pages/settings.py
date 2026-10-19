@@ -62,6 +62,7 @@ from components import connection_health
 from components.ble_pairing import connect_ble, scan_dwarf_devices, write_ble_credentials
 from components.geolocation import fetch_current_location
 from components.i18n import t
+from components.network_info import qr_svg, wake_url
 from components.pwa import add_pwa_head_tags
 from components.site_picker import site_picker
 from components.theme import apply_theme
@@ -440,6 +441,18 @@ def build_settings_page() -> None:
                     force_ble_button.enable()
 
                 force_ble_button.on("click", _handle_force_ble)
+
+            # Wake up from the phone (user-requested Oct 2026): a Dwarf
+            # that no longer answers on the home Wi-Fi wakes up once
+            # switched to its hotspot over Bluetooth - from the phone's
+            # browser (/wake-dwarf, wake_dwarf.html) when this PC is too
+            # far from the Dwarf for Force Bluetooth above.
+            with ui.card().classes("w-full p-0 mt-2"), ui.expansion(t("settings_wake_title"), icon="wifi_tethering", value=False).classes("w-full"):
+                ui.label(t("settings_wake_hint")).classes("text-xs text-grey-6")
+                url = wake_url(dwarf_uid)
+                ui.html(qr_svg(url)).classes("w-48 h-48")
+                ui.link(url, url, new_tab=True).classes("text-xs break-all")
+                ui.label(t("settings_wake_chrome")).classes("text-xs text-grey-6")
 
             # Manual IP update (user-requested Sep 2026) - for someone
             # who configured this device manually in the first place

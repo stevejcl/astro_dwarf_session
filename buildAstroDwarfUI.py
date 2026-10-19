@@ -67,6 +67,7 @@ _project_htmls = [
 
 # Single-file pages (texts in both languages inside)
 _project_htmls.append(Path("plan_target.html"))
+_project_htmls.append(Path("wake_dwarf.html"))
 
 for _html in _project_htmls:
     if _html.exists():

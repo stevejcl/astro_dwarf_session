@@ -409,6 +409,44 @@ def register_api_routes() -> None:
         )
         return HTMLResponse(html)
 
+    @app.get("/wake-dwarf")
+    def wake_dwarf_page():
+        """Wakes up a Dwarf over Bluetooth from the PHONE's browser
+        (wake_dwarf.html): hotspot mode, then optionally back to the home
+        Wi-Fi - user-requested Oct 2026, a Dwarf mini no longer answering
+        on the home Wi-Fi woke up once switched to its hotspot, and the PC
+        is too far from the garden for its own Bluetooth (Settings' Force
+        Bluetooth). One file, its texts in English and French: the app's
+        language and the known Dwarfs (their Bluetooth password and home
+        Wi-Fi from config.ini, as Settings shows them) are set here.
+        ?uid= preselects a Dwarf, client-side."""
+        page_path = _bundled_path("wake_dwarf.html")
+        if not page_path.exists():
+            return JSONResponse({"error": f"wake_dwarf.html not found at {page_path}"}, status_code=404)
+        devices = []
+        for entry in list_device_entries():
+            try:
+                cfg = DwarfConfig.from_files(entry.config_py, entry.config_ini)
+            except FileNotFoundError:
+                continue
+            devices.append({
+                "name": entry.name,
+                "dwarfUid": cfg.dwarf_uid,
+                "ip": cfg.dwarf_ip,
+                "blePsd": cfg.ble_psd,
+                "ssid": cfg.ble_sta_ssid,
+                "pwd": cfg.ble_sta_pwd,
+            })
+        lang = "fr" if get_language() == "fr" else "en"
+        # "</" escaped: a Wi-Fi name can't close the <script> early
+        devices_js = json.dumps(devices).replace("</", "<\\/")
+        html = page_path.read_text(encoding="utf-8").replace(
+            "<head>",
+            f"<head>\n<script>window.WD_LANG = {json.dumps(lang)}; window.WD_DEVICES = {devices_js};</script>",
+            1,
+        )
+        return HTMLResponse(html)
+
     def _fill_native_from_cache(device_entry: dict, dwarf_uid: str, error_code: str) -> None:
         """Falls back to the last successfully-read native schedule
         (native_schedule.py's persistent cache) when we can't read it

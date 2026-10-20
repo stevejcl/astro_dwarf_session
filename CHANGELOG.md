@@ -97,6 +97,12 @@
     centres are now laid on a regular grid in one tangent plane centred on the mosaic, and the grid is checked:
     every point between the tile centres must lie inside a tile with 1.5 deg to spare (the Dwarf's pointing was
     off by 1-1.3 deg); the spacing tightens until it does, and the summary says by how much.
+    ### Executable: "No module named 'qrcode'" (QR codes of Watch mode / wake-up)
+    The app ran from Python but the rebuilt executable failed: nicegui-pack calls, on Windows, the first
+    "pyinstaller" on the PATH, possibly another Python install's, which leaves out silently a module it can't
+    find. buildAstroDwarfUI.py now runs PyInstaller with its own Python (nicegui-pack's arguments), first
+    checks that every requirement and PyInstaller are installed there (else stops with the pip command), and
+    names qrcode / qrcode.image.svg as hidden imports (imported inside a function).
     ### Autofocus refused after the Dwarf restarted (CAMERA_TELE_CLOSED)
     The Dwarf powered off and back on (user log, Mini): this app reconnected on its own, but only the first
     connection since its start entered astro mode - the camera stayed closed until a manual Reconnect. An automatic

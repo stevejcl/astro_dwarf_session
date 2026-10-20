@@ -543,6 +543,7 @@ let selectedCenter = null; // {ra, dec} - null until the user clicks or types
 let scheduledTiles = []; // moved up from near the Generate button - referenced
 // by drawSkyChart() below, which is called once at page load, before
 // that later declaration would otherwise exist yet (temporal dead zone).
+let lastSpacingScale = 1;     // generateGrid(): < 1 when it had to tighten the steps
 let lastGenerationParams = null; // {durationMode, count, tileDurationMinutes} - see the Send handler below
 
 function drawSkyChart() {
@@ -902,25 +903,92 @@ document.getElementById('geoBtn').addEventListener('click', () => {
    evenly spaced on the SKY, not just in raw RA degrees (which would
    bunch up near the poles).
 ------------------------------------------------------------------- */
+// Gnomonic (tangent plane) projection around (ra0, dec0), all in degrees:
+// what a camera frames - its sensor is flat - and the plane the whole
+// mosaic is laid out in.
+function gnomonic(ra0, dec0, ra, dec) {
+  const dRa = (ra - ra0) * DEG, d0 = dec0 * DEG, d = dec * DEG;
+  const cosc = Math.sin(d0) * Math.sin(d) + Math.cos(d0) * Math.cos(d) * Math.cos(dRa);
+  if (cosc <= 0) return null;                    // more than 90° away
+  return {
+    x: Math.cos(d) * Math.sin(dRa) / cosc,
+    y: (Math.cos(d0) * Math.sin(d) - Math.sin(d0) * Math.cos(d) * Math.cos(dRa)) / cosc,
+  };
+}
+function gnomonicInverse(ra0, dec0, x, y) {
+  const d0 = dec0 * DEG, rho = Math.hypot(x, y);
+  if (rho === 0) return { ra: ra0, dec: dec0 };
+  const c = Math.atan(rho);
+  const dec = Math.asin(Math.cos(c) * Math.sin(d0) + y * Math.sin(c) * Math.cos(d0) / rho);
+  const ra = ra0 * DEG + Math.atan2(x * Math.sin(c), rho * Math.cos(d0) * Math.cos(c) - y * Math.sin(d0) * Math.sin(c));
+  return { ra: ((ra / DEG) % 360 + 360) % 360, dec: dec / DEG };
+}
+
+// Margin each tile must keep around its neighbours' cells: the Dwarf's
+// pointing was off by 1-1.3° on a real night (Oct 2026), and a few
+// pixels go to the stacking borders and the blending.
+const TILE_MARGIN_DEG = 1.5;
+
+/* ---------------------------------------------------------------------
+   Tile grid (user-reported Oct 2026: a 3x2 mosaic left a hole where four
+   tiles meet and a wedge at an outer corner). Rows used to be laid at
+   constant Dec with columns spaced by step / cos(Dec) of each row, so the
+   columns fanned out from row to row while the Dwarf frames every tile
+   north up with straight (great circle) edges: the overlap shrank to
+   nothing at the corners.
+   Now the tile centres sit on a regular grid in ONE tangent plane centred
+   on the mosaic, and the grid is checked: every point between the tile
+   centres (the rectangle they span in that plane) must lie inside at
+   least one tile - framed north up at its centre - with TILE_MARGIN_DEG
+   to spare; the steps shrink until it does. Beyond the outer centres
+   nothing has to be joined: the mosaic's outer edge stays ragged.
+------------------------------------------------------------------- */
 function generateGrid(centerRa, centerDec, cols, rows, fov, overlapPct) {
   const overlap = overlapPct / 100;
-  const stepH = fov.h * (1 - overlap);
-  const stepV = fov.v * (1 - overlap);
-  const tiles = [];
-  for (let row = 0; row < rows; row++) {
-    const dec = centerDec + (row - (rows - 1) / 2) * stepV;
-    const cosDec = Math.max(0.05, Math.cos(dec * DEG)); // guard near the pole
-    for (let col = 0; col < cols; col++) {
-      const raOffsetDeg = (col - (cols - 1) / 2) * stepH / cosDec;
-      const ra = centerRa + raOffsetDeg / 15;
-      tiles.push({
-        name: `MW Tile R${row + 1}C${col + 1}`,
-        ra: ((ra % 24) + 24) % 24,
-        dec,
-        row, col,
-      });
+  const ra0 = centerRa * 15, dec0 = centerDec;
+  const halfW = Math.tan(fov.h / 2 * DEG), halfH = Math.tan(fov.v / 2 * DEG);
+  // a tile's frame less the margin, as angles (the plane stretches off-centre)
+  const innerW = Math.tan((fov.h / 2 - TILE_MARGIN_DEG) * DEG), innerH = Math.tan((fov.v / 2 - TILE_MARGIN_DEG) * DEG);
+  const SAMPLES = 40;                            // points checked per gap between two centres
+
+  function layout(scale) {
+    const stepX = 2 * halfW * (1 - overlap) * scale, stepY = 2 * halfH * (1 - overlap) * scale;
+    const tiles = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        // columns towards growing RA, rows towards growing Dec, as before
+        const px = (col - (cols - 1) / 2) * stepX, py = (row - (rows - 1) / 2) * stepY;
+        const c = gnomonicInverse(ra0, dec0, px, py);
+        tiles.push({ name: `MW Tile R${row + 1}C${col + 1}`, ra: c.ra / 15, dec: c.dec, row, col, px, py });
+      }
     }
+    return { tiles, stepX, stepY };
   }
+
+  function covered({ tiles, stepX, stepY }) {
+    const nx = SAMPLES * Math.max(cols - 1, 0), ny = SAMPLES * Math.max(rows - 1, 0);
+    for (let i = 0; i <= nx; i++) {
+      for (let j = 0; j <= ny; j++) {
+        const px = nx ? (i / nx - 0.5) * (cols - 1) * stepX : 0;
+        const py = ny ? (j / ny - 0.5) * (rows - 1) * stepY : 0;
+        const p = gnomonicInverse(ra0, dec0, px, py);
+        const inside = tiles.some(t => {
+          const q = gnomonic(t.ra * 15, t.dec, p.ra, p.dec);
+          return q && Math.abs(q.x) <= innerW && Math.abs(q.y) <= innerH;
+        });
+        if (!inside) return false;
+      }
+    }
+    return true;
+  }
+
+  let scale = 1, grid = layout(scale);
+  while (!covered(grid) && scale > 0.4) {
+    scale -= 0.02;
+    grid = layout(scale);
+  }
+  const tiles = grid.tiles.map(({ px, py, ...t }) => t);
+  tiles.spacingScale = scale;                     // < 1: steps tightened for the corners
   return tiles;
 }
 
@@ -1071,6 +1139,7 @@ document.getElementById('generateBtn').addEventListener('click', () => {
   }
 
   const tiles = generateGrid(centerRa, centerDec, cols, rows, currentFov, effectiveOverlapPct);
+  lastSpacingScale = tiles.spacingScale;
   const sunLimit = parseFloat(document.getElementById('sunLimit').value);
   scheduledTiles = scheduleTiles(tiles, lat, lon, startDate, minAltitude, durationForIndex, isNaN(sunLimit) ? -18 : sunLimit);
   // Stored so the Send button (a separate handler) uses the EXACT same
@@ -1129,7 +1198,8 @@ function renderTiles() {
     ? `Targeted night: ${pad(targetDate.getDate())}/${pad(targetDate.getMonth() + 1)} starting at ${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}. `
     : '';
   summary.textContent = dateLine + `${scheduledTiles.length} tiles · ${ok} schedulable tonight` +
-    (failed ? ` · ${failed} not schedulable (never high enough in the window)` : '');
+    (failed ? ` · ${failed} not schedulable (never high enough in the window)` : '') +
+    (lastSpacingScale < 1 ? ` · spacing tightened by ${Math.round((1 - lastSpacingScale) * 100)}% so the tiles still overlap at their corners (±${TILE_MARGIN_DEG}° pointing margin)` : '');
 
   body.innerHTML = scheduledTiles.map((t, i) => {
     if (!t.scheduled) {

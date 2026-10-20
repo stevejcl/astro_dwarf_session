@@ -81,6 +81,15 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Programs in a row: up to 2 min 30 s lost between two of them
+    When the connection check ran just as a program ended, the next program's "is the Dwarf already capturing?"
+    query was sent at the same time: one answer went to the other request, and the start waited 150 s (3 of the 5
+    tile changes of a Milky Way mosaic night). The next program now takes the command slot first (waiting up to
+    30 s for a check in progress), then asks.
+    ### Milky Way planner: tiles planned too short
+    A tile was planned as count x exposure + 1 min: 24 min for 90 x 15 s, while it took ~28 min - the delay added
+    up to 28 min by the 6th tile. Now counted: the dithering (the Dwarf shifts every 6 frames and loses one frame
+    doing it) and ~3 min per tile for the session start, goto, waits and capture start / end.
     ### Autofocus refused after the Dwarf restarted (CAMERA_TELE_CLOSED)
     The Dwarf powered off and back on (user log, Mini): this app reconnected on its own, but only the first
     connection since its start entered astro mode - the camera stayed closed until a manual Reconnect. An automatic

@@ -928,7 +928,8 @@ function generateGrid(centerRa, centerDec, cols, rows, fov, overlapPct) {
    Scheduling: for each tile, scan forward from startTime in 5-min
    steps across the next 12h looking for a stretch where altitude stays
    >= minAltitude for at least the tile's own required duration
-   (count x exposure + a small buffer for goto/calibration/autofocus).
+   (count x exposure + dithering + goto/session overhead, see
+   baseDurationSeconds below).
    Greedy, sequential - tiles are considered in the order they're
    generated, each claiming the EARLIEST still-free slot that works for
    it, so two tiles never get scheduled on top of each other.
@@ -1047,9 +1048,21 @@ document.getElementById('generateBtn').addEventListener('click', () => {
   // logic used later when actually sending (i === 0 gets it if checked,
   // otherwise every tile does) - keeping the schedule's own duration
   // estimate consistent with what will really be sent, tile by tile.
+  //
+  // Measured on a real 6-tile D3 wide night (Oct 2026, 90 x 15s): a tile
+  // took ~28 min, not the 24 min this used to plan, and the drift added up
+  // to +28 min by the last tile. Two causes:
+  // - dithering: the Dwarf shifts the pointing every DITHER_EVERY_FRAMES
+  //   frames and loses one whole frame slot doing it (D3 wide: every 6
+  //   frames; same one-frame cost seen on a Mini at 120s, every 10).
+  // - fixed per-tile overhead: session init + goto/plate solving + the
+  //   10s and 30s waits + capture start before the first frame + end of
+  //   session + switch to the next tile = ~2.5-3 min, not 60s.
+  const DITHER_EVERY_FRAMES = 6;
+  const TILE_OVERHEAD_SECONDS = 180;
   const baseDurationSeconds = durationMode === 'duration'
-    ? tileDurationMinutes * 60 + 60
-    : exposure * count + 60;
+    ? tileDurationMinutes * 60 + TILE_OVERHEAD_SECONDS
+    : exposure * count * (1 + 1 / DITHER_EVERY_FRAMES) + TILE_OVERHEAD_SECONDS;
   const AUTOFOCUS_BUFFER_SECONDS = 90;
   const autofocusFirstOnly = document.getElementById('autofocusFirstOnly').checked;
   function durationForIndex(i) {

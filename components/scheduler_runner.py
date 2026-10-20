@@ -1156,6 +1156,11 @@ def device_is_actively_capturing(session) -> bool:
         return False
     return perform_is_camera_actually_busy(session=session)
 
+# How long a run start waits for a health check already in flight to give
+# the slot back (usually a few seconds) before giving up for this try.
+_SLOT_WAIT_S = 30
+
+
 def _run_starting_blocking(
     dwarf_uid,
     program,
@@ -1165,13 +1170,6 @@ def _run_starting_blocking(
 ):
     # This is now running in the io_bound worker thread.
     try:
-        if device_is_actively_capturing(session):
-            state.running = False
-            state.error = (
-                "The Dwarf is already capturing - "
-                "refusing to start a new session."
-            )
-            return
         # A task of the Dwarf's own (a megastack, maybe started by the
         # official app): nothing else can run meanwhile
         from components import device_task
@@ -1181,13 +1179,42 @@ def _run_starting_blocking(
             state.error = reason[0].upper() + reason[1:] + " - the program will start after it."
             return
 
-        acquired = connection_health.try_acquire_command_slot(
-            dwarf_uid,
-            caller="scheduler_runner.start_run",
-        )
+        # The slot BEFORE device_is_actively_capturing()'s own
+        # GET_DEVICE_STATE_INFO, not after (user-reported Oct 2026: a
+        # mosaic night lost 150s between 3 of its 5 tile changes). A
+        # health check that grabbed the slot just as the previous tile
+        # ended sent the same command at the same time: both share one
+        # result queue, one answer got taken by the other request, and
+        # the start waited for gb_timeout. priority_pending (set by
+        # start_run()) already keeps NEW health checks out, so only an
+        # in-flight one is waited for here.
+        acquired = False
+        deadline = time.monotonic() + _SLOT_WAIT_S
+        while True:
+            acquired = connection_health.try_acquire_command_slot(
+                dwarf_uid,
+                caller="scheduler_runner.start_run",
+            )
+            if acquired or time.monotonic() >= deadline:
+                break
+            time.sleep(1.0)
         if not acquired:
             state.running = False
             state.error = "A command is already in progress for this device."
+            return
+
+        try:
+            capturing = device_is_actively_capturing(session)
+        except Exception:
+            connection_health.release_command_slot(dwarf_uid)
+            raise
+        if capturing:
+            connection_health.release_command_slot(dwarf_uid)
+            state.running = False
+            state.error = (
+                "The Dwarf is already capturing - "
+                "refusing to start a new session."
+            )
             return
     finally:
         # try/finally (not a plain call after the acquire, as in an

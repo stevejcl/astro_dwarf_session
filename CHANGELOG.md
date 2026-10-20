@@ -90,6 +90,13 @@
     A tile was planned as count x exposure + 1 min: 24 min for 90 x 15 s, while it took ~28 min - the delay added
     up to 28 min by the 6th tile. Now counted: the dithering (the Dwarf shifts every 6 frames and loses one frame
     doing it) and ~3 min per tile for the session start, goto, waits and capture start / end.
+    ### Milky Way planner: holes between the tiles
+    A 3 x 2 mosaic left a hole where four tiles meet and a wedge at an outer corner: rows were laid at constant
+    Dec with columns spaced by step / cos(Dec) of each row, so the columns fanned out from row to row, while the
+    Dwarf frames each tile north up with straight edges - the overlap shrank to nothing at the corners. The tile
+    centres are now laid on a regular grid in one tangent plane centred on the mosaic, and the grid is checked:
+    every point between the tile centres must lie inside a tile with 1.5 deg to spare (the Dwarf's pointing was
+    off by 1-1.3 deg); the spacing tightens until it does, and the summary says by how much.
     ### Autofocus refused after the Dwarf restarted (CAMERA_TELE_CLOSED)
     The Dwarf powered off and back on (user log, Mini): this app reconnected on its own, but only the first
     connection since its start entered astro mode - the camera stayed closed until a manual Reconnect. An automatic

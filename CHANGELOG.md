@@ -99,6 +99,11 @@
     off by 1-1.3 deg); the spacing tightens until it does, and the summary says by how much. The sky chart draws
     each tile as what the camera frames (its north-up field, curved on the RA/Dec chart), no longer an RA x Dec box
     that showed the new rows as misaligned.
+    ### Milky Way planner: start time at the start of the night
+    The start time stayed at the time the page was opened. Once the position is known (Site, geolocation, typed),
+    it is set to the start of the night - the Sun below the chosen darkness limit - or to now when it already is,
+    unless less than an hour of that night is left (then the next night's). Changing the darkness limit moves it
+    too; a start time typed by hand is kept.
     ### Executable: "No module named 'qrcode'" (QR codes of Watch mode / wake-up)
     The app ran from Python but the rebuilt executable failed: nicegui-pack calls, on Windows, the first
     "pyinstaller" on the PATH, possibly another Python install's, which leaves out silently a module it can't

@@ -19,6 +19,8 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+import importlib.util
 import zipfile
 from pathlib import Path
 
@@ -108,24 +110,59 @@ with open("version.py", "w", encoding="utf-8") as f:
     f.write(f'APP_VERSION = "{version_str}"\n')
 print(f"Version extracted: {version_str}")
 
-# Step 2 - Run nicegui-pack
+# Step 2 - Run PyInstaller (nicegui-pack's arguments)
 print("Building executable...")
 
 if not Path(ICON_NAME).exists():
     print(f"Warning: {ICON_NAME} not found - building without a custom icon.")
 
+# Every requirement importable by THIS Python, the one PyInstaller runs in
+# below (user-reported Oct 2026: the rebuilt exe failed with "No module
+# named 'qrcode'" while the app ran fine from Python - PyInstaller leaves
+# out, silently, a module its own interpreter can't find).
+_IMPORT_NAMES = {"protobuf": "google.protobuf", "filelock": "filelock", "pywebview": "webview"}
+missing = []
+for line in Path("requirements.txt").read_text(encoding="utf-8").splitlines():
+    name = re.split(r"[<>=~!\[; ]", line.strip(), maxsplit=1)[0]
+    if not name or name.startswith("#"):
+        continue
+    module = _IMPORT_NAMES.get(name.lower(), name.lower())
+    try:
+        found = importlib.util.find_spec(module) is not None
+    except ModuleNotFoundError:
+        found = False
+    if not found:
+        missing.append(name)
+if importlib.util.find_spec("PyInstaller") is None:
+    missing.append("pyinstaller")
+if missing:
+    raise SystemExit(
+        f"Not installed for {sys.executable}: {', '.join(missing)}\n"
+        f"Run: \"{sys.executable}\" -m pip install -r requirements.txt pyinstaller"
+    )
+
+import nicegui  # noqa: E402 - checked just above
+
 icon_args = ["--icon", ICON_NAME] if Path(ICON_NAME).exists() else []
+# PyInstaller run by this very Python (what nicegui-pack does on Linux /
+# macOS; on Windows it calls the first "pyinstaller" on the PATH, which can
+# belong to another Python install) - same arguments as nicegui-pack.
 pack_cmd = [
-    "nicegui-pack",
-    "--onefile",
-    "--windowed",
-    *icon_args,
+    sys.executable, "-m", "PyInstaller",
     "--name", APP_NAME,
+    "--noconfirm",
+    "--windowed",
+    "--onefile",
+    *icon_args,
+    "--add-data", f"{Path(nicegui.__file__).parent}{sep}nicegui",
     "--add-data", f"{IMAGES_DIR}{sep}images",
     *[arg for data in extra_data for arg in ["--add-data", data]],
+    # imported inside a function (components/network_info.py)
+    "--hidden-import", "qrcode", "--hidden-import", "qrcode.image.svg",
     SOURCE_FILE,
 ]
 
+print("PyInstaller command:", " ".join(pack_cmd))
 subprocess.run(pack_cmd, check=True)
 
 # Step 3 - Copy additional files into dist

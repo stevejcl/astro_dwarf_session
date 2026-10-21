@@ -537,6 +537,37 @@ const CW = skyCanvas.width, CH = skyCanvas.height;
 function raToX(ra) { return (ra / 24) * CW; }
 function decToY(dec) { return ((90 - dec) / 180) * CH; }
 function xToRa(x) { return (x / CW) * 24; }
+
+// A tile's field on the chart: its north-up frame (scale x the FOV) at its
+// centre, edges sampled since they are curves on an RA/Dec chart; RA kept
+// continuous around the tile's own (no jump across 0h/24h).
+function tileOutline(t, scale) {
+  const hw = Math.tan(currentFov.h / 2 * DEG) * scale, hh = Math.tan(currentFov.v / 2 * DEG) * scale;
+  const N = 12, pts = [];
+  const edge = (x0, y0, x1, y1) => {
+    for (let i = 0; i < N; i++) {
+      const p = gnomonicInverse(t.ra * 15, t.dec, x0 + (x1 - x0) * i / N, y0 + (y1 - y0) * i / N);
+      let ra = p.ra / 15;
+      while (ra - t.ra > 12) ra -= 24;
+      while (t.ra - ra > 12) ra += 24;
+      pts.push({ x: raToX(ra), y: decToY(p.dec) });
+    }
+  };
+  edge(-hw, hh, hw, hh); edge(hw, hh, hw, -hh); edge(hw, -hh, -hw, -hh); edge(-hw, -hh, -hw, hh);
+  return pts;
+}
+
+// Draws an outline, again one chart-width over when it crosses 0h / 24h.
+function strokeOutline(pts) {
+  for (const shift of [0, -CW, CW]) {
+    const xs = pts.map(p => p.x + shift);
+    if (Math.max(...xs) < 0 || Math.min(...xs) > CW) continue;
+    skyCtx.beginPath();
+    pts.forEach((p, i) => (i ? skyCtx.lineTo : skyCtx.moveTo).call(skyCtx, p.x + shift, p.y));
+    skyCtx.closePath();
+    skyCtx.stroke();
+  }
+}
 function yToDec(y) { return 90 - (y / CH) * 180; }
 
 let selectedCenter = null; // {ra, dec} - null until the user clicks or types
@@ -653,35 +684,32 @@ function drawSkyChart() {
   }
 
   // Generated tiles overlay (user-requested Sep 2026: "cote esthetique:
-  // carte du ciel avec tuiles") - each drawn as its actual FOV rectangle
-  // at its RA/Dec, RA half-width corrected by cos(dec) same as the grid
-  // generation itself (otherwise rectangles would look too wide near
-  // the poles relative to what the camera actually frames). Colored by
+  // carte du ciel avec tuiles") - each drawn as what the camera frames:
+  // its north-up field projected back on this RA/Dec chart (tileOutline),
+  // the same footprint generateGrid() checks the overlaps with. Colored by
   // status: green = schedulable, red = not, dashed amber outline added
   // on top for the near-zenith warning.
   if (scheduledTiles.length) {
     for (const t of scheduledTiles) {
-      const cosDec = Math.max(0.05, Math.cos(t.dec * DEG));
-      const halfRaHours = (currentFov.h / 2 / cosDec) / 15;
-      const halfDec = currentFov.v / 2;
-      const x1 = raToX(t.ra - halfRaHours), x2 = raToX(t.ra + halfRaHours);
-      const y1 = decToY(t.dec + halfDec), y2 = decToY(t.dec - halfDec);
+      const outline = tileOutline(t, 1);
 
       skyCtx.strokeStyle = t.scheduled ? 'rgba(74, 222, 128, 0.9)' : 'rgba(248, 113, 113, 0.85)';
       skyCtx.lineWidth = 1.5;
       skyCtx.setLineDash([]);
-      skyCtx.strokeRect(Math.min(x1, x2), y1, Math.abs(x2 - x1), y2 - y1);
+      strokeOutline(outline);
 
       if (t.nearZenith) {
         skyCtx.strokeStyle = 'rgba(251, 191, 36, 0.9)';
         skyCtx.setLineDash([3, 3]);
-        skyCtx.strokeRect(Math.min(x1, x2) - 2, y1 - 2, Math.abs(x2 - x1) + 4, y2 - y1 + 4);
+        strokeOutline(tileOutline(t, 1.06));
         skyCtx.setLineDash([]);
       }
 
+      // label inside the tile's upper corner on the low-RA side
+      const corner = outline.reduce((best, p) => (p.y - p.x * 0.3 < best.y - best.x * 0.3 ? p : best));
       skyCtx.fillStyle = t.scheduled ? 'rgba(74, 222, 128, 0.95)' : 'rgba(248, 113, 113, 0.9)';
       skyCtx.font = 'bold 10px sans-serif';
-      skyCtx.fillText(`${t.row + 1}.${t.col + 1}`, Math.min(x1, x2) + 3, y1 + 12);
+      skyCtx.fillText(`${t.row + 1}.${t.col + 1}`, corner.x + 3, corner.y + 12);
     }
   }
 

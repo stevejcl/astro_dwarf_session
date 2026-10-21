@@ -96,7 +96,9 @@
     Dwarf frames each tile north up with straight edges - the overlap shrank to nothing at the corners. The tile
     centres are now laid on a regular grid in one tangent plane centred on the mosaic, and the grid is checked:
     every point between the tile centres must lie inside a tile with 1.5 deg to spare (the Dwarf's pointing was
-    off by 1-1.3 deg); the spacing tightens until it does, and the summary says by how much.
+    off by 1-1.3 deg); the spacing tightens until it does, and the summary says by how much. The sky chart draws
+    each tile as what the camera frames (its north-up field, curved on the RA/Dec chart), no longer an RA x Dec box
+    that showed the new rows as misaligned.
     ### Executable: "No module named 'qrcode'" (QR codes of Watch mode / wake-up)
     The app ran from Python but the rebuilt executable failed: nicegui-pack calls, on Windows, the first
     "pyinstaller" on the PATH, possibly another Python install's, which leaves out silently a module it can't

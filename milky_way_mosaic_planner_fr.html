@@ -436,11 +436,37 @@ function findSunCrossing(from, lat, lon, thresholdDeg) {
   return null;
 }
 
+// Start time defaults to the start of the night (user-reported Oct 2026:
+// it stayed at the time the page was opened) - the Sun below the chosen
+// darkness limit; now when it already is, unless less than
+// MIN_NIGHT_LEFT_MIN of it is left (then the next night's). Left alone
+// once the user has typed a start time.
+const MIN_NIGHT_LEFT_MIN = 60;
+let startTimeEditedByUser = false;
+function setStartToNight(lat, lon) {
+  if (startTimeEditedByUser) return;
+  const limit = parseFloat(document.getElementById('sunLimit').value);
+  const now = new Date();
+  let start = null;
+  if (sunAltitude(now, lat, lon) <= limit) {
+    let end = new Date(now);                      // when this night ends
+    while (end - now < 20 * 3600000 && sunAltitude(end, lat, lon) <= limit) end = new Date(end.getTime() + 60000);
+    start = end - now >= MIN_NIGHT_LEFT_MIN * 60000 ? now : findSunCrossing(end, lat, lon, limit);
+  } else {
+    start = findSunCrossing(now, lat, lon, limit);
+  }
+  if (!start) return;
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('startTime').value = `${pad(start.getHours())}:${pad(start.getMinutes())}:00`;
+  drawSkyChart();
+}
+
 function updateTwilightTimes() {
   const lat = parseFloat(document.getElementById('lat').value);
   const lon = parseFloat(document.getElementById('lon').value);
   const el = document.getElementById('twilightHint');
   if (isNaN(lat) || isNaN(lon)) { el.textContent = ''; return; }
+  setStartToNight(lat, lon);
   const now = new Date();
   const sunset = findSunCrossing(now, lat, lon, 0);
   const astro = findSunCrossing(now, lat, lon, -18);
@@ -743,9 +769,10 @@ document.getElementById('geoBtn').addEventListener('click', () => {
   // covers the geolocation button's own programmatic fill).
   setTimeout(() => { drawSkyChart(); updateTwilightTimes(); }, 1200);
 });
-['lat', 'lon'].forEach(id => {
+['lat', 'lon', 'sunLimit'].forEach(id => {
   document.getElementById(id).addEventListener('change', updateTwilightTimes);
 });
+document.getElementById('startTime').addEventListener('input', () => { startTimeEditedByUser = true; });
 drawSkyChart();
 updateTwilightTimes();
 
@@ -919,8 +946,9 @@ document.getElementById('geoBtn').addEventListener('click', () => {
   );
 });
 
-// Default start time: now.
+// Default start time: now, until the position is known (setStartToNight).
 (function setDefaultStart() {
+  if (document.getElementById('startTime').value) return;   // already the night's start
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
   document.getElementById('startTime').value = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;

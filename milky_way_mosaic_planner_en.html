@@ -78,6 +78,7 @@
   tr.tile-row { cursor: default; }
   .badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
   .badge-ok { background: rgba(74,222,128,0.15); color: var(--ok); }
+  .badge-decor { background: rgba(147,197,253,0.15); color: #93c5fd; }
   .badge-warn { background: rgba(248,113,113,0.15); color: var(--err); }
   .summary { font-size: 0.85rem; color: var(--text-dim); margin: 0.6rem 0; }
   .status-line { font-size: 0.88rem; font-weight: 600; padding: 0.6rem 0.8rem; border-radius: 8px; margin-top: 0.8rem; display: none; }
@@ -216,6 +217,21 @@
     <div class="checks">
       <label><input type="checkbox" id="autofocusFirstOnly" checked> Autofocus on the 1st tile of each group</label>
     </div>
+    <div class="row">
+      <div>
+        <label for="decorPass">Foreground pass</label>
+        <select id="decorPass">
+          <option value="none" selected>None (foreground left out)</option>
+          <option value="start">At the start of the series</option>
+          <option value="end">At the end of the series</option>
+        </select>
+      </div>
+      <div>
+        <label for="decorCount">Images per tile (foreground)</label>
+        <input type="number" id="decorCount" value="5" min="1" max="5">
+      </div>
+    </div>
+    <p class="hint">The same tiles again, a few images each and one after the other, to freeze the foreground (trees, roof) at almost the same time: the Milky Way tab of Dwarfium Scope Archive puts it back in front of the mosaic. At most 5 images: the Dwarf dithers after the 6th. Foreground to the east (sky rising): at the start; to the west (sky setting): at the end.</p>
     <p class="hint">Autofocus runs through the Tele lens even when the capture itself is on Wide — this field doesn't depend on which camera is used.</p>
   </fieldset>
 
@@ -691,6 +707,7 @@ function drawSkyChart() {
   // on top for the near-zenith warning.
   if (scheduledTiles.length) {
     for (const t of scheduledTiles) {
+      if (t.decor) continue;
       const outline = tileOutline(t, 1);
 
       skyCtx.strokeStyle = t.scheduled ? 'rgba(74, 222, 128, 0.9)' : 'rgba(248, 113, 113, 0.85)';
@@ -1044,7 +1061,16 @@ function slotIsUsable(tile, lat, lon, start, end, minAltitude, sunLimit) {
   }
 }
 
-function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIndex, sunLimit = -18) {
+// Foreground pass (user-requested Oct 2026): the same tiles again, a few
+// images each, one after the other, before or after the series - the
+// foreground then freezes at almost the same time on every tile, and the
+// sky behind it is the tiles' own. DECOR_MAX_FRAMES: the Dwarf dithers
+// after the 6th frame.
+const DECOR_MAX_FRAMES = 5;
+const DECOR_MIN_ALTITUDE = 0;
+
+function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIndex, sunLimit = -18,
+                       getAutofocusForIndex = i => i === 0) {
   const stepMinutes = 5;
   // 24h, not 12h: a start time in daylight must still reach the coming
   // night now that daylight slots are refused.
@@ -1055,17 +1081,19 @@ function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIn
   for (let i = 0; i < tiles.length; i++) {
     const tile = tiles[i];
     const durationSeconds = getDurationForIndex(i);
+    // a foreground entry is low by nature: above the horizon is enough
+    const minAlt = tile.decor ? DECOR_MIN_ALTITUDE : minAltitude;
     let found = null;
     let probe = new Date(cursor);
     const deadline = new Date(startDate.getTime() + maxHorizonMinutes * 60000);
 
     while (probe < deadline) {
       const { alt } = altAz(tile.ra, tile.dec, lat, lon, probe);
-      if (alt >= minAltitude && sunAltitude(probe, lat, lon) <= sunLimit) {
+      if (alt >= minAlt && sunAltitude(probe, lat, lon) <= sunLimit) {
         // Check the tile stays above minAltitude, in the dark, for its
         // WHOLE duration - otherwise it could set or meet dawn mid-capture.
         const endProbe = new Date(probe.getTime() + durationSeconds * 1000);
-        if (slotIsUsable(tile, lat, lon, probe, endProbe, minAltitude, sunLimit)) {
+        if (slotIsUsable(tile, lat, lon, probe, endProbe, minAlt, sunLimit)) {
           found = { start: new Date(probe), end: endProbe, altAtStart: alt };
           break;
         }
@@ -1074,7 +1102,8 @@ function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIn
     }
 
     if (found) {
-      results.push({ ...tile, scheduled: true, start: found.start, end: found.end, altAtStart: found.altAtStart });
+      results.push({ ...tile, scheduled: true, start: found.start, end: found.end, altAtStart: found.altAtStart,
+                     autofocus: getAutofocusForIndex(i) });
       // Next tile can't start before this one ends.
       cursor = new Date(found.end.getTime() + 30000); // 30s buffer between tiles
     } else {
@@ -1161,22 +1190,34 @@ document.getElementById('generateBtn').addEventListener('click', () => {
     : exposure * count * (1 + 1 / DITHER_EVERY_FRAMES) + TILE_OVERHEAD_SECONDS;
   const AUTOFOCUS_BUFFER_SECONDS = 90;
   const autofocusFirstOnly = document.getElementById('autofocusFirstOnly').checked;
+  const grid = generateGrid(centerRa, centerDec, cols, rows, currentFov, effectiveOverlapPct);
+  lastSpacingScale = grid.spacingScale;
+  const decorPass = document.getElementById('decorPass').value;
+  const decorCount = Math.min(Math.max(parseInt(document.getElementById('decorCount').value, 10) || DECOR_MAX_FRAMES, 1), DECOR_MAX_FRAMES);
+  const decorTiles = decorPass === 'none' ? [] : grid.map(t => ({ ...t, name: `${t.name} Decor`, decor: true }));
+  const tiles = decorPass === 'start' ? [...decorTiles, ...grid] : [...grid, ...decorTiles];
+  // the first entry of the sequence focuses; with autofocus on every tile,
+  // the foreground entries still don't (the pass must stay short)
+  function autofocusForIndex(i) {
+    return i === 0 || (!autofocusFirstOnly && !tiles[i].decor);
+  }
   function durationForIndex(i) {
-    const hasAutofocus = autofocusFirstOnly ? i === 0 : true;
-    return baseDurationSeconds + (hasAutofocus ? AUTOFOCUS_BUFFER_SECONDS : 0);
+    const seconds = tiles[i].decor
+      ? exposure * decorCount + TILE_OVERHEAD_SECONDS
+      : baseDurationSeconds;
+    return seconds + (autofocusForIndex(i) ? AUTOFOCUS_BUFFER_SECONDS : 0);
   }
 
-  const tiles = generateGrid(centerRa, centerDec, cols, rows, currentFov, effectiveOverlapPct);
-  lastSpacingScale = tiles.spacingScale;
   const sunLimit = parseFloat(document.getElementById('sunLimit').value);
-  scheduledTiles = scheduleTiles(tiles, lat, lon, startDate, minAltitude, durationForIndex, isNaN(sunLimit) ? -18 : sunLimit);
+  scheduledTiles = scheduleTiles(tiles, lat, lon, startDate, minAltitude, durationForIndex,
+                                 isNaN(sunLimit) ? -18 : sunLimit, autofocusForIndex);
   // Stored so the Send button (a separate handler) uses the EXACT same
   // count/mode this schedule was actually computed with (user-reported
   // Sep 2026 concern: re-reading the hidden #count field directly at
   // send time, instead of the computed duration-mode ceiling, would
   // silently send the wrong count - possibly not enough images to last
   // until endTime).
-  lastGenerationParams = { durationMode, count, tileDurationMinutes, startDate };
+  lastGenerationParams = { durationMode, count, tileDurationMinutes, startDate, decorPass, decorCount };
   // Near-zenith flag (Alt-Az only) - field rotation is fastest close to
   // the zenith (it can exceed several degrees per MINUTE right
   // overhead, versus being slow near the meridian at more typical
@@ -1185,7 +1226,7 @@ document.getElementById('generateBtn').addEventListener('click', () => {
   // tracking. Flagged, not excluded - still the caller's call.
   if (!eqMode) {
     scheduledTiles.forEach(t => {
-      if (t.scheduled && t.altAtStart > 80) t.nearZenith = true;
+      if (t.scheduled && !t.decor && t.altAtStart > 80) t.nearZenith = true;
     });
   }
 
@@ -1227,13 +1268,14 @@ function renderTiles() {
     : '';
   summary.textContent = dateLine + `${scheduledTiles.length} tiles · ${ok} schedulable tonight` +
     (failed ? ` · ${failed} not schedulable (never high enough in the window)` : '') +
+    (lastGenerationParams && lastGenerationParams.decorPass && lastGenerationParams.decorPass !== 'none' ? ` · foreground pass at the ${lastGenerationParams.decorPass === 'start' ? 'start' : 'end'} (${lastGenerationParams.decorCount} images per tile)` : '') +
     (lastSpacingScale < 1 ? ` · spacing tightened by ${Math.round((1 - lastSpacingScale) * 100)}% so the tiles still overlap at their corners (±${TILE_MARGIN_DEG}° pointing margin)` : '');
 
   body.innerHTML = scheduledTiles.map((t, i) => {
     if (!t.scheduled) {
       return `<tr class="unschedulable"><td>${i + 1}</td><td>${formatRa(t.ra)}</td><td>${t.dec.toFixed(2)}°</td><td>—</td><td>—</td><td><span class="badge badge-warn">Not schedulable</span></td><td>—</td></tr>`;
     }
-    return `<tr class="tile-row"><td>${i + 1}</td><td>${formatRa(t.ra)}</td><td>${t.dec.toFixed(2)}°</td><td class="progress-cell">${t.altAtStart.toFixed(0)}°</td><td>${formatTime(t.start)}</td><td><span class="badge badge-ok">OK</span>${t.nearZenith ? ' <span class="badge badge-warn">Near zenith</span>' : ''}</td>` +
+    return `<tr class="tile-row"><td>${i + 1}</td><td>${formatRa(t.ra)}</td><td>${t.dec.toFixed(2)}°</td><td class="progress-cell">${t.altAtStart.toFixed(0)}°</td><td>${formatTime(t.start)}</td><td><span class="badge badge-ok">OK</span>${t.decor ? ' <span class="badge badge-decor">Foreground</span>' : ''}${t.nearZenith ? ' <span class="badge badge-warn">Near zenith</span>' : ''}</td>` +
       `<td><button type="button" class="secondary" style="padding:0.2rem 0.5rem; font-size:0.72rem;" onclick="showMoonInfo(${i})">🌙</button><div class="hint" id="moonInfo${i}" style="margin-top:0.2rem;"></div></td></tr>`;
   }).join('');
 }
@@ -1266,10 +1308,9 @@ document.getElementById('sendAllBtn').addEventListener('click', async () => {
   // hidden #count field directly here, instead of what was actually
   // scheduled with, risked a mismatch in duration mode) - not re-read
   // from the form directly.
-  const { durationMode, count } = lastGenerationParams || {
+  const { durationMode, count, decorCount } = lastGenerationParams || {
     durationMode: 'count', count: parseInt(document.getElementById('count').value, 10),
   };
-  const autofocusFirstOnly = document.getElementById('autofocusFirstOnly').checked;
 
   btn.disabled = true;
   let okCount = 0, errCount = 0;
@@ -1282,24 +1323,22 @@ document.getElementById('sendAllBtn').addEventListener('click', async () => {
       dwarfUid,
       target: { name: t.name, ra: t.ra, dec: t.dec },
       camera: 'wide',
-      exposure, gain, count,
+      exposure, gain, count: t.decor ? decorCount : count,
       date: `${t.start.getFullYear()}-${pad(t.start.getMonth() + 1)}-${pad(t.start.getDate())}`,
       time: `${pad(t.start.getHours())}:${pad(t.start.getMinutes())}:${pad(t.start.getSeconds())}`,
       // Absolute instant: the server converts it to the Dwarf's site time
       // (this browser may be in another timezone, e.g. remote access).
       startEpochMs: t.start.getTime(),
-      autofocus: autofocusFirstOnly ? (t.row === 0 && t.col === 0) : true,
-      // Matches durationForIndex()'s own criterion at generation time
-      // (user-reported Sep 2026: this used to key off position in the
-      // FILTERED toSend list - i===0 - while the schedule's own extra
-      // autofocus-time buffer was given to the grid's real first tile
-      // [row 0, col 0], which could be a DIFFERENT tile if that one
-      // happened to be unschedulable. Same tile, same criterion, both
-      // places now - if row0/col0 itself isn't schedulable, no tile in
-      // this batch gets autofocus, which is at least consistent rather
-      // than silently mismatched.
+      autofocus: t.autofocus,
+      // Decided at generation time with the schedule's own autofocus
+      // buffer (scheduleTiles' getAutofocusForIndex): the same entry gets
+      // both - the sequence's first one (row 0, col 0, or its foreground
+      // entry when the pass comes first), or every tile but the
+      // foreground pass's when autofocus is wanted on each. An
+      // unschedulable first entry leaves the batch without one,
+      // consistently on both sides.
     };
-    if (durationMode === 'duration') {
+    if (durationMode === 'duration' && !t.decor) {
       // Cuts the capture off at t.end (already computed by
       // scheduleTiles() using this same tile's own duration) - the
       // program's own optional End Time mechanism

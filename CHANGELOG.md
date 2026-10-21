@@ -2,6 +2,14 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### Milky Way planner: foreground pass
+    The foreground (trees, roof) is attached to the ground, the sky turns 15 deg an hour: over a 2 h mosaic each tile
+    shows it elsewhere against the stars. New "Foreground pass" (at the start or at the end of the series, 5 images per
+    tile by default, at most 5 - the Dwarf dithers after the 6th): the same tiles again, one after the other, named
+    "MW Tile R1C1 Decor", so the foreground freezes at almost the same time on every tile and the sky behind it is the
+    tiles' own - for the Milky Way tab of Dwarfium Scope Archive to put it back in front of the mosaic. Foreground
+    entries only need to be above the horizon, don't focus (the first entry of the sequence does) and never use the
+    fixed-duration end time.
     ### After the session and end of the night
     After a capture the Dwarf stayed on its end-of-session screen, still tracking (battery), and powered off while
     tracking the D3 / Mini don't close their lenses (from rest they do - user-tested). New card in the Programs page's

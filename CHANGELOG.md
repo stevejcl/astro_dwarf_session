@@ -104,6 +104,8 @@
     it is set to the start of the night - the Sun below the chosen darkness limit - or to now when it already is,
     unless less than an hour of that night is left (then the next night's). Changing the darkness limit moves it
     too; a start time typed by hand is kept.
+    The French planner's "Ou choisir un Site enregistré" read "enregistr\u00e9" (and the empty Site choice "\u2014"
+    on both): escapes written in the page's HTML, where they are not decoded.
     ### Executable: "No module named 'qrcode'" (QR codes of Watch mode / wake-up)
     The app ran from Python but the rebuilt executable failed: nicegui-pack calls, on Windows, the first
     "pyinstaller" on the PATH, possibly another Python install's, which leaves out silently a module it can't

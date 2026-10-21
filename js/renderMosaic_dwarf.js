@@ -471,3 +471,93 @@ async function _dwSend(btn) {
   _dwStatus = okN + (nat.on ? ' mosaic(s) sent' : ' tile(s) sent') + (errN ? ', ' + errN + ' failed' : '') + '. Arm the device on the Programs page so the schedule starts automatically.';
   renderMosaic();
 }
+
+// Auxiliary function for managing the "Fill in Plan" on the Dwarf side
+async function _inspFillDwarf(m) {
+  var P = typeof mosaicPlan !== 'undefined' ? mosaicPlan : {};
+  if (!P.dwarfUid) {
+    alert("Please select a Dwarf device in the mosaic planner.");
+    return;
+  }
+
+  var exp = P.expSec ? +P.expSec : 15;
+  var gain = P.gain ? +P.gain : 80;
+  var count = P.durationMode !== 'duration' ? +P.count : 60;
+  var okN = 0, errN = 0;
+
+  // Go through each missing panel detected by the Inspector
+  for (var i = 0; i < m.panes.length; i++) {
+    var p = m.panes[i];
+    var now = new Date();
+    var payload = {
+      dwarfUid: P.dwarfUid,
+      target: { name: (P.gridTarget || 'Fill-in') + ' Gap ' + (i + 1), ra: p.raH, dec: p.dec },
+      camera: P.camera || 'wide',
+      exposure: String(exp),
+      gain: String(gain),
+      count: count,
+      date: now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'),
+      time: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0'),
+      autofocus: false
+    };
+
+    try {
+      var res = await fetch(_dwApiBase() + '/api/program', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      var data = await res.json();
+      if (!res.ok || data.error) errN++; else okN++;
+    } catch (err) {
+      errN++;
+    }
+  }
+
+  alert("Fill-in Dwarf completed : " + okN + " pannel(x) infill sent" + (errN ? " (" + errN + " failure)" : "") + ".");
+}  
+
+// Panel calculation function for Dwarf mode
+function plannedPanesDwarf() {
+  var tgt = (typeof _mosaicTarget === 'function') ? _mosaicTarget() : null;
+  if (!tgt) return null;
+
+  var _saved = null; 
+  try { _saved = JSON.parse(localStorage.getItem('mosaicPlan_dwarf')); } catch (e) {}
+  
+  var D = { camera: 'wide', rows: 2, cols: 3, overlapPct: 15, eqMode: false, native: false, framingX: 180, framingY: 180 };
+  var P = Object.assign({}, D, _saved || {}, (typeof mosaicPlan !== 'undefined' ? mosaicPlan : {}));
+
+  // Get Dwarf FOV
+  var fovW = 44.0, fovH = 24.6;
+  if (typeof _dwRig === 'function') {
+    var r = _dwRig();
+    if (r) { fovW = r.fovW; fovH = r.fovH; }
+  }
+
+  var nat = (typeof _dwNative === 'function') ? _dwNative(P) : { on: false, fx: 100, fy: 100, nx: 1, ny: 1, n: 1 };
+  var tileFov = nat.on ? { h: fovW * nat.fx / 100, v: fovH * nat.fy / 100 } : { h: fovW, v: fovH };
+  var effOv = P.eqMode ? P.overlapPct : P.overlapPct + 10;
+
+  var tiles = (typeof _dwGrid === 'function') ? _dwGrid(tgt, tileFov, P.rows, P.cols, effOv) : [];
+  var prevPanes = nat.on && typeof _dwPanels === 'function' 
+    ? [].concat.apply([], tiles.map(function(t) { return _dwPanels(t, { h: fovW, v: fovH }, nat); })) 
+    : tiles;
+
+  if (!prevPanes.length) return null;
+
+  //  Flip the panel centers (to be converted to degrees) + the rig's FOV
+  return {
+    fovW: fovW,
+    fovH: fovH,
+    panes: prevPanes.map(function(p) {
+      return {
+        raDeg: p.raH * 15, // Conversion of RA hours into degrees
+        decDeg: p.dec,
+        name: p.name,
+        row: p.row,
+        col: p.col
+      };
+    })
+  };
+}

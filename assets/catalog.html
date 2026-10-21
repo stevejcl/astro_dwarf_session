@@ -14170,16 +14170,26 @@ function _skymapWireEvents() {
   }
   // saved DEF-114 plan → planned pane centres (RA deg, Dec deg) + rig fov, or null
   function plannedPanes() {
-    try {
-      var raw = localStorage.getItem('dso_mosaic_plan'); if (!raw) return null;
-      var m = JSON.parse(raw); if (!m || !m.rigKey || typeof RIGS === 'undefined' || !RIGS[m.rigKey]) return null;
-      if (typeof _mosaicPanes !== 'function' || typeof _parseFovString !== 'function') return null;
-      var fov = _parseFovString(RIGS[m.rigKey].detail); if (!fov) return null;
-      // needs a target — reuse the plan's own centre isn't stored; skip overlay if no target context.
-      if (m.targetRaH == null || m.targetDec == null) return { needsTarget: true };
-      var panes = _mosaicPanes(m.targetRaH, m.targetDec, fov.w, fov.h, m.rows, m.cols, (m.overlapPct || 0) / 100, m.rotDeg || 0, m.alignPanes !== false);
-      return { panes: panes, fovW: fov.w, fovH: fov.h, rig: m.rigKey };
-    } catch (e) { return null; }
+    // 1. Test if ASIAIR mode on
+    if (typeof _mosaicMode === 'function' && _mosaicMode() !== 'dwarf') {
+      try {
+        var raw = localStorage.getItem('dso_mosaic_plan'); if (!raw) return null;
+        var m = JSON.parse(raw); if (!m || !m.rigKey || typeof RIGS === 'undefined' || !RIGS[m.rigKey]) return null;
+        if (typeof _mosaicPanes !== 'function' || typeof _parseFovString !== 'function') return null;
+        var fov = _parseFovString(RIGS[m.rigKey].detail); if (!fov) return null;
+        // needs a target — reuse the plan's own centre isn't stored; skip overlay if no target context.
+        if (m.targetRaH == null || m.targetDec == null) return { needsTarget: true };
+        var panes = _mosaicPanes(m.targetRaH, m.targetDec, fov.w, fov.h, m.rows, m.cols, (m.overlapPct || 0) / 100, m.rotDeg || 0, m.alignPanes !== false);
+        return { panes: panes, fovW: fov.w, fovH: fov.h, rig: m.rigKey };
+      } catch (e) { return null; }
+    }
+
+    // 2. Dwarf mode logic
+    if (typeof plannedPanesDwarf === 'function') {
+      return plannedPanesDwarf();
+    }
+  
+    return null;
   }
   function drawFootprints() {
     var g = frameGeometry();
@@ -14441,10 +14451,22 @@ function _skymapWireEvents() {
     el.style.display = 'flex';
   }
   window._inspFill = function () {
-    var g = frameGeometry(); var m = _computeMissing(g); if (!m.panes.length) return;
-    var panes = m.panes.map(function (p, i) { return { i: i + 1, raH: p.raH, dec: p.dec, angle: p.angle }; });
-    _saveText(_asiairPlanText(m.center.raH, m.center.dec, panes), 'mosaic-fill-in.txt');
+    var g = frameGeometry(); 
+    var m = _computeMissing(g); 
+    if (!m.panes.length) return;
+
+    // 1. Check whether you are in Dwarf mode or ASIAIR mode
+    var mode = (typeof _mosaicMode === 'function') ? _mosaicMode() : 'asiair';
+    if (mode === 'dwarf' && typeof _inspFillDwarf === 'function') {
+      // 2. Logical step for the Dwarf: convert the missing panels and send them to the Dwarf server
+      _inspFillDwarf(m);
+    } else {
+      // 3. Original logic for the ASIAIR (export of the .txt file)
+      var panes = m.panes.map(function (p, i) { return { i: i + 1, raH: p.raH, dec: p.dec, angle: p.angle }; });
+      _saveText(_asiairPlanText(m.center.raH, m.center.dec, panes), 'mosaic-fill-in.txt');
+    }
   };
+
   function openInspector() { var ov = $i('inspector-overlay'); if (ov) ov.classList.add('open'); }
   function closeInspector() { var ov = $i('inspector-overlay'); if (ov) ov.classList.remove('open'); }
   window.openInspector = openInspector; window.closeInspector = closeInspector;

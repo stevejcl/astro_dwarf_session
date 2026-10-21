@@ -5885,7 +5885,7 @@ textarea.form-input { min-height: 70px; resize: vertical; font-family: var(--bod
         <div class="help-item-body">Open it from the header (&#9649; Mosaic) or the &ldquo;Plan mosaic&rdquo; button in an object&rsquo;s detail pane. Pick one of your ASIAIR rigs (FMA180 / Askar V60 &amp; V80 / 91F with your ASI cameras &mdash; smartscopes plan mosaics in their own apps), set columns &times; rows &times; overlap and an optional rotation. It builds the ASIAIR mosaic plan (Center + each pane with RA / Dec / Angle) to Copy or Download as a .txt for ASIAIR&rsquo;s Plan &rarr; Mosaic import. &ldquo;Rotate panes to preserve alignment&rdquo; (on by default) gives per-pane angles for a clean great-circle grid; off keeps one fixed camera angle. The to-scale preview draws the target&rsquo;s real shape (outline or measured ellipse) under the pane grid and flags when a target fits in one frame. Exposure per pane defaults to the Imaging Settings sub-length recommendation and is editable. Geometry validated against a real ASIAIR export.</div>
       </div>            <div class="help-item" data-search="mosaic inspector panelwright fits wcs plate solve footprint overlap gap composite reproject stretch asinh midtone linear captured lights verify field teardown save png on device offline planned vs actual">
         <div class="help-item-title">The Mosaic Inspector</div>
-        <div class="help-item-body">Open it from the header (&#128301; Inspector, next to Mosaic). Drop in your captured lights (.fit / .fits) &mdash; as many as you like; subs of the same panel are grouped automatically, and a selected-files list shows what you picked. It reads each frame&rsquo;s plate-solve (WCS) to draw the real on-sky footprints &mdash; so you can confirm in the field, before teardown, that every pane landed and left no coverage gap. If you saved a plan in the Mosaic Planner, it overlays the planned panes (dashed) under the actual footprints and red-shades any planned pane not yet covered. A second pass bins, sky-subtracts and reprojects the frames into a rough grey composite (asinh / midtone / linear stretch) you can Save as PNG. Everything runs on-device &mdash; nothing is uploaded; on mobile the FITS you download from the ASIAIR all land in one folder, so select them together. A framing quick-look, not a stacker. Use &#10005; Clear on the file list to start over; when a saved mosaic plan is present, the bar under the footprint says whether it is overlaid or hidden and lets you forget it (offering to save it first). The composite labels each panel with its frame name, and a coverage line flags any interior gaps with a one-click supplementary plan to fill them.</div>
+        <div class="help-item-body">Open it from the header (&#128301; Inspector, next to Mosaic). Drop in your captured lights (.fit / .fits) &mdash; as many as you like (a frame without a plate-solve in its header, like a DWARF FITS, takes it from its <code>.wcs</code> file selected with it: same name, as Dwarfium Scope Archive, ASTAP or astrometry.net write it); subs of the same panel are grouped automatically, and a selected-files list shows what you picked. It reads each frame&rsquo;s plate-solve (WCS) to draw the real on-sky footprints &mdash; so you can confirm in the field, before teardown, that every pane landed and left no coverage gap. If you saved a plan in the Mosaic Planner, it overlays the planned panes (dashed) under the actual footprints and red-shades any planned pane not yet covered. A second pass bins, sky-subtracts and reprojects the frames into a rough grey composite (asinh / midtone / linear stretch) you can Save as PNG. Everything runs on-device &mdash; nothing is uploaded; on mobile the FITS you download from the ASIAIR all land in one folder, so select them together. A framing quick-look, not a stacker. Use &#10005; Clear on the file list to start over; when a saved mosaic plan is present, the bar under the footprint says whether it is overlaid or hidden and lets you forget it (offering to save it first). The composite labels each panel with its frame name, and a coverage line flags any interior gaps with a one-click supplementary plan to fill them.</div>
       </div>      <div class="help-item" data-search="sky map selected target crosshair reticle hand picked marker teal where is my object shown highlight find locate chosen not smart pick plan full catalog name label">
         <div class="help-item-title">Where's my selected target on the Sky Map?</div>
         <div class="help-item-body">Pick any object from the catalogue and open the Sky Map &mdash; it marks that target with a teal crosshair reticle and name label at its position in tonight&rsquo;s sky, so you can see where it sits. This works for any of the 15,810 catalogue objects, not just the five Smart Pick plans (which keep their coloured rings). The crosshair tracks the time slider and is hidden only when the target is below your horizon.</div>
@@ -6077,8 +6077,8 @@ textarea.form-input { min-height: 70px; resize: vertical; font-family: var(--bod
 
       <fieldset class="insp-card">
         <legend>1 &middot; Frames</legend>
-        <p class="insp-hint">Your captured lights &mdash; .fit / .fits. Drop in as many as you like; subs of the same panel are grouped automatically (headers read first; pixels only when you build). On mobile, the FITS you download from the ASIAIR all land in one folder &mdash; select them together.</p>
-        <input type="file" id="insp-files" multiple accept=".fit,.fits,.fts">
+        <p class="insp-hint">Your captured lights &mdash; .fit / .fits. Drop in as many as you like; subs of the same panel are grouped automatically (headers read first; pixels only when you build). On mobile, the FITS you download from the ASIAIR all land in one folder &mdash; select them together. A frame without a plate-solve in its header (a DWARF FITS) takes it from its <code>.wcs</code> file &mdash; select it with the frame (same name: <code>MW_Tile_R1C1.fits</code> + <code>MW_Tile_R1C1.wcs</code>, as Dwarfium Scope Archive, ASTAP or astrometry.net write it).</p>
+        <input type="file" id="insp-files" multiple accept=".fit,.fits,.fts,.wcs">
         <div id="insp-filelist" class="insp-filelist"></div>
         <button class="insp-btn insp-primary" id="insp-go" disabled>Read headers &rarr; footprint map</button>
       </fieldset>
@@ -13933,27 +13933,41 @@ function _skymapWireEvents() {
   var yield_ = function () { return new Promise(function (r) { setTimeout(r, 0); }); };
 
   /* ---------- FITS header ---------- */
+  // one 80-char header card into `cards`; true at END
+  function parseCard(card, cards) {
+    var key = card.substr(0, 8).trim();
+    if (key === 'END') return true;
+    if (!key || card[8] !== '=') return false;
+    var v = card.substr(9); var q = false, cut = v.length;
+    for (var k = 0; k < v.length; k++) { if (v[k] === "'") q = !q; else if (v[k] === '/' && !q) { cut = k; break; } }
+    v = v.substring(0, cut).trim(); var val;
+    if (v[0] === "'") val = v.slice(1, v.lastIndexOf("'")).trim();
+    else if (v === 'T') val = true; else if (v === 'F') val = false;
+    else { var n = parseFloat(v); val = isNaN(n) ? v : n; }
+    cards[key] = val;
+    return false;
+  }
   function parseHeader(buf) {
     var dec = new TextDecoder('ascii'); var cards = {}; var pos = 0, done = false;
     while (!done) {
       if (pos + 2880 > buf.byteLength) throw new Error('header ran past end of file');
       var block = dec.decode(new Uint8Array(buf, pos, 2880));
-      for (var i = 0; i < 36; i++) {
-        var card = block.substr(i * 80, 80); var key = card.substr(0, 8).trim();
-        if (key === 'END') { done = true; break; }
-        if (!key || card[8] !== '=') continue;
-        var v = card.substr(9); var q = false, cut = v.length;
-        for (var k = 0; k < v.length; k++) { if (v[k] === "'") q = !q; else if (v[k] === '/' && !q) { cut = k; break; } }
-        v = v.substring(0, cut).trim(); var val;
-        if (v[0] === "'") val = v.slice(1, v.lastIndexOf("'")).trim();
-        else if (v === 'T') val = true; else if (v === 'F') val = false;
-        else { var n = parseFloat(v); val = isNaN(n) ? v : n; }
-        cards[key] = val;
-      }
+      for (var i = 0; i < 36; i++) { if (parseCard(block.substr(i * 80, 80), cards)) { done = true; break; } }
       pos += 2880;
     }
     return { cards: cards, dataStart: pos };
   }
+  // A plate-solve beside its frame (<name>.wcs): a header-only FITS
+  // (astrometry.net, Dwarfium Scope Archive) or the same cards as plain text,
+  // not padded, one per line or not (ASTAP).
+  function parseWcsFile(buf) {
+    var text = new TextDecoder('ascii').decode(new Uint8Array(buf)); var cards = {};
+    var lines = text.indexOf('\n') >= 0 ? text.split(/\r?\n/) : text.match(/[\s\S]{1,80}/g) || [];
+    for (var i = 0; i < lines.length; i++) { if (parseCard((lines[i] + new Array(81).join(' ')).substr(0, 80), cards)) break; }
+    return cards;
+  }
+  function hasCelestialWcs(c) { return typeof c.CTYPE1 === 'string' && c.CTYPE1.indexOf('RA') === 0 && c.CRVAL1 !== undefined; }
+  function fileStem(name) { return String(name).replace(/\.[^.]*$/, '').toLowerCase(); }
   function sipSet(c, prefix) {
     var order = c[prefix + '_ORDER']; if (!order) return null; var t = [];
     for (var p = 0; p <= order; p++) for (var q = 0; q <= order - p; q++) { var v = c[prefix + '_' + p + '_' + q]; if (v) t.push([p, q, v]); }
@@ -13963,6 +13977,10 @@ function _skymapWireEvents() {
   function buildWCS(c) {
     var w = { nx: c.NAXIS1, ny: c.NAXIS2, crpix1: c.CRPIX1, crpix2: c.CRPIX2, crval1: c.CRVAL1, crval2: c.CRVAL2, A: sipSet(c, 'A'), B: sipSet(c, 'B'), AP: sipSet(c, 'AP'), BP: sipSet(c, 'BP') };
     if (c.CD1_1 !== undefined) { w.cd = [c.CD1_1, (c.CD1_2 != null ? c.CD1_2 : 0), (c.CD2_1 != null ? c.CD2_1 : 0), c.CD2_2]; }
+    else if (c.PC1_1 !== undefined && c.CDELT1 !== undefined) {
+      var d1 = c.CDELT1, d2 = (c.CDELT2 != null ? c.CDELT2 : c.CDELT1);
+      w.cd = [d1 * c.PC1_1, d1 * (c.PC1_2 != null ? c.PC1_2 : 0), d2 * (c.PC2_1 != null ? c.PC2_1 : 0), d2 * (c.PC2_2 != null ? c.PC2_2 : 1)];
+    }
     else if (c.CDELT1 !== undefined) { var rot = (c.CROTA2 != null ? c.CROTA2 : 0) * D2R, cr = Math.cos(rot), sr = Math.sin(rot); w.cd = [c.CDELT1 * cr, -c.CDELT2 * sr, c.CDELT1 * sr, c.CDELT2 * cr]; }
     else throw new Error('no CD matrix and no CDELT');
     var det = w.cd[0] * w.cd[3] - w.cd[1] * w.cd[2]; if (Math.abs(det) < 1e-18) throw new Error('degenerate CD matrix');
@@ -13980,6 +13998,36 @@ function _skymapWireEvents() {
     var cosc = Math.sin(D0) * Math.sin(D) + Math.cos(D0) * Math.cos(D) * Math.cos(dA); if (cosc <= 0.02) return null;
     var xi = Math.cos(D) * Math.sin(dA) / cosc; var eta = (Math.cos(D0) * Math.sin(D) - Math.sin(D0) * Math.cos(D) * Math.cos(dA)) / cosc;
     return [xi * R2D, eta * R2D];
+  }
+  // The common frame all the panels are drawn and reprojected in:
+  // stereographic (conformal - panel shapes kept however wide the field; a
+  // gnomonic frame stretched a 120 deg Milky Way mosaic's outer panels into
+  // long wedges). Same units as the TAN plane near the centre (degrees).
+  function skyToFrame(ra, dec, a0, d0) {
+    var A = ra * D2R, D = dec * D2R, A0 = a0 * D2R, D0 = d0 * D2R, dA = A - A0;
+    var cosc = Math.sin(D0) * Math.sin(D) + Math.cos(D0) * Math.cos(D) * Math.cos(dA); if (cosc <= -0.95) return null;
+    var k = 2 / (1 + cosc);
+    return [k * Math.cos(D) * Math.sin(dA) * R2D, k * (Math.cos(D0) * Math.sin(D) - Math.sin(D0) * Math.cos(D) * Math.cos(dA)) * R2D];
+  }
+  function frameToSky(x, y, a0, d0) {
+    var X = x * D2R, Y = y * D2R, A0 = a0 * D2R, D0 = d0 * D2R, r = Math.hypot(X, Y);
+    if (r < 1e-12) return [a0, d0];
+    var c = 2 * Math.atan(r / 2), sc = Math.sin(c), cc = Math.cos(c);
+    var dec = Math.asin(cc * Math.sin(D0) + Y * sc * Math.cos(D0) / r);
+    var ra = A0 + Math.atan2(X * sc, r * Math.cos(D0) * cc - Y * Math.sin(D0) * sc);
+    return [((ra * R2D) % 360 + 360) % 360, dec * R2D];
+  }
+  // a panel's edge in the frame, sampled (lens distortion, curved frame)
+  var OUTLINE_STEPS = 12;
+  function panelOutline(w, a0, d0) {
+    var pts = [], n = OUTLINE_STEPS, side = [[1, 1, w.nx, 1], [w.nx, 1, w.nx, w.ny], [w.nx, w.ny, 1, w.ny], [1, w.ny, 1, 1]];
+    side.forEach(function (sd) {
+      for (var k = 0; k < n; k++) {
+        var f = k / n, s = pixToSky(w, sd[0] + (sd[2] - sd[0]) * f, sd[1] + (sd[3] - sd[1]) * f);
+        pts.push(skyToFrame(s[0], s[1], a0, d0) || [0, 0]);
+      }
+    });
+    return pts;
   }
   function pixToSky(w, x, y) { var u = x - w.crpix1, v = y - w.crpix2; var U = u + sipEval(w.A, u, v), V = v + sipEval(w.B, u, v); var xi = w.cd[0] * U + w.cd[1] * V, eta = w.cd[2] * U + w.cd[3] * V; return tanToSky(xi, eta, w.crval1, w.crval2); }
   function skyToPix(w, ra, dec) {
@@ -14009,6 +14057,7 @@ function _skymapWireEvents() {
 
   /* ---------- state ---------- */
   var FILES = [], PANELS = [], GROUPS = [];
+  var WCSFILES = {};   // frame name without extension (lower case) -> its .wcs File
   function _esc(s) { return String(s).replace(/[<>&"]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]; }); }
   // DEF-117: filename → panel key (before headers are read), for the selected-
   // files list. Matches ASIAIR mosaic "<target>_<R-C>"; else strips sub index.
@@ -14053,10 +14102,16 @@ function _skymapWireEvents() {
     return groups;
   }
   function onFiles(e) {
-    FILES = Array.prototype.slice.call(e.target.files);
+    // .wcs files go with their frames (same name), the rest are frames
+    FILES = []; WCSFILES = {};
+    Array.prototype.slice.call(e.target.files).forEach(function (f) {
+      if (/\.wcs$/i.test(f.name)) WCSFILES[fileStem(f.name)] = f; else FILES.push(f);
+    });
     $i('insp-go').disabled = FILES.length === 0;
     $i('insp-stepset').classList.add('hide'); $i('insp-fpset').classList.add('hide'); $i('insp-outset').classList.add('hide');
-    iclear(); ilog(FILES.length + ' file' + (FILES.length === 1 ? '' : 's') + ' selected.');
+    var nw = Object.keys(WCSFILES).length;
+    iclear(); ilog(FILES.length + ' file' + (FILES.length === 1 ? '' : 's') + ' selected' +
+                   (nw ? ' + ' + nw + ' .wcs plate-solve' + (nw === 1 ? '' : 's') : '') + '.');
     _renderFileList();
   }
 
@@ -14069,6 +14124,16 @@ function _skymapWireEvents() {
       try {
         var head = await f.slice(0, 64 * 2880).arrayBuffer();
         var cards = parseHeader(head).cards;
+        // no plate-solve in the header (a DWARF FITS): the one in <name>.wcs, if selected
+        var side = WCSFILES[fileStem(f.name)];
+        if (side && !hasCelestialWcs(cards)) {
+          var wc = parseWcsFile(await side.arrayBuffer()), keep = { SIMPLE: 1, BITPIX: 1, NAXIS: 1, NAXIS1: 1, NAXIS2: 1, NAXIS3: 1, EXTEND: 1, BZERO: 1, BSCALE: 1 };
+          Object.keys(wc).forEach(function (k) { if (!keep[k]) cards[k] = wc[k]; });
+          ilog('  plate-solve from ' + side.name, 'ok');
+          if (wc.IMAGEW && wc.IMAGEH && (wc.IMAGEW !== cards.NAXIS1 || wc.IMAGEH !== cards.NAXIS2))
+            ilog('  .wcs is for a ' + wc.IMAGEW + '×' + wc.IMAGEH + ' image, the frame is ' + cards.NAXIS1 + '×' + cards.NAXIS2, 'hi');
+        }
+        if (!hasCelestialWcs(cards)) throw new Error('no plate-solve (WCS) in its header' + (side ? '' : ' — select its .wcs with it'));
         var w = buildWCS(cards);
         var cen = pixToSky(w, w.nx / 2 + 0.5, w.ny / 2 + 0.5);
         PANELS.push({ file: f, cards: cards, wcs: w, centre: cen });
@@ -14097,10 +14162,8 @@ function _skymapWireEvents() {
     var xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9, corners = [];
     for (i = 0; i < reps.length; i++) {
       var w = reps[i].wcs;
-      var cs = [[1, 1], [w.nx, 1], [w.nx, w.ny], [1, w.ny]].map(function (pt) {
-        var s = pixToSky(w, pt[0], pt[1]); var t = skyToTan(s[0], s[1], ra0, dec0) || [0, 0];
-        xmin = Math.min(xmin, t[0]); xmax = Math.max(xmax, t[0]); ymin = Math.min(ymin, t[1]); ymax = Math.max(ymax, t[1]); return t;
-      });
+      var cs = panelOutline(w, ra0, dec0);
+      cs.forEach(function (t) { xmin = Math.min(xmin, t[0]); xmax = Math.max(xmax, t[0]); ymin = Math.min(ymin, t[1]); ymax = Math.max(ymax, t[1]); });
       corners.push(cs);
     }
     return { ra0: ra0, dec0: dec0, xmin: xmin, xmax: xmax, ymin: ymin, ymax: ymax, corners: corners, reps: reps };
@@ -14132,7 +14195,7 @@ function _skymapWireEvents() {
     if (plan && plan.panes) {
       var _mgx = plan.fovW, _mgy = plan.fovH;
       var _allRects = plan.panes.map(function (p) {
-        var t = skyToTan(p.raH * 15, p.dec, g.ra0, g.dec0); if (!t) return null;
+        var t = skyToFrame(p.raH * 15, p.dec, g.ra0, g.dec0); if (!t) return null;
         var hw = plan.fovW / 2, hh = plan.fovH / 2; // axis-aligned in tangent plane
         return { rr: [[t[0] - hw, t[1] - hh], [t[0] + hw, t[1] - hh], [t[0] + hw, t[1] + hh], [t[0] - hw, t[1] + hh]], c: t };
       }).filter(Boolean);
@@ -14152,7 +14215,7 @@ function _skymapWireEvents() {
       planRects.forEach(function (pr) {
         ctx.beginPath(); pr.rr.forEach(function (c, k) { k ? ctx.lineTo(X(c[0]), Y(c[1])) : ctx.moveTo(X(c[0]), Y(c[1])); }); ctx.closePath(); ctx.stroke();
         // gap = no actual panel centre within half the pane size of this planned centre
-        var covered = GROUPS.some(function (grp) { var p = grp.rep; var t = skyToTan(p.centre[0], p.centre[1], g.ra0, g.dec0); return t && Math.abs(t[0] - pr.c[0]) < plan.fovW / 2 && Math.abs(t[1] - pr.c[1]) < plan.fovH / 2; });
+        var covered = GROUPS.some(function (grp) { var p = grp.rep; var t = skyToFrame(p.centre[0], p.centre[1], g.ra0, g.dec0); return t && Math.abs(t[0] - pr.c[0]) < plan.fovW / 2 && Math.abs(t[1] - pr.c[1]) < plan.fovH / 2; });
         if (!covered) { gaps++; ctx.fillStyle = 'rgba(229,96,77,0.14)'; ctx.beginPath(); pr.rr.forEach(function (c, k) { k ? ctx.lineTo(X(c[0]), Y(c[1])) : ctx.moveTo(X(c[0]), Y(c[1])); }); ctx.closePath(); ctx.fill(); }
       });
       ctx.setLineDash([]);
@@ -14163,7 +14226,7 @@ function _skymapWireEvents() {
       ctx.beginPath(); cs.forEach(function (c, k) { k ? ctx.lineTo(X(c[0]), Y(c[1])) : ctx.moveTo(X(c[0]), Y(c[1])); }); ctx.closePath();
       ctx.fillStyle = 'rgba(48,200,192,0.10)'; ctx.fill(); ctx.strokeStyle = 'rgba(48,200,192,0.80)'; ctx.stroke();
       var rep = g.reps[i], grp = GROUPS[i];
-      var t = skyToTan(rep.centre[0], rep.centre[1], g.ra0, g.dec0);
+      var t = skyToFrame(rep.centre[0], rep.centre[1], g.ra0, g.dec0);
       var name = String(rep.cards.OBJECT != null ? rep.cards.OBJECT : (i + 1)).replace(/^Pane\s*/i, '');
       if (grp && grp.panels.length > 1) name += ' \u00d7' + grp.panels.length;
       ctx.fillStyle = '#cfe6ff'; ctx.fillText(name, X(t[0]), Y(t[1]) + 5);
@@ -14203,14 +14266,14 @@ function _skymapWireEvents() {
       ilog('  binned ' + img.w + '×' + img.h + '  sky ' + stats.med.toFixed(0) + '  MAD ' + stats.mad.toFixed(1), 'ok');
       await yield_();
       var w = p.wcs, bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9, corner;
-      var cc4 = [[1, 1], [w.nx, 1], [w.nx, w.ny], [1, w.ny]];
-      for (var ci = 0; ci < 4; ci++) { corner = cc4[ci]; var sky0 = pixToSky(w, corner[0], corner[1]); var t = skyToTan(sky0[0], sky0[1], g.ra0, g.dec0); var oxx = t[0] / cd[0] + crpix[0], oyy = t[1] / cd[3] + crpix[1]; bx0 = Math.min(bx0, oxx); bx1 = Math.max(bx1, oxx); by0 = Math.min(by0, oyy); by1 = Math.max(by1, oyy); }
+      var cc4 = panelOutline(w, g.ra0, g.dec0);
+      for (var ci = 0; ci < cc4.length; ci++) { var t = cc4[ci]; var oxx = t[0] / cd[0] + crpix[0], oyy = t[1] / cd[3] + crpix[1]; bx0 = Math.min(bx0, oxx); bx1 = Math.max(bx1, oxx); by0 = Math.min(by0, oyy); by1 = Math.max(by1, oyy); }
       bx0 = Math.max(0, Math.floor(bx0)); bx1 = Math.min(W - 1, Math.ceil(bx1)); by0 = Math.max(0, Math.floor(by0)); by1 = Math.min(H - 1, Math.ceil(by1));
       var half = F / 2 + 0.5, hit = 0;
       for (var oy = by0; oy <= by1; oy++) {
         var eta = (oy - crpix[1]) * cd[3];
         for (var oxp = bx0; oxp <= bx1; oxp++) {
-          var xi = (oxp - crpix[0]) * cd[0]; var sky = tanToSky(xi, eta, g.ra0, g.dec0); var pix = skyToPix(w, sky[0], sky[1]); if (!pix) continue;
+          var xi = (oxp - crpix[0]) * cd[0]; var sky = frameToSky(xi, eta, g.ra0, g.dec0); var pix = skyToPix(w, sky[0], sky[1]); if (!pix) continue;
           var fx = (pix[0] - half) / F, fy = (pix[1] - half) / F; if (fx < 0 || fy < 0 || fx > img.w - 1 || fy > img.h - 1) continue;
           var ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy, i0 = iy * img.w + ix;
           var x1 = ix < img.w - 1 ? 1 : 0, y1 = iy < img.h - 1 ? img.w : 0;
@@ -14239,9 +14302,9 @@ function _skymapWireEvents() {
     ctx.lineWidth = Math.max(1, W / 900); ctx.strokeStyle = 'rgba(48,200,192,0.5)'; ctx.font = '600 ' + _fpx + 'px ui-monospace,monospace'; ctx.textAlign = 'center';
     for (var _li = 0; _li < reps.length; _li++) {
       var _w = reps[_li].wcs, _grp = GROUPS[_li];
-      var _cs = [[1, 1], [_w.nx, 1], [_w.nx, _w.ny], [1, _w.ny]].map(function (pt) { var s = pixToSky(_w, pt[0], pt[1]); return skyToTan(s[0], s[1], g.ra0, g.dec0) || [0, 0]; });
+      var _cs = panelOutline(_w, g.ra0, g.dec0);
       ctx.beginPath(); _cs.forEach(function (c, k) { k ? ctx.lineTo(_CX(c[0]), _CY(c[1])) : ctx.moveTo(_CX(c[0]), _CY(c[1])); }); ctx.closePath(); ctx.stroke();
-      var _t = skyToTan(reps[_li].centre[0], reps[_li].centre[1], g.ra0, g.dec0);
+      var _t = skyToFrame(reps[_li].centre[0], reps[_li].centre[1], g.ra0, g.dec0);
       var _nm = String(reps[_li].cards.OBJECT != null ? reps[_li].cards.OBJECT : (_li + 1)).replace(/^Pane\s*/i, '');
       if (_grp && _grp.panels.length > 1) _nm += ' \u00d7' + _grp.panels.length;
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(_nm, _CX(_t[0]) + 1, _CY(_t[1]) + 1 + _fpx * 0.35);
@@ -14267,7 +14330,7 @@ function _skymapWireEvents() {
 
   // DEF-119: full reset — clear selection, panes, log.
   function resetInspector() {
-    FILES = []; PANELS = []; GROUPS = [];
+    FILES = []; PANELS = []; GROUPS = []; WCSFILES = {};
     var fi = $i('insp-files'); if (fi) fi.value = '';
     var go = $i('insp-go'); if (go) go.disabled = true;
     ['insp-fpset', 'insp-stepset', 'insp-outset'].forEach(function (id) { var e = $i(id); if (e) e.classList.add('hide'); });
@@ -14328,7 +14391,7 @@ function _skymapWireEvents() {
     var quads = g.corners; if (!quads || quads.length < 4) return { regions: [], uncoveredPct: 0, reliable: false };
     var xmin = g.xmin, xmax = g.xmax, ymin = g.ymin, ymax = g.ymax;
     var sxN = 140, syN = Math.max(8, Math.round(sxN * (ymax - ymin) / (xmax - xmin)));
-    function inQuad(px, py, q) { var inside = false; for (var i = 0, j = 3; i < 4; j = i++) { var xi = q[i][0], yi = q[i][1], xj = q[j][0], yj = q[j][1]; if (((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside; } return inside; }
+    function inQuad(px, py, q) { var inside = false; for (var i = 0, j = q.length - 1; i < q.length; j = i++) { var xi = q[i][0], yi = q[i][1], xj = q[j][0], yj = q[j][1]; if (((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside; } return inside; }
     var grid = [];
     for (var iy = 0; iy < syN; iy++) { grid.push(new Uint8Array(sxN)); var py = ymin + (iy + 0.5) * (ymax - ymin) / syN; for (var ix = 0; ix < sxN; ix++) { var px = xmin + (ix + 0.5) * (xmax - xmin) / sxN; var cc = 0; for (var k = 0; k < quads.length; k++) { if (inQuad(px, py, quads[k])) { cc = 1; break; } } grid[iy][ix] = cc; } }
     var interior = [], intUnc = 0;
@@ -14355,7 +14418,7 @@ function _skymapWireEvents() {
     if (!cg.reliable) return { panes: [], center: { raH: g.ra0 / 15, dec: g.dec0 }, source: 'none', reliable: false, fovW: fovW, fovH: fovH, uncoveredPct: 0, regions: [] };
     var pas = reps.map(function (rp) { var w = rp.wcs, pa = Math.atan2(w.cd[2], w.cd[0]) * R2D; return pa - 180 * Math.round(pa / 180); }).sort(function (a, b) { return a - b; });
     var base = ((pas[pas.length >> 1] % 360) + 360) % 360;
-    var panes = cg.regions.map(function (rg, i) { var s = tanToSky(rg.cx, rg.cy, g.ra0, g.dec0); return { i: i + 1, raH: s[0] / 15, dec: s[1], angle: Math.round(base * 10) / 10 }; });
+    var panes = cg.regions.map(function (rg, i) { var s = frameToSky(rg.cx, rg.cy, g.ra0, g.dec0); return { i: i + 1, raH: s[0] / 15, dec: s[1], angle: Math.round(base * 10) / 10 }; });
     return { panes: panes, center: { raH: g.ra0 / 15, dec: g.dec0 }, source: 'geometric', reliable: true, fovW: fovW, fovH: fovH, uncoveredPct: cg.uncoveredPct, regions: cg.regions };
   }
   function _drawMissing(miss, X, Y, g) {

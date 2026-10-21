@@ -7,6 +7,9 @@
     2026). A frame takes it from its .wcs file selected with it - same name (MW_Tile_R1C1.fits +
     MW_Tile_R1C1.wcs), as Dwarfium Scope Archive's Milky Way tab, ASTAP or astrometry.net write it: a header-only
     FITS or plain text cards (ASTAP), the CD matrix or PC + CDELT. A frame without either says to select its .wcs.
+    Its footprints and composite are now drawn in a stereographic frame, each panel's edge sampled through its
+    plate-solve (lens distortion): the gnomonic frame drew straight-edged panels that a wide field (a 120 deg Milky
+    Way mosaic) stretched into long wedges at its edges - the panels now keep their real shape.
     ### Milky Way planner: foreground pass
     The foreground (trees, roof) is attached to the ground, the sky turns 15 deg an hour: over a 2 h mosaic each tile
     shows it elsewhere against the stars. New "Foreground pass" (at the start or at the end of the series, 5 images per

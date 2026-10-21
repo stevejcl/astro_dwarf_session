@@ -13999,6 +13999,36 @@ function _skymapWireEvents() {
     var xi = Math.cos(D) * Math.sin(dA) / cosc; var eta = (Math.cos(D0) * Math.sin(D) - Math.sin(D0) * Math.cos(D) * Math.cos(dA)) / cosc;
     return [xi * R2D, eta * R2D];
   }
+  // The common frame all the panels are drawn and reprojected in:
+  // stereographic (conformal - panel shapes kept however wide the field; a
+  // gnomonic frame stretched a 120 deg Milky Way mosaic's outer panels into
+  // long wedges). Same units as the TAN plane near the centre (degrees).
+  function skyToFrame(ra, dec, a0, d0) {
+    var A = ra * D2R, D = dec * D2R, A0 = a0 * D2R, D0 = d0 * D2R, dA = A - A0;
+    var cosc = Math.sin(D0) * Math.sin(D) + Math.cos(D0) * Math.cos(D) * Math.cos(dA); if (cosc <= -0.95) return null;
+    var k = 2 / (1 + cosc);
+    return [k * Math.cos(D) * Math.sin(dA) * R2D, k * (Math.cos(D0) * Math.sin(D) - Math.sin(D0) * Math.cos(D) * Math.cos(dA)) * R2D];
+  }
+  function frameToSky(x, y, a0, d0) {
+    var X = x * D2R, Y = y * D2R, A0 = a0 * D2R, D0 = d0 * D2R, r = Math.hypot(X, Y);
+    if (r < 1e-12) return [a0, d0];
+    var c = 2 * Math.atan(r / 2), sc = Math.sin(c), cc = Math.cos(c);
+    var dec = Math.asin(cc * Math.sin(D0) + Y * sc * Math.cos(D0) / r);
+    var ra = A0 + Math.atan2(X * sc, r * Math.cos(D0) * cc - Y * Math.sin(D0) * sc);
+    return [((ra * R2D) % 360 + 360) % 360, dec * R2D];
+  }
+  // a panel's edge in the frame, sampled (lens distortion, curved frame)
+  var OUTLINE_STEPS = 12;
+  function panelOutline(w, a0, d0) {
+    var pts = [], n = OUTLINE_STEPS, side = [[1, 1, w.nx, 1], [w.nx, 1, w.nx, w.ny], [w.nx, w.ny, 1, w.ny], [1, w.ny, 1, 1]];
+    side.forEach(function (sd) {
+      for (var k = 0; k < n; k++) {
+        var f = k / n, s = pixToSky(w, sd[0] + (sd[2] - sd[0]) * f, sd[1] + (sd[3] - sd[1]) * f);
+        pts.push(skyToFrame(s[0], s[1], a0, d0) || [0, 0]);
+      }
+    });
+    return pts;
+  }
   function pixToSky(w, x, y) { var u = x - w.crpix1, v = y - w.crpix2; var U = u + sipEval(w.A, u, v), V = v + sipEval(w.B, u, v); var xi = w.cd[0] * U + w.cd[1] * V, eta = w.cd[2] * U + w.cd[3] * V; return tanToSky(xi, eta, w.crval1, w.crval2); }
   function skyToPix(w, ra, dec) {
     var t = skyToTan(ra, dec, w.crval1, w.crval2); if (!t) return null;
@@ -14132,10 +14162,8 @@ function _skymapWireEvents() {
     var xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9, corners = [];
     for (i = 0; i < reps.length; i++) {
       var w = reps[i].wcs;
-      var cs = [[1, 1], [w.nx, 1], [w.nx, w.ny], [1, w.ny]].map(function (pt) {
-        var s = pixToSky(w, pt[0], pt[1]); var t = skyToTan(s[0], s[1], ra0, dec0) || [0, 0];
-        xmin = Math.min(xmin, t[0]); xmax = Math.max(xmax, t[0]); ymin = Math.min(ymin, t[1]); ymax = Math.max(ymax, t[1]); return t;
-      });
+      var cs = panelOutline(w, ra0, dec0);
+      cs.forEach(function (t) { xmin = Math.min(xmin, t[0]); xmax = Math.max(xmax, t[0]); ymin = Math.min(ymin, t[1]); ymax = Math.max(ymax, t[1]); });
       corners.push(cs);
     }
     return { ra0: ra0, dec0: dec0, xmin: xmin, xmax: xmax, ymin: ymin, ymax: ymax, corners: corners, reps: reps };
@@ -14167,7 +14195,7 @@ function _skymapWireEvents() {
     if (plan && plan.panes) {
       var _mgx = plan.fovW, _mgy = plan.fovH;
       var _allRects = plan.panes.map(function (p) {
-        var t = skyToTan(p.raH * 15, p.dec, g.ra0, g.dec0); if (!t) return null;
+        var t = skyToFrame(p.raH * 15, p.dec, g.ra0, g.dec0); if (!t) return null;
         var hw = plan.fovW / 2, hh = plan.fovH / 2; // axis-aligned in tangent plane
         return { rr: [[t[0] - hw, t[1] - hh], [t[0] + hw, t[1] - hh], [t[0] + hw, t[1] + hh], [t[0] - hw, t[1] + hh]], c: t };
       }).filter(Boolean);
@@ -14187,7 +14215,7 @@ function _skymapWireEvents() {
       planRects.forEach(function (pr) {
         ctx.beginPath(); pr.rr.forEach(function (c, k) { k ? ctx.lineTo(X(c[0]), Y(c[1])) : ctx.moveTo(X(c[0]), Y(c[1])); }); ctx.closePath(); ctx.stroke();
         // gap = no actual panel centre within half the pane size of this planned centre
-        var covered = GROUPS.some(function (grp) { var p = grp.rep; var t = skyToTan(p.centre[0], p.centre[1], g.ra0, g.dec0); return t && Math.abs(t[0] - pr.c[0]) < plan.fovW / 2 && Math.abs(t[1] - pr.c[1]) < plan.fovH / 2; });
+        var covered = GROUPS.some(function (grp) { var p = grp.rep; var t = skyToFrame(p.centre[0], p.centre[1], g.ra0, g.dec0); return t && Math.abs(t[0] - pr.c[0]) < plan.fovW / 2 && Math.abs(t[1] - pr.c[1]) < plan.fovH / 2; });
         if (!covered) { gaps++; ctx.fillStyle = 'rgba(229,96,77,0.14)'; ctx.beginPath(); pr.rr.forEach(function (c, k) { k ? ctx.lineTo(X(c[0]), Y(c[1])) : ctx.moveTo(X(c[0]), Y(c[1])); }); ctx.closePath(); ctx.fill(); }
       });
       ctx.setLineDash([]);
@@ -14198,7 +14226,7 @@ function _skymapWireEvents() {
       ctx.beginPath(); cs.forEach(function (c, k) { k ? ctx.lineTo(X(c[0]), Y(c[1])) : ctx.moveTo(X(c[0]), Y(c[1])); }); ctx.closePath();
       ctx.fillStyle = 'rgba(48,200,192,0.10)'; ctx.fill(); ctx.strokeStyle = 'rgba(48,200,192,0.80)'; ctx.stroke();
       var rep = g.reps[i], grp = GROUPS[i];
-      var t = skyToTan(rep.centre[0], rep.centre[1], g.ra0, g.dec0);
+      var t = skyToFrame(rep.centre[0], rep.centre[1], g.ra0, g.dec0);
       var name = String(rep.cards.OBJECT != null ? rep.cards.OBJECT : (i + 1)).replace(/^Pane\s*/i, '');
       if (grp && grp.panels.length > 1) name += ' \u00d7' + grp.panels.length;
       ctx.fillStyle = '#cfe6ff'; ctx.fillText(name, X(t[0]), Y(t[1]) + 5);
@@ -14238,14 +14266,14 @@ function _skymapWireEvents() {
       ilog('  binned ' + img.w + '×' + img.h + '  sky ' + stats.med.toFixed(0) + '  MAD ' + stats.mad.toFixed(1), 'ok');
       await yield_();
       var w = p.wcs, bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9, corner;
-      var cc4 = [[1, 1], [w.nx, 1], [w.nx, w.ny], [1, w.ny]];
-      for (var ci = 0; ci < 4; ci++) { corner = cc4[ci]; var sky0 = pixToSky(w, corner[0], corner[1]); var t = skyToTan(sky0[0], sky0[1], g.ra0, g.dec0); var oxx = t[0] / cd[0] + crpix[0], oyy = t[1] / cd[3] + crpix[1]; bx0 = Math.min(bx0, oxx); bx1 = Math.max(bx1, oxx); by0 = Math.min(by0, oyy); by1 = Math.max(by1, oyy); }
+      var cc4 = panelOutline(w, g.ra0, g.dec0);
+      for (var ci = 0; ci < cc4.length; ci++) { var t = cc4[ci]; var oxx = t[0] / cd[0] + crpix[0], oyy = t[1] / cd[3] + crpix[1]; bx0 = Math.min(bx0, oxx); bx1 = Math.max(bx1, oxx); by0 = Math.min(by0, oyy); by1 = Math.max(by1, oyy); }
       bx0 = Math.max(0, Math.floor(bx0)); bx1 = Math.min(W - 1, Math.ceil(bx1)); by0 = Math.max(0, Math.floor(by0)); by1 = Math.min(H - 1, Math.ceil(by1));
       var half = F / 2 + 0.5, hit = 0;
       for (var oy = by0; oy <= by1; oy++) {
         var eta = (oy - crpix[1]) * cd[3];
         for (var oxp = bx0; oxp <= bx1; oxp++) {
-          var xi = (oxp - crpix[0]) * cd[0]; var sky = tanToSky(xi, eta, g.ra0, g.dec0); var pix = skyToPix(w, sky[0], sky[1]); if (!pix) continue;
+          var xi = (oxp - crpix[0]) * cd[0]; var sky = frameToSky(xi, eta, g.ra0, g.dec0); var pix = skyToPix(w, sky[0], sky[1]); if (!pix) continue;
           var fx = (pix[0] - half) / F, fy = (pix[1] - half) / F; if (fx < 0 || fy < 0 || fx > img.w - 1 || fy > img.h - 1) continue;
           var ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy, i0 = iy * img.w + ix;
           var x1 = ix < img.w - 1 ? 1 : 0, y1 = iy < img.h - 1 ? img.w : 0;
@@ -14274,9 +14302,9 @@ function _skymapWireEvents() {
     ctx.lineWidth = Math.max(1, W / 900); ctx.strokeStyle = 'rgba(48,200,192,0.5)'; ctx.font = '600 ' + _fpx + 'px ui-monospace,monospace'; ctx.textAlign = 'center';
     for (var _li = 0; _li < reps.length; _li++) {
       var _w = reps[_li].wcs, _grp = GROUPS[_li];
-      var _cs = [[1, 1], [_w.nx, 1], [_w.nx, _w.ny], [1, _w.ny]].map(function (pt) { var s = pixToSky(_w, pt[0], pt[1]); return skyToTan(s[0], s[1], g.ra0, g.dec0) || [0, 0]; });
+      var _cs = panelOutline(_w, g.ra0, g.dec0);
       ctx.beginPath(); _cs.forEach(function (c, k) { k ? ctx.lineTo(_CX(c[0]), _CY(c[1])) : ctx.moveTo(_CX(c[0]), _CY(c[1])); }); ctx.closePath(); ctx.stroke();
-      var _t = skyToTan(reps[_li].centre[0], reps[_li].centre[1], g.ra0, g.dec0);
+      var _t = skyToFrame(reps[_li].centre[0], reps[_li].centre[1], g.ra0, g.dec0);
       var _nm = String(reps[_li].cards.OBJECT != null ? reps[_li].cards.OBJECT : (_li + 1)).replace(/^Pane\s*/i, '');
       if (_grp && _grp.panels.length > 1) _nm += ' \u00d7' + _grp.panels.length;
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(_nm, _CX(_t[0]) + 1, _CY(_t[1]) + 1 + _fpx * 0.35);
@@ -14363,7 +14391,7 @@ function _skymapWireEvents() {
     var quads = g.corners; if (!quads || quads.length < 4) return { regions: [], uncoveredPct: 0, reliable: false };
     var xmin = g.xmin, xmax = g.xmax, ymin = g.ymin, ymax = g.ymax;
     var sxN = 140, syN = Math.max(8, Math.round(sxN * (ymax - ymin) / (xmax - xmin)));
-    function inQuad(px, py, q) { var inside = false; for (var i = 0, j = 3; i < 4; j = i++) { var xi = q[i][0], yi = q[i][1], xj = q[j][0], yj = q[j][1]; if (((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside; } return inside; }
+    function inQuad(px, py, q) { var inside = false; for (var i = 0, j = q.length - 1; i < q.length; j = i++) { var xi = q[i][0], yi = q[i][1], xj = q[j][0], yj = q[j][1]; if (((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside; } return inside; }
     var grid = [];
     for (var iy = 0; iy < syN; iy++) { grid.push(new Uint8Array(sxN)); var py = ymin + (iy + 0.5) * (ymax - ymin) / syN; for (var ix = 0; ix < sxN; ix++) { var px = xmin + (ix + 0.5) * (xmax - xmin) / sxN; var cc = 0; for (var k = 0; k < quads.length; k++) { if (inQuad(px, py, quads[k])) { cc = 1; break; } } grid[iy][ix] = cc; } }
     var interior = [], intUnc = 0;
@@ -14390,7 +14418,7 @@ function _skymapWireEvents() {
     if (!cg.reliable) return { panes: [], center: { raH: g.ra0 / 15, dec: g.dec0 }, source: 'none', reliable: false, fovW: fovW, fovH: fovH, uncoveredPct: 0, regions: [] };
     var pas = reps.map(function (rp) { var w = rp.wcs, pa = Math.atan2(w.cd[2], w.cd[0]) * R2D; return pa - 180 * Math.round(pa / 180); }).sort(function (a, b) { return a - b; });
     var base = ((pas[pas.length >> 1] % 360) + 360) % 360;
-    var panes = cg.regions.map(function (rg, i) { var s = tanToSky(rg.cx, rg.cy, g.ra0, g.dec0); return { i: i + 1, raH: s[0] / 15, dec: s[1], angle: Math.round(base * 10) / 10 }; });
+    var panes = cg.regions.map(function (rg, i) { var s = frameToSky(rg.cx, rg.cy, g.ra0, g.dec0); return { i: i + 1, raH: s[0] / 15, dec: s[1], angle: Math.round(base * 10) / 10 }; });
     return { panes: panes, center: { raH: g.ra0 / 15, dec: g.dec0 }, source: 'geometric', reliable: true, fovW: fovW, fovH: fovH, uncoveredPct: cg.uncoveredPct, regions: cg.regions };
   }
   function _drawMissing(miss, X, Y, g) {

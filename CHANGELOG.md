@@ -104,12 +104,15 @@
     it is set to the start of the night - the Sun below the chosen darkness limit - or to now when it already is,
     unless less than an hour of that night is left (then the next night's). Changing the darkness limit moves it
     too; a start time typed by hand is kept.
+    The French planner's "Ou choisir un Site enregistré" read "enregistr\u00e9" (and the empty Site choice "\u2014"
+    on both): escapes written in the page's HTML, where they are not decoded.
     ### Executable: "No module named 'qrcode'" (QR codes of Watch mode / wake-up)
     The app ran from Python but the rebuilt executable failed: nicegui-pack calls, on Windows, the first
     "pyinstaller" on the PATH, possibly another Python install's, which leaves out silently a module it can't
     find. buildAstroDwarfUI.py now runs PyInstaller with its own Python (nicegui-pack's arguments), first
     checks that every requirement and PyInstaller are installed there (else stops with the pip command), and
     names qrcode / qrcode.image.svg as hidden imports (imported inside a function).
+    On macOS it also checks Pillow (PyInstaller turns the .ico into an .icns with it - the CI workflow installs it).
     ### Autofocus refused after the Dwarf restarted (CAMERA_TELE_CLOSED)
     The Dwarf powered off and back on (user log, Mini): this app reconnected on its own, but only the first
     connection since its start entered astro mode - the camera stayed closed until a manual Reconnect. An automatic

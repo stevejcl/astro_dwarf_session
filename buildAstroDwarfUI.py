@@ -135,10 +135,15 @@ for line in Path("requirements.txt").read_text(encoding="utf-8").splitlines():
         missing.append(name)
 if importlib.util.find_spec("PyInstaller") is None:
     missing.append("pyinstaller")
+# macOS: PyInstaller turns the .ico into an .icns with Pillow (the CI
+# workflow installs it for that, build.yml - a build by hand needs it too)
+if sys.platform == "darwin" and Path(ICON_NAME).exists() and importlib.util.find_spec("PIL") is None:
+    missing.append("Pillow")
 if missing:
+    extras = [m for m in missing if m in ("pyinstaller", "Pillow")]   # not in requirements.txt
     raise SystemExit(
         f"Not installed for {sys.executable}: {', '.join(missing)}\n"
-        f"Run: \"{sys.executable}\" -m pip install -r requirements.txt pyinstaller"
+        f"Run: \"{sys.executable}\" -m pip install -r requirements.txt {' '.join(extras)}".rstrip()
     )
 
 import nicegui  # noqa: E402 - checked just above

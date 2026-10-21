@@ -112,6 +112,7 @@
     find. buildAstroDwarfUI.py now runs PyInstaller with its own Python (nicegui-pack's arguments), first
     checks that every requirement and PyInstaller are installed there (else stops with the pip command), and
     names qrcode / qrcode.image.svg as hidden imports (imported inside a function).
+    On macOS it also checks Pillow (PyInstaller turns the .ico into an .icns with it - the CI workflow installs it).
     ### Autofocus refused after the Dwarf restarted (CAMERA_TELE_CLOSED)
     The Dwarf powered off and back on (user log, Mini): this app reconnected on its own, but only the first
     connection since its start entered astro mode - the camera stayed closed until a manual Reconnect. An automatic

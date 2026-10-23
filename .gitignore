@@ -19,4 +19,3 @@ config.lock
 /assets/catalog_add_on.json
 version.py
 /end_of_night.json
-site/

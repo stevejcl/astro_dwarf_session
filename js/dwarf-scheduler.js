@@ -120,6 +120,11 @@ function _dwarfTaskFromPlan(p) {
 
   return {
     name: p.name || 'Target Unknown',
+    // The plan this task comes from: the panel's checkbox rows are matched
+    // back to their plan by it. Carried on the task itself because the
+    // tasks are re-sorted (_dwarfSequenceTasks) and those without RA / Dec
+    // dropped - matching them by position ticked the wrong targets.
+    planId: p.id,
     ra: ra,
     dec: dec,
     // startTime/endTime are NOT set here anymore - see _dwarfSequenceTasks
@@ -289,15 +294,17 @@ function _dwarfStalenessWarning(sched) {
   return null;
 }
 
-function _dwarfSummaryHtml(sched, selectedIds) {
+function _dwarfSummaryHtml(sched, leftOut) {
+  // leftOut: tasks of the unticked targets, shown greyed after the
+  // scheduled ones (no slot) so they can be ticked again.
   const hhmm = ms => ms ? new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—';
-  const rows = sched.shooting_tasks.map(t =>
-    '<tr><td><input type="checkbox" class="dwarf-task-checkbox" data-plan-id="' + escapeHtml(t.planId) + '"' +
-      (selectedIds.has(t.planId) ? ' checked' : '') + '></td>' +
-    '<td>' + escapeHtml(t.name) + '</td><td>' + hhmm(t.startTime) + '–' + hhmm(t.endTime) +
+  const row = (t, on) =>
+    '<tr' + (on ? '' : ' style="opacity:.45"') + '><td><input type="checkbox" class="dwarf-task-checkbox" data-plan-id="' +
+      escapeHtml(t.planId) + '"' + (on ? ' checked' : '') + '></td>' +
+    '<td>' + escapeHtml(t.name) + '</td><td>' + (on ? hhmm(t.startTime) + '–' + hhmm(t.endTime) : 'left out') +
     '</td><td>' + escapeHtml(t.shutterName || '—') + 's @ ' + escapeHtml(t.gainName || '—') +
-    '</td><td>' + escapeHtml(t.filterModeName || '—') + '</td></tr>'
-  ).join('');
+    '</td><td>' + escapeHtml(t.filterModeName || '—') + '</td></tr>';
+  const rows = sched.shooting_tasks.map(t => row(t, true)).join('') + leftOut.map(t => row(t, false)).join('');
   return '<table class="dwarf-sched-table"><thead><tr><th></th><th>Target</th><th>Window</th><th>Exp/Gain</th><th>Filter</th></tr></thead>' +
          '<tbody>' + rows + '</tbody></table>';
 }
@@ -368,23 +375,21 @@ export function openDwarfProgramPanel(plans, meta) {
 
   function rebuild() {
     const chosen = valid.filter(p => selectedIds.has(p.id));
-    sched = buildDwarfShootingSchedule(chosen, meta);
-    // planId threaded through here (not inside buildDwarfShootingSchedule
-    // itself) so the checkbox row can be matched back to a plan without
-    // changing the wire schema the device actually receives.
-    sched.shooting_tasks.forEach((t, i) => { t.planId = chosen[i] && chosen[i].id; });
+    sched = buildDwarfShootingSchedule(chosen, meta);   // each task carries its planId
     json = JSON.stringify(sched, null, 2);
     stalenessWarning = sched.shooting_tasks.length ? _dwarfStalenessWarning(sched) : null;
 
     const n = sched.shooting_tasks.length;
+    const leftOut = valid.filter(p => !selectedIds.has(p.id)).map(_dwarfTaskFromPlan)
+      .filter(t => t.ra != null && t.dec != null);
     dynamicRegion.innerHTML =
       '<div style="font-size:12px;color:var(--text2,#7a9bc5);margin-bottom:12px">' +
         (n || 'No') + ' target(s) selected, ' + escapeHtml(sched.scheduleName) + '. This builds a native ' +
         'shooting-schedule payload (CMD_SYNC_SHOOTING_SCHEDULE) — see the caveats in the console/source ' +
-        'before trusting it unattended. Untick any target below to leave it out — the rest re-flow to fill its slot.</div>' +
+        'before trusting it unattended. Untick any target below to leave it out — the rest re-flow to fill its slot; tick it again to put it back.</div>' +
       (stalenessWarning ? '<div style="background:rgba(180,60,30,.18);border:1px solid rgba(220,100,60,.5);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:12px;color:#ffb08a">' + escapeHtml(stalenessWarning) + '</div>' : '') +
-      (n ? _dwarfSummaryHtml(sched, selectedIds)
-         : '<div style="font-size:12px;color:var(--text3,#4a6a95);padding:8px 0">Nothing selected — tick at least one target above.</div>');
+      (n ? '' : '<div style="font-size:12px;color:var(--text3,#4a6a95);padding:8px 0">Nothing selected — tick at least one target below.</div>') +
+      (n || leftOut.length ? _dwarfSummaryHtml(sched, leftOut) : '');
   }
 
   // Event delegation on the dynamic region: rows are replaced wholesale on

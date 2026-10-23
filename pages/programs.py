@@ -19,7 +19,7 @@ from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 
-from components import scheduler_loop, scheduler_runner, task_check_cache
+from components import eclipsing_binaries, scheduler_loop, scheduler_runner, task_check_cache
 from components.i18n import get_language, t
 from components.json_files import read_json, write_json_atomic
 from components.end_of_night_card import build_end_of_night_card
@@ -94,7 +94,7 @@ def build_programs_page() -> None:
         with ui.column().classes(
             "w-full max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-[900px] mx-auto gap-3 p-4"
         ):
-            with ui.row().classes("items-center gap-2"):
+            with ui.row().classes("w-full items-center gap-2"):
                 ui.button(
                     icon="arrow_back",
                     on_click=lambda: ui.navigate.to(f"/session/{dwarf_uid}"),
@@ -126,6 +126,34 @@ def build_programs_page() -> None:
                     icon="event_note",
                     on_click=lambda: ui.navigate.to(f"/Program-{get_language()}/{dwarf_uid}", new_tab=True),
                 ).props("flat round").tooltip(t("program_page_link"))
+                ui.space()
+                # Variable stars, optional (user-requested Oct 2026): turns
+                # on the editor's "Eclipsing binary minimum" button and
+                # loads the stars' elements - kept for this run of the app
+                # (components/eclipsing_binaries.py's feature).
+                variable_button = ui.button(icon="contrast").props("flat round")
+                with variable_button:
+                    variable_tip = ui.tooltip("")
+
+                def _show_variable_state() -> None:
+                    on = eclipsing_binaries.feature.enabled
+                    variable_button.props(f"color={'primary' if on else 'grey'}")
+                    variable_tip.set_text(t("eb_feature_on" if on else "eb_feature_off"))
+
+                async def _toggle_variable_stars() -> None:
+                    feature = eclipsing_binaries.feature
+                    feature.enabled = not feature.enabled
+                    _show_variable_state()
+                    if not feature.enabled:
+                        ui.notify(t("eb_feature_disabled"))
+                        return
+                    ui.notify(t("eb_feature_enabled"))
+                    failed = await run.io_bound(eclipsing_binaries.fetch_missing_elements)
+                    if failed:
+                        ui.notify(t("eb_fetch_failed", names=", ".join(failed)), type="warning", multi_line=True)
+
+                variable_button.on_click(_toggle_variable_stars)
+                _show_variable_state()
             # In native mode (ui.run(native=True)) there is no address
             # bar at all - the URL's dwarf_uid, which is the ONLY thing
             # that determines which device Scripts/Results/relaunch

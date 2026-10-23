@@ -72,6 +72,18 @@ WINDOW_MARGIN_H = 0.5
 _lock = threading.Lock()
 
 
+class _Feature:
+    """On / off for this run of the app only (user-requested Oct 2026:
+    optional, a button at the top right of the Programs page, the choice
+    kept while the app runs): off, the editor shows no eclipsing binary
+    button and nothing is read or fetched."""
+    enabled = False
+
+
+# The editor's button binds its visibility to feature.enabled
+feature = _Feature()
+
+
 # ── stars file ────────────────────────────────────────────────────────────
 def _read_file() -> dict:
     if not STARS_FILE.exists():
@@ -216,6 +228,21 @@ def update_from_vsx(star: dict) -> dict:
     merged["name"] = star["name"]
     save_star(merged)
     return merged
+
+
+def fetch_missing_elements() -> list[str]:
+    """The elements of the stars that have none yet, from VSX (network):
+    the names that could not be fetched. Stops at the first network
+    failure (VSX not reachable: no point trying the others)."""
+    todo = [s for s in load_stars() if not has_elements(s)]
+    for i, star in enumerate(todo):
+        try:
+            update_from_vsx(star)
+        except requests.RequestException:
+            return [s["name"] for s in todo[i:]]
+        except ValueError:
+            pass
+    return [s["name"] for s in load_stars() if not has_elements(s)]
 
 
 # ── predictions ───────────────────────────────────────────────────────────

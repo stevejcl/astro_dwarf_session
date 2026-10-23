@@ -4,7 +4,9 @@
   ### Add
     ### Program editor: eclipsing binary minima (variable stars)
     Dwarfs with nothing to do can time variable stars (user-requested Oct 2026: plan and capture here, measure in Siril
-    or AstroImageJ). New "Eclipsing binary minimum" button next to "Pick from catalog": the next minima (primary,
+    or AstroImageJ). Optional: a button at the top right of the Programs page turns it on for this run of the app (off
+    at each start) and loads the stars' elements. Then an "Eclipsing binary minimum" button next to "Pick from
+    catalog": the next minima (primary,
     optionally secondary) of eclipsing binaries over the coming nights, seen from the Dwarf's site - time, altitude,
     the window around the minimum (half the eclipse + 30 min each side when its duration is known, else +/- 1.5 h)
     and whether all of it is dark and high enough. A click sets the target, RA/Dec, a description with the predicted

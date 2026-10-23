@@ -42,7 +42,7 @@ from components.dso_catalog import (
     parse_ra_hours,
     short_name,
 )
-from components.eclipsing_binaries import describe as describe_minimum
+from components.eclipsing_binaries import describe as describe_minimum, feature as eclipsing_feature
 from components.eclipsing_planner import open_minima_dialog
 from components.stellarium import get_target_from_stellarium
 from components.target_planner import build_altitude_panel, earliest_start, night_of, open_catalog_dialog
@@ -321,13 +321,14 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                         session, _apply_catalog_entry, _current_night, tz=site_tz(session.config)
                     ),
                 ).props("flat dense")
+                # Shown once turned on from the Programs page's top-right button
                 ui.button(
                     t("prog_pick_eclipse"),
                     icon="contrast",
                     on_click=lambda: open_minima_dialog(
                         session, _apply_minimum, _current_night, tz=site_tz(session.config)
                     ),
-                ).props("flat dense")
+                ).props("flat dense").bind_visibility_from(eclipsing_feature, "enabled")
 
             # Altitude over the night + best slot (user-requested Oct
             # 2026: "voir sa hauteur dans le ciel pour choisir le

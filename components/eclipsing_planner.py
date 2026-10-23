@@ -24,6 +24,21 @@ def _mag_range(star: dict) -> str:
         return ""
 
 
+def _why_missing(star: dict) -> str:
+    """Why a star has no elements: its last VSX fetch's error, or what VSX
+    has no value for."""
+    error = eb.progress.errors.get(star["name"], "")
+    if error == "not found":
+        return t("eb_status_not_found")
+    if error.startswith("network"):
+        return t("eb_status_network", detail=error.partition(":")[2].strip()[:80])
+    missing = star.get("vsx_error") or ""
+    if missing:
+        names = ", ".join(t(f"eb_el_{field}") for field in missing.split(","))
+        return t("eb_status_missing", what=names)
+    return t("eb_status_not_fetched")
+
+
 def open_minima_dialog(
     session,
     on_pick: Callable[[eb.Minimum], None],
@@ -35,7 +50,7 @@ def open_minima_dialog(
     timezone of get_night()'s date and of every time shown (None = this
     PC's)."""
     location = site_location(session)
-    state: dict = {"stars": eb.load_stars(), "minima": [], "busy": False}
+    state: dict = {"stars": eb.load_stars(), "minima": []}
 
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl"):
         ui.label(t("eb_title")).classes("text-lg")
@@ -116,7 +131,7 @@ def open_minima_dialog(
             "mag": _mag_range(s),
             "period": f"{float(s['period_d']):.7f}" if eb.has_elements(s) else "",
             "epoch": f"{float(s['epoch_hjd']):.4f}" if eb.has_elements(s) else "",
-            "source": s.get("source") or "",
+            "source": s.get("source") or "" if eb.has_elements(s) else _why_missing(s),
         } for s in stars]
         star_table.update()
 
@@ -156,33 +171,29 @@ def open_minima_dialog(
         message.set_text(t("eb_found", count=len(minima), stars=with_elements, date=f"{night:%Y-%m-%d}", tz=tz_text))
 
     async def _update(only_missing: bool) -> None:
-        if state["busy"]:
-            return
-        todo = [s for s in state["stars"] if not (only_missing and eb.has_elements(s))]
-        if not todo:
-            return
-        state["busy"] = True
-        update_button.disable()
-        failed: list[str] = []
-        try:
-            for i, star in enumerate(todo, 1):
-                message.set_text(t("eb_fetching", name=star["name"], i=i, n=len(todo)))
-                try:
-                    await run.io_bound(eb.update_from_vsx, star)
-                except requests.RequestException:
-                    failed.append(star["name"])
-                    if i == 1:   # VSX not reachable: no point trying the others
-                        failed.extend(s["name"] for s in todo[1:])
-                        break
-                except ValueError:
-                    failed.append(star["name"])
-        finally:
-            state["busy"] = False
+        """A VSX update - or waits for the one already running (started by
+        the Programs page's button). _show_progress() follows it."""
+        if not only_missing or any(not eb.has_elements(s) for s in state["stars"]) or eb.progress.running:
+            _show_progress()
+            failed = await run.io_bound(eb.fetch_elements, only_missing)
+            _show_progress()
+            if failed:
+                ui.notify(t("eb_fetch_failed", names=", ".join(failed)), type="warning", multi_line=True)
+
+    def _show_progress() -> None:
+        """The update's progress on its button (greyed meanwhile), and the
+        minima of the stars fetched so far."""
+        running = eb.progress.running
+        if running:
+            update_button.disable()
+            update_button.set_text(t("eb_updating", done=eb.progress.done, total=eb.progress.total))
+        else:
             update_button.enable()
-        state["stars"] = eb.load_stars()
-        _refresh_minima()
-        if failed:
-            ui.notify(t("eb_fetch_failed", names=", ".join(failed)), type="warning", multi_line=True)
+            update_button.set_text(t("eb_update_vsx"))
+        if eb.progress.done != state.get("shown_done") or running != state.get("shown_running"):
+            state["shown_done"], state["shown_running"] = eb.progress.done, running
+            state["stars"] = eb.load_stars()
+            _refresh_minima()
 
     def _number(text) -> float | None:
         try:
@@ -238,7 +249,8 @@ def open_minima_dialog(
 
     _refresh_minima()
     dialog.open()
-    # The seed stars' elements, fetched from VSX the first time
-    if any(not eb.has_elements(s) for s in state["stars"]):
-        with dialog:
-            ui.timer(0.1, lambda: _update(only_missing=True), once=True)
+    with dialog:
+        # The seed stars' elements, fetched from VSX the first time
+        ui.timer(0.1, lambda: _update(only_missing=True), once=True)
+        progress_timer = ui.timer(1.0, _show_progress)
+    dialog.on_value_change(lambda e: None if e.value else progress_timer.cancel())

@@ -178,6 +178,8 @@
     The panel's rows were matched to their targets by position, while the tasks are sorted (the target that sets
     first goes first) and those without RA / Dec dropped: a row could show M 33 and untick M 31 (user-found Oct
     2026). Each task now carries its target's id (planId, already sent with the schedule).
+    An unticked target also vanished from the list, so it couldn't be ticked again (nor anything, once all were
+    unticked): it stays, greyed, "left out" - tick it again to put it back.
 
 ## [3.2.5] - 2026-10-16
   ### BugFix

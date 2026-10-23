@@ -42,6 +42,8 @@ from components.dso_catalog import (
     parse_ra_hours,
     short_name,
 )
+from components.eclipsing_binaries import describe as describe_minimum, feature as eclipsing_feature
+from components.eclipsing_planner import open_minima_dialog
 from components.stellarium import get_target_from_stellarium
 from components.target_planner import build_altitude_panel, earliest_start, night_of, open_catalog_dialog
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
@@ -288,6 +290,26 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 stellarium_status.classes(replace="text-xs text-green-700")
                 _refresh_altitude(open_panel=True)
 
+            # An eclipsing binary's next minimum (user-requested Oct 2026,
+            # components/eclipsing_binaries.py): the star, and the window
+            # around its minimum as start / end time - measured afterwards
+            # in Siril or AstroImageJ.
+            def _apply_minimum(minimum) -> None:
+                star = minimum.star
+                manual_target.value = minimum.name
+                ra_input.value = f"{float(star['ra_hours']):.6f}"
+                dec_input.value = f"{float(star['dec_deg']):.6f}"
+                description.value = describe_minimum(minimum)
+                goto_mode.value = "manual"
+                _update_goto_visibility()
+                if camera_choice.value == "none":
+                    camera_choice.value = "tele"
+                stellarium_status.set_text(t("prog_stellarium_fetched", name=minimum.name))
+                stellarium_status.classes(replace="text-xs text-green-700")
+                _apply_slot(minimum.window_start, minimum.window_end)
+                _refresh_altitude(open_panel=True)
+                ui.notify(t("eb_exposure_hint"), type="info", multi_line=True, timeout=12000)
+
             with ui.row().classes("gap-2"):
                 ui.button(
                     t("prog_get_from_stellarium"), icon="explore", on_click=_fetch_from_stellarium
@@ -299,6 +321,14 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                         session, _apply_catalog_entry, _current_night, tz=site_tz(session.config)
                     ),
                 ).props("flat dense")
+                # Shown once turned on from the Programs page's top-right button
+                ui.button(
+                    t("prog_pick_eclipse"),
+                    icon="contrast",
+                    on_click=lambda: open_minima_dialog(
+                        session, _apply_minimum, _current_night, tz=site_tz(session.config)
+                    ),
+                ).props("flat dense").bind_visibility_from(eclipsing_feature, "enabled")
 
             # Altitude over the night + best slot (user-requested Oct
             # 2026: "voir sa hauteur dans le ciel pour choisir le

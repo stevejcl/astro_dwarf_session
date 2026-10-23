@@ -5,6 +5,8 @@
 
 Astro Dwarf Session automates and monitors imaging sessions for Dwarf II, Dwarf 3, and Dwarf Mini telescopes. It runs as a lightweight local web app (built with [NiceGUI](https://nicegui.io)) that you open in a browser or as a native desktop window — and, since it's a web app, from your phone or tablet too, on the same network.
 
+> 📖 **Documentation:** [stevejcl.github.io/astro_dwarf_session](https://stevejcl.github.io/astro_dwarf_session/) — what Dwarfium Lite, Dwarfium Scope Archive and Dwarfium-Hub do, and searchable "I want to…" recipes. Sources in [`docs/`](docs/).
+
 > **Note:** this project used to ship a Tkinter desktop GUI (`astro_dwarf_session_UI.py`). That interface is retired — a full rewrite on NiceGUI now covers everything it did and more, including proper multi-device support. The old Tkinter code is preserved on the `V3-multi` branch for reference.
 
 <img width="1010" height="579" alt="AstroDwarfUI_Home Screen" src="https://github.com/user-attachments/assets/6722400a-896e-45df-9579-eba1b5117333" />

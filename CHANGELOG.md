@@ -6,16 +6,18 @@
     Dwarfs with nothing to do can time variable stars (user-requested Oct 2026: plan and capture here, measure in Siril
     or AstroImageJ). Optional: a button at the top right of the Programs page turns it on for this run of the app (off
     at each start) and loads the stars' elements. Then an "Eclipsing binary minimum" button next to "Pick from
-    catalog": the next minima (primary,
-    optionally secondary) of eclipsing binaries over the coming nights, seen from the Dwarf's site - time, altitude,
+    catalog": the next minima (primary, optionally secondary) of eclipsing binaries over the coming nights, seen from
+    the Dwarf's site - time, altitude,
     the window around the minimum (half the eclipse + 30 min each side when its duration is known, else +/- 1.5 h)
     and whether all of it is dark and high enough. A click sets the target, RA/Dec, a description with the predicted
-    minimum and its HJD, the start / end time and the image count. Stars and elements in eclipsing_binaries.json
-    (working folder): about thirty bright Algol-type stars, their elements fetched from the AAVSO's VSX (api.object)
-    the first time or with "Update from VSX" (4 at a time, one update shared by the Programs page's button and the
-    dialog, its progress on the button, the minima shown as the stars come in, a network error retried once, why a star has no elements shown in the
-    star list: not found, VSX not reached, or no epoch / period in VSX - to type in); others added by name, or with an epoch / period of one's own (kept over
-    VSX's). Minima corrected for the light time to the Sun (HJD), within a few seconds of astropy.
+    minimum and its HJD, the start / end time and the image count.
+    Stars and elements in eclipsing_binaries.json (working folder). About thirty bright Algol-type stars come with the
+    app, their elements from the AAVSO's VSX (assets/eclipsing_binaries_seed.json - fetching them on first use took a
+    while). Others are added by name (fetched from VSX, api.object), or with an epoch / period of one's own (kept over
+    VSX's). "Update from VSX" refreshes them: 4 stars at a time, one update shared by the Programs page's button and
+    the dialog, its progress on the button, a network error retried once. The star list says why a star has no
+    elements: not found, VSX not reached, or no epoch / period in VSX (to type in).
+    Minima corrected for the light time to the Sun (HJD), within a few seconds of astropy.
     ### Catalog, Mosaic Inspector: the plate-solve from a .wcs file
     The DWARF's FITS have no plate-solve (WCS) in their header, and the Inspector skipped them (user-requested Oct
     2026). A frame takes it from its .wcs file selected with it - same name (MW_Tile_R1C1.fits +

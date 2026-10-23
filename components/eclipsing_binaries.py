@@ -14,8 +14,9 @@ sky_altitude.py, well under 10 s here.
 The stars and their elements (RA/Dec, epoch, period, magnitudes, variability
 type, eclipse duration) are in eclipsing_binaries.json (working folder, as
 end_of_night.json). SEED_STARS are the bright ones a Dwarf can measure;
-their elements are fetched from the AAVSO's VSX (its JSON API, by name) the
-first time, and can be refreshed, or typed in (e.g. the more up-to-date
+their elements come with the app (assets/eclipsing_binaries_seed.json), are
+fetched from the AAVSO's VSX (its JSON API, by name) for any other star,
+and can be refreshed, or typed in (e.g. the more up-to-date
 elements of the Krakow "Up-to-date linear elements" list).
 
 All datetimes are NAIVE wall-clock times in `tz` (the Dwarf's site
@@ -45,6 +46,7 @@ from components.sky_altitude import (
 )
 
 STARS_FILE = Path("eclipsing_binaries.json")
+SEED_FILE_NAME = "eclipsing_binaries_seed.json"
 
 VSX_URL = "https://www.aavso.org/vsx/index.php"
 _VSX_TIMEOUT_S = 20
@@ -107,16 +109,32 @@ def _key(name: str) -> str:
     return " ".join(str(name or "").split()).lower()
 
 
+def _seed_elements() -> dict[str, dict]:
+    """The seed stars' elements shipped with the app (assets/
+    eclipsing_binaries_seed.json, fetched from VSX in Oct 2026 - user-
+    reported: fetching them on first use took a while), by _key(name)."""
+    from components.dso_catalog import _app_dir
+
+    try:
+        raw = json.loads((_app_dir() / "assets" / SEED_FILE_NAME).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {_key(s.get("name")): s for s in raw if isinstance(s, dict) and s.get("name")}
+
+
 def load_stars() -> list[dict]:
     """Every star: the seed stars (minus the ones the user removed) then the
-    user's own, each with its elements when known (see has_elements())."""
+    user's own, each with its elements when known (see has_elements()). A
+    seed star's elements: the user's file's, else the ones shipped with the
+    app."""
     data = _read_file()
+    seeds = _seed_elements()
     saved = {_key(s.get("name")): s for s in data.get("stars", []) if isinstance(s, dict) and s.get("name")}
     removed = {_key(n) for n in data.get("removed", [])}
     stars = []
     for name in SEED_STARS:
         if _key(name) not in removed:
-            stars.append({**saved.pop(_key(name), {}), "name": name})
+            stars.append({**seeds.get(_key(name), {}), **saved.pop(_key(name), {}), "name": name})
     stars.extend(s for k, s in saved.items() if k not in removed)
     return stars
 

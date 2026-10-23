@@ -27,6 +27,7 @@ import math
 import os
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from pathlib import Path
@@ -230,19 +231,57 @@ def update_from_vsx(star: dict) -> dict:
     return merged
 
 
-def fetch_missing_elements() -> list[str]:
-    """The elements of the stars that have none yet, from VSX (network):
-    the names that could not be fetched. Stops at the first network
-    failure (VSX not reachable: no point trying the others)."""
-    todo = [s for s in load_stars() if not has_elements(s)]
-    for i, star in enumerate(todo):
-        try:
-            update_from_vsx(star)
-        except requests.RequestException:
-            return [s["name"] for s in todo[i:]]
-        except ValueError:
-            pass
-    return [s["name"] for s in load_stars() if not has_elements(s)]
+class _FetchProgress:
+    """The VSX update running, if any - shown by the editor's dialog."""
+    running = False
+    done = 0
+    total = 0
+    failed: list[str] = []
+
+
+progress = _FetchProgress()
+_fetch_lock = threading.Lock()
+_progress_lock = threading.Lock()
+# Stars fetched at the same time (user-reported Oct 2026: one after the
+# other, the 28 seed stars took long, the dialog's button greyed meanwhile)
+_FETCH_WORKERS = 4
+
+
+def fetch_elements(only_missing: bool = True) -> list[str]:
+    """The stars' elements from VSX (network) - only those that have none
+    yet, or all of them. Returns the names that could not be fetched. One
+    update at a time: called while one runs (the Programs page's button,
+    then the dialog), it waits for it and returns its result. A network
+    failure skips the stars not tried yet (VSX not reachable)."""
+    if not _fetch_lock.acquire(blocking=False):
+        with _fetch_lock:
+            return list(progress.failed)
+    try:
+        todo = [s for s in load_stars() if not (only_missing and has_elements(s))]
+        progress.done, progress.total, progress.failed, progress.running = 0, len(todo), [], True
+        unreachable = threading.Event()
+
+        def _one(star: dict) -> None:
+            failed = unreachable.is_set()
+            if not failed:
+                try:
+                    update_from_vsx(star)
+                except requests.RequestException:
+                    unreachable.set()
+                    failed = True
+                except ValueError:
+                    failed = True
+            with _progress_lock:
+                progress.done += 1
+                if failed:
+                    progress.failed.append(star["name"])
+
+        with ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
+            list(pool.map(_one, todo))
+        return list(progress.failed)
+    finally:
+        progress.running = False
+        _fetch_lock.release()
 
 
 # ── predictions ───────────────────────────────────────────────────────────

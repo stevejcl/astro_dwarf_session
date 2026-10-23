@@ -148,7 +148,7 @@ def build_programs_page() -> None:
                         ui.notify(t("eb_feature_disabled"))
                         return
                     ui.notify(t("eb_feature_enabled"))
-                    failed = await run.io_bound(eclipsing_binaries.fetch_missing_elements)
+                    failed = await run.io_bound(eclipsing_binaries.fetch_elements)
                     if failed:
                         ui.notify(t("eb_fetch_failed", names=", ".join(failed)), type="warning", multi_line=True)
 

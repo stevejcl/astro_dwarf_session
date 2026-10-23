@@ -120,6 +120,11 @@ function _dwarfTaskFromPlan(p) {
 
   return {
     name: p.name || 'Target Unknown',
+    // The plan this task comes from: the panel's checkbox rows are matched
+    // back to their plan by it. Carried on the task itself because the
+    // tasks are re-sorted (_dwarfSequenceTasks) and those without RA / Dec
+    // dropped - matching them by position ticked the wrong targets.
+    planId: p.id,
     ra: ra,
     dec: dec,
     // startTime/endTime are NOT set here anymore - see _dwarfSequenceTasks
@@ -368,11 +373,7 @@ export function openDwarfProgramPanel(plans, meta) {
 
   function rebuild() {
     const chosen = valid.filter(p => selectedIds.has(p.id));
-    sched = buildDwarfShootingSchedule(chosen, meta);
-    // planId threaded through here (not inside buildDwarfShootingSchedule
-    // itself) so the checkbox row can be matched back to a plan without
-    // changing the wire schema the device actually receives.
-    sched.shooting_tasks.forEach((t, i) => { t.planId = chosen[i] && chosen[i].id; });
+    sched = buildDwarfShootingSchedule(chosen, meta);   // each task carries its planId
     json = JSON.stringify(sched, null, 2);
     stalenessWarning = sched.shooting_tasks.length ? _dwarfStalenessWarning(sched) : null;
 

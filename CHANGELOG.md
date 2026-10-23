@@ -13,7 +13,8 @@
     minimum and its HJD, the start / end time and the image count. Stars and elements in eclipsing_binaries.json
     (working folder): about thirty bright Algol-type stars, their elements fetched from the AAVSO's VSX (api.object)
     the first time or with "Update from VSX" (4 at a time, one update shared by the Programs page's button and the
-    dialog, its progress on the button, the minima shown as the stars come in); others added by name, or with an epoch / period of one's own (kept over
+    dialog, its progress on the button, the minima shown as the stars come in, a network error retried once, why a star has no elements shown in the
+    star list: not found, VSX not reached, or no epoch / period in VSX - to type in); others added by name, or with an epoch / period of one's own (kept over
     VSX's). Minima corrected for the light time to the Sun (HJD), within a few seconds of astropy.
     ### Catalog, Mosaic Inspector: the plate-solve from a .wcs file
     The DWARF's FITS have no plate-solve (WCS) in their header, and the Inspector skipped them (user-requested Oct

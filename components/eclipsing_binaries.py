@@ -27,6 +27,7 @@ import math
 import os
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
@@ -227,16 +228,45 @@ def update_from_vsx(star: dict) -> dict:
     if star.get("source") == "manual" and has_elements(star):
         merged.update(epoch_hjd=star["epoch_hjd"], period_d=star["period_d"], source="manual")
     merged["name"] = star["name"]
+    # Why it still can't be predicted, shown in the dialog's star list
+    # (user-reported Oct 2026: 15 of the 28 seed stars stayed without
+    # elements, and nothing said why)
+    merged["vsx_error"] = missing_elements(merged)
+    if not merged["vsx_error"]:
+        del merged["vsx_error"]
     save_star(merged)
     return merged
 
 
+def missing_elements(star: dict) -> str:
+    """"" when the star can be predicted, else what is missing: "epoch",
+    "period", "epoch,period"... (see has_elements())."""
+    missing = []
+    try:
+        ok = float(star.get("epoch_hjd")) > 2400000
+    except (TypeError, ValueError):
+        ok = False
+    if not ok:
+        missing.append("epoch")
+    try:
+        ok = float(star.get("period_d")) > 0
+    except (TypeError, ValueError):
+        ok = False
+    if not ok:
+        missing.append("period")
+    if star.get("ra_hours") is None or star.get("dec_deg") is None:
+        missing.append("coordinates")
+    return ",".join(missing)
+
+
 class _FetchProgress:
-    """The VSX update running, if any - shown by the editor's dialog."""
+    """The VSX update running, if any - shown by the editor's dialog.
+    errors: star name -> why its last fetch failed (network, not found)."""
     running = False
     done = 0
     total = 0
     failed: list[str] = []
+    errors: dict[str, str] = {}
 
 
 progress = _FetchProgress()
@@ -245,14 +275,18 @@ _progress_lock = threading.Lock()
 # Stars fetched at the same time (user-reported Oct 2026: one after the
 # other, the 28 seed stars took long, the dialog's button greyed meanwhile)
 _FETCH_WORKERS = 4
+# A network error (a timeout, VSX refusing too many requests) is retried
+# once after this delay
+_RETRY_DELAY_S = 3
 
 
 def fetch_elements(only_missing: bool = True) -> list[str]:
     """The stars' elements from VSX (network) - only those that have none
-    yet, or all of them. Returns the names that could not be fetched. One
-    update at a time: called while one runs (the Programs page's button,
-    then the dialog), it waits for it and returns its result. A network
-    failure skips the stars not tried yet (VSX not reachable)."""
+    yet, or all of them. Returns the names still without elements
+    afterwards. One update at a time: called while one runs (the Programs
+    page's button, then the dialog), it waits for it and returns its
+    result. VSX not reachable at all (no connection): the stars not tried
+    yet are skipped."""
     if not _fetch_lock.acquire(blocking=False):
         with _fetch_lock:
             return list(progress.failed)
@@ -262,19 +296,31 @@ def fetch_elements(only_missing: bool = True) -> list[str]:
         unreachable = threading.Event()
 
         def _one(star: dict) -> None:
-            failed = unreachable.is_set()
-            if not failed:
+            error = "network: not tried, VSX not reachable" if unreachable.is_set() else ""
+            for attempt in range(2):
+                if error:
+                    break
                 try:
-                    update_from_vsx(star)
-                except requests.RequestException:
-                    unreachable.set()
-                    failed = True
+                    if not has_elements(update_from_vsx(star)):
+                        error = "missing"
+                    break
+                except requests.RequestException as exc:
+                    if attempt == 0:
+                        time.sleep(_RETRY_DELAY_S)
+                        continue
+                    error = f"network: {exc}"
+                    if isinstance(exc, requests.ConnectionError):
+                        unreachable.set()
                 except ValueError:
-                    failed = True
+                    error = "not found"
             with _progress_lock:
                 progress.done += 1
-                if failed:
+                if error:
                     progress.failed.append(star["name"])
+                if error and error != "missing":
+                    progress.errors[star["name"]] = error
+                else:
+                    progress.errors.pop(star["name"], None)
 
         with ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
             list(pool.map(_one, todo))

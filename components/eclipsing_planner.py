@@ -24,6 +24,21 @@ def _mag_range(star: dict) -> str:
         return ""
 
 
+def _why_missing(star: dict) -> str:
+    """Why a star has no elements: its last VSX fetch's error, or what VSX
+    has no value for."""
+    error = eb.progress.errors.get(star["name"], "")
+    if error == "not found":
+        return t("eb_status_not_found")
+    if error.startswith("network"):
+        return t("eb_status_network", detail=error.partition(":")[2].strip()[:80])
+    missing = star.get("vsx_error") or ""
+    if missing:
+        names = ", ".join(t(f"eb_el_{field}") for field in missing.split(","))
+        return t("eb_status_missing", what=names)
+    return t("eb_status_not_fetched")
+
+
 def open_minima_dialog(
     session,
     on_pick: Callable[[eb.Minimum], None],
@@ -116,7 +131,7 @@ def open_minima_dialog(
             "mag": _mag_range(s),
             "period": f"{float(s['period_d']):.7f}" if eb.has_elements(s) else "",
             "epoch": f"{float(s['epoch_hjd']):.4f}" if eb.has_elements(s) else "",
-            "source": s.get("source") or "",
+            "source": s.get("source") or "" if eb.has_elements(s) else _why_missing(s),
         } for s in stars]
         star_table.update()
 

@@ -10,7 +10,8 @@
     the Dwarf's site - time, altitude,
     the window around the minimum (half the eclipse + 30 min each side when its duration is known, else +/- 1.5 h)
     and whether all of it is dark and high enough. A click sets the target, RA/Dec, a description with the predicted
-    minimum and its HJD, the start / end time and the image count.
+    minimum and its HJD, the start / end time and the image count, and the IR filter cutting the infrared (VIS on a
+    DWARF 3, IR cut on a DWARF II - the sensor's green pixels let some infrared through).
     Stars and elements in eclipsing_binaries.json (working folder). About thirty bright Algol-type stars come with the
     app, their elements from the AAVSO's VSX (assets/eclipsing_binaries_seed.json - fetching them on first use took a
     while). Others are added by name (fetched from VSX, api.object), or with an epoch / period of one's own (kept over

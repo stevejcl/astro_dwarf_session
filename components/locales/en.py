@@ -525,6 +525,7 @@ TRANSLATIONS: dict[str, str] = {
     "eb_add_failed":                "{name} not added: {error}",
     "eb_added":                     "{name} added.",
     "eb_exposure_hint":             "Photometry: the star must not be saturated - short exposures and a moderate gain, checked on a first frame. Every raw FITS is kept on the Dwarf for Siril / AstroImageJ.",
+    "eb_filter_set":                "IR filter set to {name}: it cuts the infrared, for photometry.",
     "eb_feature_off":               "Variable stars (eclipsing binary minima): off - click to turn on",
     "eb_feature_on":                "Variable stars (eclipsing binary minima): on - click to turn off",
     "eb_feature_enabled":           "Variable stars on: \"Eclipsing binary minimum\" button in the program editor (manual goto). Loading the stars' elements...",

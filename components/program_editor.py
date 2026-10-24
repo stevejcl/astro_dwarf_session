@@ -308,6 +308,13 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 stellarium_status.classes(replace="text-xs text-green-700")
                 _apply_slot(minimum.window_start, minimum.window_end)
                 _refresh_altitude(open_panel=True)
+                # The filter cutting the infrared, which the sensor's green
+                # pixels let through a bit (user-confirmed Oct 2026: VIS on the
+                # D3, IR cut on the D2); the Mini has neither
+                photometry_filter = {"3": "VIS Filter", "2": "IR_CUT"}.get(dwarf_type)
+                if photometry_filter in _ir_filter_names(dwarf_type):
+                    ir_filter_input.value = photometry_filter
+                    ui.notify(t("eb_filter_set", name=photometry_filter))
                 ui.notify(t("eb_exposure_hint"), type="info", multi_line=True, timeout=12000)
 
             with ui.row().classes("gap-2"):

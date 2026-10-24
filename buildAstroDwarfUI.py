@@ -223,6 +223,15 @@ if _dso_catalog.exists():
 else:
     print("Warning: dso_catalog.json not found - 'Pick from catalog' will be unavailable unless Dwarfium Scope Archive is installed next to the exe.")
 
+# eclipsing_binaries_seed.json: the seed stars' elements (program editor's
+# eclipsing binary minima, components/eclipsing_binaries.py) - loose file too.
+_eb_seed = Path("assets") / "eclipsing_binaries_seed.json"
+if _eb_seed.exists():
+    print(f"Copying {_eb_seed} to {DIST_ASSETS_DIR / _eb_seed.name}")
+    shutil.copy2(_eb_seed, DIST_ASSETS_DIR / _eb_seed.name)
+else:
+    print("Warning: eclipsing_binaries_seed.json not found - the seed stars' elements will be fetched from VSX on first use.")
+
 
 # Step 4 - Zip everything in dist
 suffix = os.environ.get("RUNNER_OS", "unknown")  # Windows, Linux, macOS

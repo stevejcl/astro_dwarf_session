@@ -525,6 +525,7 @@ TRANSLATIONS: dict[str, str] = {
     "eb_add_failed":                "{name} non ajoutée : {error}",
     "eb_added":                     "{name} ajoutée.",
     "eb_exposure_hint":             "Photométrie : l'étoile ne doit pas saturer - poses courtes et gain modéré, à vérifier sur une première image. Tous les FITS bruts restent sur le Dwarf pour Siril / AstroImageJ.",
+    "eb_filter_set":                "Filtre IR réglé sur {name} : il coupe l'infrarouge, pour la photométrie.",
     "eb_feature_off":               "Étoiles variables (minima de binaires à éclipses) : désactivé - cliquez pour activer",
     "eb_feature_on":                "Étoiles variables (minima de binaires à éclipses) : activé - cliquez pour désactiver",
     "eb_feature_enabled":           "Étoiles variables activées : bouton « Minimum de binaire à éclipses » dans l'éditeur de programmes (goto manuel). Chargement des éléments des étoiles...",

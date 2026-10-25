@@ -14,12 +14,19 @@ requested Oct 2026: in a web browser, its Transfer page's system folder
 dialogs aren't available): its /api/open-in-app loads the page there and
 brings it to front. Without an app window, or Scope Archive not
 answering, the page opens in a browser as before.
+
+Clicked from another device - a phone on the LAN (user-requested Oct
+2026: the capture launched from the phone, its archive opened on the PC)
+- the page opens on that device when Scope Archive answers on the LAN
+(started with --lan); its address the PC's as the phone reaches this app
+when the Settings URL is localhost (both apps on the PC). Else on the PC,
+said so.
 """
 from __future__ import annotations
 
 import configparser
 import posixpath
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
 from nicegui import run, ui
@@ -29,6 +36,64 @@ from components.i18n import t
 
 # Scope Archive waits up to 4 s for its window's page to be ready
 _OPEN_TIMEOUT_S = 8
+# Scope Archive answering on the LAN address (for a phone)
+_LAN_TIMEOUT_S = 2
+_LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
+def remote_host(request) -> str | None:
+    """The host name another device (a phone) used to reach this app, or
+    None when the request comes from this PC: from the loopback, or from
+    the address it asked for (a browser of the PC on its LAN IP)."""
+    if request is None or request.client is None:
+        return None
+    client = request.client.host
+    asked = request.url.hostname or ""
+    if client in _LOOPBACK or client == asked:
+        return None
+    return asked or None
+
+
+def lan_url(url: str, host: str) -> str:
+    """url for a device that reaches this PC as `host`: a localhost URL
+    (Scope Archive on this PC) gets that host, its port kept; another one
+    (an IP, a name) is already reachable."""
+    parts = urlsplit(url)
+    if (parts.hostname or "") not in _LOOPBACK:
+        return url
+    netloc = f"[{host}]" if ":" in host else host
+    if parts.port:
+        netloc += f":{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+def answers(url: str) -> bool:
+    """Scope Archive answers at this address (blocking) - on a LAN address,
+    only when started with --lan (else bound to 127.0.0.1)."""
+    parts = urlsplit(url)
+    try:
+        return requests.get(f"{parts.scheme}://{parts.netloc}/", timeout=_LAN_TIMEOUT_S).ok
+    except requests.RequestException:
+        return False
+
+
+def open_for(url: str, request) -> dict:
+    """Where the page opens for the device of `request` (blocking):
+    {"url": ...} for that device to open (a phone, Scope Archive on the
+    LAN), else Scope Archive's window on the PC: {"opened": True, "on_pc":
+    <clicked from another device>}, {"busy": True}, or {"url": url} when it
+    has no window (a browser tab, as before)."""
+    host = remote_host(request)
+    if host:
+        phone_url = lan_url(url, host)
+        if answers(phone_url):
+            return {"url": phone_url}
+    result = open_in_app(url)
+    if result == "opened":
+        return {"opened": True, "on_pc": bool(host)}
+    if result == "busy":
+        return {"busy": True}
+    return {"url": url}
 
 
 def scope_settings(config) -> tuple[str, str]:
@@ -122,8 +187,9 @@ def page_url(config, page: str) -> str | None:
 
 
 async def open_page(url: str | None) -> None:
-    """Shows a Scope Archive page: in its window when it runs as an app
-    (notified), else in a browser tab. When it didn't answer the last
+    """Shows a Scope Archive page: on the phone when clicked there and
+    Scope Archive is on the LAN (open_for), else in its window when it
+    runs as an app (notified), else in a browser tab. When it didn't answer the last
     hello (peer_link.py), asked again first: said so if still not
     running, without waiting for a timeout or opening a dead tab."""
     if not url:
@@ -131,13 +197,26 @@ async def open_page(url: str | None) -> None:
     if peer_link.is_up(url) is False and await peer_link.check_now(url) is False:
         ui.notify(t("scope_archive_not_running"), type="warning")
         return
-    result = await run.io_bound(open_in_app, url)
-    if result == "opened":
-        ui.notify(t("archive_opened_in_app"), type="positive")
-    elif result == "busy":
+    try:
+        request = ui.context.client.request
+    except (AttributeError, RuntimeError):
+        request = None
+    result = await run.io_bound(open_for, url, request)
+    if result.get("url") and remote_host(request):
+        # On the phone: a link to tap - a tab opened after this round trip is
+        # blocked by its browser (no longer the click's)
+        with ui.dialog() as dialog, ui.card():
+            ui.label(t("archive_open_on_device"))
+            ui.link(t("archive_in_scope_archive"), result["url"], new_tab=True) \
+                .on("click", dialog.close)
+            ui.button(t("close"), on_click=dialog.close).props("flat")
+        dialog.open()
+    elif result.get("opened"):
+        ui.notify(t("archive_opened_on_pc" if result.get("on_pc") else "archive_opened_in_app"), type="positive")
+    elif result.get("busy"):
         ui.notify(t("archive_app_busy"), type="warning")
     else:
-        ui.navigate.to(url, new_tab=True)
+        ui.navigate.to(result["url"], new_tab=True)
 
 
 async def archive_session(config, media_path: str) -> None:

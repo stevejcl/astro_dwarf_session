@@ -270,9 +270,14 @@ async function openArchive(btn) {
     const resp = await fetch(`/api/scope-archive/open/${btn.dataset.uid}?media=${btn.dataset.media}`);
     r = await resp.json();
   } catch (e) { /* tab below */ }
-  if (r.opened) { if (status) status.textContent = "Ouvert dans Dwarfium Scope Archive"; }
+  if (r.opened) { if (status) status.textContent = r.onPc ? "Ouvert sur le PC" : "Ouvert dans Dwarfium Scope Archive"; }
   else if (r.busy) { if (status) status.textContent = "Dwarfium Scope Archive démarre - réessayez dans un instant"; }
-  else if (r.url) window.open(r.url, "_blank", "noopener");
+  else if (r.url) {
+    // After the await a phone's browser can block the new tab: a link then
+    const tab = window.open(r.url, "_blank");   // "noopener" would always give null
+    if (tab) tab.opener = null;
+    else if (status) status.innerHTML = `<a href="${r.url}" target="_blank" rel="noopener">${r.url}</a>`;
+  }
 }
 document.addEventListener("click", (e) => {
   const archiveBtn = e.target.closest(".archive-btn");

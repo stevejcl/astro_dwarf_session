@@ -2,6 +2,12 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### Archive in Dwarfium Scope Archive from a phone
+    Clicked on a phone (or another device of the LAN - user-requested Oct 2026: the capture launched from the phone,
+    its archive opened on the PC), the Scope Archive page opens on that device when Scope Archive answers on the LAN
+    (started with --lan): its address the PC's as the phone reaches this app when the Settings URL is localhost (both
+    apps on the PC), a link to tap (a tab opened after the round trip is blocked by the phone's browser). Else it opens
+    in Scope Archive's window on the PC as before, "Opened on the PC" shown on the phone. Programs page and Explorer.
     ### Program editor: eclipsing binary minima (variable stars)
     Dwarfs with nothing to do can time variable stars (user-requested Oct 2026: plan and capture here, measure in Siril
     or AstroImageJ). Optional: a button at the top right of the Programs page turns it on for this run of the app (off

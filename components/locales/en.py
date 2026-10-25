@@ -319,6 +319,8 @@ TRANSLATIONS: dict[str, str] = {
     "explorer_downloaded":          "Saved to {path}",
     "explorer_download_failed":     "Download failed",
     "archive_opened_in_app":        "Opened in Dwarfium Scope Archive",
+    "archive_opened_on_pc":         "Opened on the PC",
+    "archive_open_on_device":       "Dwarfium Scope Archive answers on the network: open it here",
     "archive_app_busy":             "Dwarfium Scope Archive is starting - try again in a moment",
     "scope_archive_not_running":    "Dwarfium Scope Archive is not running (or not reachable at its Settings URL)",
     "archive_in_scope_archive":     "Archive in Dwarfium Scope Archive",

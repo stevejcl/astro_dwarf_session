@@ -550,11 +550,13 @@ def register_api_routes() -> None:
         return JSONResponse(result)
 
     @app.get("/api/scope-archive/open/{dwarf_uid}")
-    async def api_scope_archive_open(dwarf_uid: str, media: str):
-        """The Program page's "Archive" button: Scope Archive's window when it
-        has one (opened=true), else the URL for the page to open in a tab.
-        The URL is rebuilt here from the device's settings, never taken from
-        the request."""
+    async def api_scope_archive_open(dwarf_uid: str, media: str, request: Request):
+        """The Program page's "Archive" button: the URL for a phone to open
+        when Scope Archive is on the LAN, else Scope Archive's window when it
+        has one (opened=true, onPc when clicked from another device), else
+        the URL for the page to open in a tab (scope_archive.open_for). The
+        URL is rebuilt here from the device's settings, never taken from the
+        request."""
         try:
             session = get_manager().get(dwarf_uid)
         except KeyError:
@@ -562,8 +564,9 @@ def register_api_routes() -> None:
         url = scope_archive.transfer_url(session.config, media)
         if not url:
             return JSONResponse({"opened": False, "url": None})
-        result = await run.io_bound(scope_archive.open_in_app, url)
-        return JSONResponse({"opened": result == "opened", "busy": result == "busy", "url": url})
+        result = await run.io_bound(scope_archive.open_for, url, request)
+        return JSONResponse({"opened": bool(result.get("opened")), "onPc": bool(result.get("on_pc")),
+                             "busy": bool(result.get("busy")), "url": result.get("url")})
 
     @app.get("/api/sites")
     def api_sites():

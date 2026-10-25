@@ -19,13 +19,15 @@ Clicked from another device - a phone on the LAN (user-requested Oct
 2026: the capture launched from the phone, its archive opened on the PC)
 - the page opens on that device when Scope Archive answers on the LAN
 (started with --lan); its address the PC's as the phone reaches this app
-when the Settings URL is localhost (both apps on the PC). Else on the PC,
+(LAN, Tailscale) when the Settings URL is one of this PC's (localhost, its
+LAN IP...: both apps on the PC), another machine's kept. Else on the PC,
 said so.
 """
 from __future__ import annotations
 
 import configparser
 import posixpath
+import socket
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
@@ -54,12 +56,28 @@ def remote_host(request) -> str | None:
     return asked or None
 
 
+def _own_address(host: str) -> bool:
+    """host is one of this PC's addresses - loopback, its LAN or Tailscale
+    IP, its name: a socket can be bound to it only here."""
+    if host in _LOOPBACK:
+        return True
+    try:
+        for family, _, _, _, address in socket.getaddrinfo(host, None):
+            with socket.socket(family, socket.SOCK_DGRAM) as probe:
+                probe.bind((address[0], 0))
+            return True
+    except OSError:
+        return False
+    return False
+
+
 def lan_url(url: str, host: str) -> str:
-    """url for a device that reaches this PC as `host`: a localhost URL
-    (Scope Archive on this PC) gets that host, its port kept; another one
-    (an IP, a name) is already reachable."""
+    """url for a device that reaches this PC as `host`: a URL of this PC
+    (Scope Archive here: localhost, or its LAN IP while the phone comes
+    through Tailscale - user-asked Oct 2026) gets that host, its port kept;
+    another machine's is left as set in the Settings."""
     parts = urlsplit(url)
-    if (parts.hostname or "") not in _LOOPBACK:
+    if not parts.hostname or parts.hostname == host or not _own_address(parts.hostname):
         return url
     netloc = f"[{host}]" if ":" in host else host
     if parts.port:

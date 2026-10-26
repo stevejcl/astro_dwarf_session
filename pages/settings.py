@@ -61,6 +61,7 @@ from components import scope_archive
 from components import connection_health
 from components.ble_pairing import connect_ble, scan_dwarf_devices, write_ble_credentials
 from components.geolocation import fetch_current_location
+from components.https_card import render_https_card
 from components.i18n import t
 from components.network_info import qr_svg, wake_url
 from components.pwa import add_pwa_head_tags
@@ -453,6 +454,10 @@ def build_settings_page() -> None:
                 ui.html(qr_svg(url)).classes("w-48 h-48")
                 ui.link(url, url, new_tab=True).classes("text-xs break-all")
                 ui.label(t("settings_wake_chrome")).classes("text-xs text-grey-6")
+
+            # HTTPS for phones (user-requested Oct 2026): Android installs
+            # the app full screen only over HTTPS - see components/https_server.py
+            render_https_card()
 
             # Manual IP update (user-requested Sep 2026) - for someone
             # who configured this device manually in the first place

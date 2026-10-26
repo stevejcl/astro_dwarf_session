@@ -34,6 +34,7 @@ import requests
 from nicegui import run, ui
 
 from components import peer_link
+from components.https_server import peer_of
 from components.i18n import t
 
 # Scope Archive waits up to 4 s for its window's page to be ready
@@ -50,6 +51,9 @@ def remote_host(request) -> str | None:
     if request is None or request.client is None:
         return None
     client = request.client.host
+    # Through the HTTPS relay (components/https_server.py) every request
+    # comes from 127.0.0.1: the relay knows who really asked
+    client = peer_of(client, request.client.port) or client
     asked = request.url.hostname or ""
     if client in _LOOPBACK or client == asked:
         return None

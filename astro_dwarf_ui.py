@@ -106,6 +106,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 
 from device_registry import bootstrap_devices
 from components.pwa import register_manifest_route
+from components import https_server
 from components import device_lock, peer_link, rtsp_worker
 from components import scheduler_runner
 from components.api_routes import register_api_routes
@@ -253,6 +254,9 @@ def main() -> None:
     # enlever la barre d'adresse") - see components/pwa.py's own
     # docstring for what this does/doesn't cover.
     register_manifest_route()
+    # Optional HTTPS relay for phones (user-requested Oct 2026: the app
+    # full screen on Android) - see components/https_server.py
+    https_server.register(PORT, args.host)
 
     # Embedded live RTSP preview (user-requested Sep 2026) - registers
     # the /video/rtsp_stream/ and /video/rtsp_snapshot/ routes

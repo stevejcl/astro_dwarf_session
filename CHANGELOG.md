@@ -2,6 +2,15 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### HTTPS for phones: the app full screen on Android
+    Optional, in a device's Settings ("HTTPS for phones"; user-requested Oct 2026, from a fork's commit by
+    nhat-bui-dk): Android installs the app full screen only over HTTPS. Once on, this PC also answers in HTTPS on port
+    8443 - a relay to the normal HTTP server, which with the PC's window stays unchanged. Its certificate (localhost,
+    <name>.local, the PC's LAN and Tailscale addresses) is signed by Dwarfium's certificate authority when its folder
+    is given (CADwarfiumCert.pem + CADwarfiumKey.pem - user-asked: a phone that trusts Dwarfium needs nothing more),
+    else by this app's own, limited to private networks, Tailscale and .local; signed again at startup when an address
+    or the authority changes. QR codes to install the authority on the phone (/https/ca.crt) and open the app.
+    Opening Scope Archive from a phone works through the relay too. New requirement: cryptography.
     ### Pulsating stars: their maxima
     A pulsating star (VSX type SXPHE, DSCT, HADS, RR, CEP, CW...; user-requested Oct 2026: DY Peg listed as an eclipsing
     binary's minimum) is shown with its maxima - "max" in the list, "Pulsating star ... maximum predicted" in the

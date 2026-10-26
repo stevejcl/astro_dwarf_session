@@ -11,6 +11,10 @@
     else by this app's own, limited to private networks, Tailscale and .local; signed again at startup when an address
     or the authority changes. QR codes to install the authority on the phone (/https/ca.crt) and open the app.
     Opening Scope Archive from a phone works through the relay too. New requirement: cryptography.
+    ### Archive from a phone over HTTPS: always on the phone
+    Through the HTTPS relay, the Explorer's and the session page's Archive buttons opened Scope Archive on the PC,
+    sometimes on the phone (user-reported Oct 2026): the page's own request, by which the phone was recognized, is
+    often closed by the time of the click. The page's websocket, open as long as the page, tells it then.
     ### Pulsating stars: their maxima
     A pulsating star (VSX type SXPHE, DSCT, HADS, RR, CEP, CW...; user-requested Oct 2026: DY Peg listed as an eclipsing
     binary's minimum) is shown with its maxima - "max" in the list, "Pulsating star ... maximum predicted" in the

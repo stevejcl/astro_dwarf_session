@@ -44,16 +44,24 @@ _LAN_TIMEOUT_S = 2
 _LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 
 
-def remote_host(request) -> str | None:
+def remote_host(request, socket_scope: dict | None = None) -> str | None:
     """The host name another device (a phone) used to reach this app, or
     None when the request comes from this PC: from the loopback, or from
-    the address it asked for (a browser of the PC on its LAN IP)."""
+    the address it asked for (a browser of the PC on its LAN IP).
+    socket_scope: the page's websocket (a click on a page), see open_page()."""
     if request is None or request.client is None:
         return None
     client = request.client.host
     # Through the HTTPS relay (components/https_server.py) every request
-    # comes from 127.0.0.1: the relay knows who really asked
-    client = peer_of(client, request.client.port) or client
+    # comes from 127.0.0.1: the relay knows who really asked - while that
+    # connection is open. A page's own request is often closed by the
+    # time of a click (user-reported Oct 2026: the Explorer's import
+    # opened on the PC, sometimes on the phone): the page's websocket,
+    # open as long as the page, tells it then.
+    peer = peer_of(client, request.client.port)
+    if peer is None and socket_scope and socket_scope.get("client"):
+        peer = peer_of(*socket_scope["client"][:2])
+    client = peer or client
     asked = request.url.hostname or ""
     if client in _LOOPBACK or client == asked:
         return None
@@ -99,13 +107,13 @@ def answers(url: str) -> bool:
         return False
 
 
-def open_for(url: str, request) -> dict:
+def open_for(url: str, request, socket_scope: dict | None = None) -> dict:
     """Where the page opens for the device of `request` (blocking):
     {"url": ...} for that device to open (a phone, Scope Archive on the
     LAN), else Scope Archive's window on the PC: {"opened": True, "on_pc":
     <clicked from another device>}, {"busy": True}, or {"url": url} when it
     has no window (a browser tab, as before)."""
-    host = remote_host(request)
+    host = remote_host(request, socket_scope)
     if host:
         phone_url = lan_url(url, host)
         if answers(phone_url):
@@ -221,10 +229,11 @@ async def open_page(url: str | None) -> None:
         return
     try:
         request = ui.context.client.request
+        socket_scope = (ui.context.client.environ or {}).get("asgi.scope")
     except (AttributeError, RuntimeError):
-        request = None
-    result = await run.io_bound(open_for, url, request)
-    if result.get("url") and remote_host(request):
+        request, socket_scope = None, None
+    result = await run.io_bound(open_for, url, request, socket_scope)
+    if result.get("url") and remote_host(request, socket_scope):
         # On the phone: a link to tap - a tab opened after this round trip is
         # blocked by its browser (no longer the click's)
         with ui.dialog() as dialog, ui.card():

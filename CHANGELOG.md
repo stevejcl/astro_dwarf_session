@@ -147,6 +147,10 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Manual positioning pad on a phone: the mount kept turning, Stop did nothing
+    User-reported Oct 2026. The phone sent each press twice (touch, then its emulated mouse events), the starts and stops ran side by side,
+    a start could land last; Stop was skipped while the pad believed the mount stopped. Now pointer events only, one
+    command at a time in their order, Stop always sent, no long-press menu on the arrows.
     ### Programs in a row: up to 2 min 30 s lost between two of them
     When the connection check ran just as a program ended, the next program's "is the Dwarf already capturing?"
     query was sent at the same time: one answer went to the other request, and the start waited 150 s (3 of the 5

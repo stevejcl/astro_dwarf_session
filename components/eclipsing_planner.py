@@ -168,7 +168,7 @@ def open_minima_dialog(
             "id": i,
             "date": f"{m.time:%Y-%m-%d}",
             "time": f"{m.time:%H:%M}",
-            "kind": "I" if m.primary else "II",
+            "kind": t("eb_kind_max") if eb.is_pulsating(m.star) else ("I" if m.primary else "II"),
             "star": m.name,
             "vartype": m.star.get("vartype") or "",
             "mag": _mag_range(m.star),

@@ -15,6 +15,10 @@
     Through the HTTPS relay, the Explorer's and the session page's Archive buttons opened Scope Archive on the PC,
     sometimes on the phone (user-reported Oct 2026): the page's own request, by which the phone was recognized, is
     often closed by the time of the click. The page's websocket, open as long as the page, tells it then.
+    ### Phone layout: Settings and program editor
+    The "HTTPS for phones" card last in the Settings, after "Manually update IP" (user-asked Oct 2026). Program
+    editor, manual target: the icon of "Get from Stellarium", "Pick from catalog" and the variable star button kept
+    left of its text, which wraps beside it, on a phone (the text went under the icon).
     ### Pulsating stars: their maxima
     A pulsating star (VSX type SXPHE, DSCT, HADS, RR, CEP, CW...; user-requested Oct 2026: DY Peg listed as an eclipsing
     binary's minimum) is shown with its maxima - "max" in the list, "Pulsating star ... maximum predicted" in the

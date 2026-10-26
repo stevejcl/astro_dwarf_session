@@ -492,6 +492,7 @@ TRANSLATIONS: dict[str, str] = {
     "prog_pick_eclipse":            "Minimum de binaire à éclipses",
     "eb_title":                     "Binaires à éclipses : prochains minima",
     "eb_intro":                     "Minima prévus (éléments du VSX de l'AAVSO, temps héliocentrique corrigé) vus depuis le site de ce Dwarf. Capturez-les ici, puis mesurez les FITS bruts de la session dans Siril ou AstroImageJ.",
+    "eb_night_of":                  "Nuit du",
     "eb_nights":                    "Nuits",
     "eb_secondary":                 "Minima secondaires",
     "eb_full_only":                 "Fenêtre entièrement observable",

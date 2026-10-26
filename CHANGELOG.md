@@ -2,6 +2,10 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### Eclipsing binary minima: from tonight
+    The minima list starts from tonight (site time), no longer from the program's own date, which may already be the
+    next day (user-reported Oct 2026: DY Peg's minimum picked at 19:30 dated the next day); a "Night of" field picks
+    another night.
     ### Archive in Dwarfium Scope Archive from a phone
     Clicked on a phone (or another device of the LAN - user-requested Oct 2026: the capture launched from the phone,
     its archive opened on the PC), the Scope Archive page opens on that device when Scope Archive answers on the LAN

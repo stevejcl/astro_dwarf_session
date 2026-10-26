@@ -505,7 +505,7 @@ TRANSLATIONS: dict[str, str] = {
 
     # -- DSO catalog + altitude planner (program editor) ---------------
     "prog_pick_from_catalog":       "Pick from catalog",
-    "prog_pick_eclipse":            "Variable star: minimum / maximum",
+    "prog_pick_eclipse":            "Variable star: min / max",
     "eb_title":                     "Variable stars: next minima and maxima",
     "eb_intro":                     "Predicted minima of eclipsing binaries and maxima of pulsating stars (elements from the AAVSO's VSX, heliocentric time corrected) seen from this Dwarf's site. Capture them here, then measure the session's raw FITS in Siril or AstroImageJ.",
     "eb_night_of":                  "Night of",

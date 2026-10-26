@@ -317,17 +317,21 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                     ui.notify(t("eb_filter_set", name=photometry_filter))
                 ui.notify(t("eb_exposure_hint"), type="info", multi_line=True, timeout=12000)
 
+            # On a phone the icon stays left of its text, which wraps beside
+            # it (user-reported Oct 2026: the variable star button's text
+            # under its icon - longer still in French)
+            ui.add_css(".icon-beside .q-btn__content { flex-wrap: nowrap; text-align: left; }")
             with ui.row().classes("gap-2"):
                 ui.button(
                     t("prog_get_from_stellarium"), icon="explore", on_click=_fetch_from_stellarium
-                ).props("flat dense")
+                ).props("flat dense").classes("icon-beside")
                 ui.button(
                     t("prog_pick_from_catalog"),
                     icon="menu_book",
                     on_click=lambda: open_catalog_dialog(
                         session, _apply_catalog_entry, _current_night, tz=site_tz(session.config)
                     ),
-                ).props("flat dense")
+                ).props("flat dense").classes("icon-beside")
                 # Shown once turned on from the Programs page's top-right button
                 ui.button(
                     t("prog_pick_eclipse"),
@@ -335,7 +339,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                     on_click=lambda: open_minima_dialog(
                         session, _apply_minimum, _current_night, tz=site_tz(session.config)
                     ),
-                ).props("flat dense").bind_visibility_from(eclipsing_feature, "enabled")
+                ).props("flat dense").classes("icon-beside").bind_visibility_from(eclipsing_feature, "enabled")
 
             # Altitude over the night + best slot (user-requested Oct
             # 2026: "voir sa hauteur dans le ciel pour choisir le

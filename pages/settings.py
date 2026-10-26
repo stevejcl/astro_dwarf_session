@@ -455,10 +455,6 @@ def build_settings_page() -> None:
                 ui.link(url, url, new_tab=True).classes("text-xs break-all")
                 ui.label(t("settings_wake_chrome")).classes("text-xs text-grey-6")
 
-            # HTTPS for phones (user-requested Oct 2026): Android installs
-            # the app full screen only over HTTPS - see components/https_server.py
-            render_https_card()
-
             # Manual IP update (user-requested Sep 2026) - for someone
             # who configured this device manually in the first place
             # (pages/manual_config.py, no Bluetooth working on their
@@ -493,3 +489,8 @@ def build_settings_page() -> None:
                     manual_ip_status.classes(replace="text-xs text-green-700")
 
                 ui.button(t("settings_manual_ip_button"), icon="save", on_click=_handle_manual_ip_update)
+
+            # HTTPS for phones (user-requested Oct 2026), the last card:
+            # Android installs the app full screen only over HTTPS - see
+            # components/https_server.py
+            render_https_card()

@@ -11,11 +11,19 @@
     else by this app's own, limited to private networks, Tailscale and .local; signed again at startup when an address
     or the authority changes. QR codes to install the authority on the phone (/https/ca.crt) and open the app.
     Opening Scope Archive from a phone works through the relay too. New requirement: cryptography.
+    ### Archive from a phone over HTTPS: always on the phone
+    Through the HTTPS relay, the Explorer's and the session page's Archive buttons opened Scope Archive on the PC,
+    sometimes on the phone (user-reported Oct 2026): the page's own request, by which the phone was recognized, is
+    often closed by the time of the click. The page's websocket, open as long as the page, tells it then.
+    ### Phone layout: Settings and program editor
+    The "HTTPS for phones" card last in the Settings, after "Manually update IP" (user-asked Oct 2026). Program
+    editor, manual target: the icon of "Get from Stellarium", "Pick from catalog" and the variable star button kept
+    left of its text, which wraps beside it, on a phone (the text went under the icon).
     ### Pulsating stars: their maxima
     A pulsating star (VSX type SXPHE, DSCT, HADS, RR, CEP, CW...; user-requested Oct 2026: DY Peg listed as an eclipsing
     binary's minimum) is shown with its maxima - "max" in the list, "Pulsating star ... maximum predicted" in the
     program's description -, no secondary, a window of 0.6 period on each side (a whole cycle, 30 min to 1.5 h). The
-    dialog and its button named for both ("Variable star: minimum / maximum").
+    dialog and its button named for both ("Variable star: min / max").
     ### Eclipsing binary minima: from tonight
     The minima list starts from tonight (site time), no longer from the program's own date, which may already be the
     next day (user-reported Oct 2026: DY Peg's minimum picked at 19:30 dated the next day); a "Night of" field picks

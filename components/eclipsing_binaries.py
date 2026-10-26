@@ -368,9 +368,29 @@ def _local_from_jd(jd: float, tz: tzinfo | None) -> datetime:
     return (aware.astimezone(tz) if tz is not None else aware.astimezone()).replace(tzinfo=None)
 
 
+# Pulsating stars' VSX types (GCVS): their epoch is a MAXIMUM (user-requested
+# Oct 2026: DY Peg, an SX Phe star, listed as an eclipsing binary's minimum)
+PULSATING_TYPES = ("SXPHE", "DSCT", "DSCTC", "HADS", "RRAB", "RRC", "RRD", "RR", "CEP", "DCEP", "DCEPS",
+                   "CW", "CWA", "CWB", "BCEP", "BLAP", "ROAP")
+
+
+def is_pulsating(star: dict) -> bool:
+    """A pulsating star (VSX type, e.g. "SXPHE", "HADS(B)", "RRAB|BL"): its
+    events are maxima, it has no secondary."""
+    kinds = re.split(r"[|+/:()\s]+", str(star.get("vartype") or "").upper())
+    return any(kind in PULSATING_TYPES for kind in kinds if kind)
+
+
 def half_window_hours(star: dict) -> float:
     """Half of the window to capture around a minimum: half the eclipse plus
-    WINDOW_MARGIN_H when its duration is known, else DEFAULT_HALF_WINDOW_H."""
+    WINDOW_MARGIN_H when its duration is known, else DEFAULT_HALF_WINDOW_H.
+    Around a pulsating star's maximum: 0.6 period (a whole cycle and a bit,
+    the rise and the fall), from 30 min to DEFAULT_HALF_WINDOW_H."""
+    if is_pulsating(star):
+        try:
+            return min(max(0.6 * float(star["period_d"]) * 24.0, 0.5), DEFAULT_HALF_WINDOW_H)
+        except (KeyError, TypeError, ValueError):
+            return DEFAULT_HALF_WINDOW_H
     try:
         duration_h = float(star["duration_pct"]) / 100.0 * float(star["period_d"]) * 24.0
     except (KeyError, TypeError, ValueError):
@@ -433,7 +453,7 @@ def predict_minima(
     end = start + timedelta(days=max(1, nights))
     jd_start = _julian_date(to_utc(start, tz))
     jd_end = _julian_date(to_utc(end, tz))
-    phases = (0.0, 0.5) if secondary else (0.0,)
+    phases = (0.0, 0.5) if secondary and not is_pulsating(star) else (0.0,)
     result: list[Minimum] = []
     steps = int(half.total_seconds() // 60 // _SAMPLE_MIN)
     # From one cycle before the first night (the light-time shift) to past the last
@@ -470,11 +490,15 @@ def describe(minimum: Minimum) -> str:
     """Program description: what is captured and why, kept with the session
     for the measurement afterwards."""
     star = minimum.star
-    kind = "primary" if minimum.primary else "secondary"
-    parts = [f"Eclipsing binary {minimum.name}"]
+    if is_pulsating(star):
+        parts = [f"Pulsating star {minimum.name}"]
+        event = "maximum"
+    else:
+        parts = [f"Eclipsing binary {minimum.name}"]
+        event = ("primary" if minimum.primary else "secondary") + " minimum"
     if star.get("vartype"):
         parts.append(f"({star['vartype']})")
-    parts.append(f"- {kind} minimum predicted {minimum.time:%Y-%m-%d %H:%M} (HJD {minimum.hjd:.4f})")
+    parts.append(f"- {event} predicted {minimum.time:%Y-%m-%d %H:%M} (HJD {minimum.hjd:.4f})")
     if star.get("max_mag") is not None and star.get("min_mag") is not None:
         parts.append(f"- mag {float(star['max_mag']):.1f}-{float(star['min_mag']):.1f}")
     parts.append("- photometry: Siril / AstroImageJ")

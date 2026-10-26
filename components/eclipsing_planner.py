@@ -13,8 +13,10 @@ from nicegui import run, ui
 
 from components import eclipsing_binaries as eb
 from components.coords import parse_dec_degrees, parse_ra_hours
+from components.datetime_picker import date_picker_input
 from components.i18n import t
-from components.target_planner import site_location
+from components.site_time import site_now
+from components.target_planner import night_of, site_location
 
 
 def _mag_range(star: dict) -> str:
@@ -47,10 +49,15 @@ def open_minima_dialog(
     tz: tzinfo | None = None,
 ) -> None:
     """on_pick(minimum): called with the chosen eb.Minimum. tz: the
-    timezone of get_night()'s date and of every time shown (None = this
-    PC's)."""
+    timezone of every time shown (None = this PC's). The minima from
+    tonight (site time) by default - not get_night(), the program's own
+    date, which may already be the next day (user-reported Oct 2026: a
+    minimum picked at 19:30 dated the next day); its "Night of" field picks
+    another night."""
     location = site_location(session)
     state: dict = {"stars": eb.load_stars(), "minima": []}
+    now = site_now(getattr(session, "config", None))
+    tonight = night_of(f"{now:%Y-%m-%d}", f"{now:%H:%M:%S}")
 
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl"):
         ui.label(t("eb_title")).classes("text-lg")
@@ -59,6 +66,7 @@ def open_minima_dialog(
             ui.label(t("planner_no_location")).classes("text-xs text-amber-700")
 
         with ui.row().classes("w-full gap-2 items-end"):
+            night_input = date_picker_input(t("eb_night_of"), f"{tonight:%Y-%m-%d}").classes("w-40")
             nights_input = ui.number(t("eb_nights"), value=3, min=1, max=30, step=1, format="%d").classes("w-28")
             min_alt_input = ui.number(t("planner_min_alt"), value=30, min=0, max=85, step=5).classes("w-36")
             darkness = ui.select(
@@ -141,7 +149,10 @@ def open_minima_dialog(
             table.rows = []
             table.update()
             return
-        night = get_night()
+        try:
+            night = datetime.strptime((night_input.value or "").strip(), "%Y-%m-%d")
+        except ValueError:
+            night = tonight
         minima = eb.predict_all(
             state["stars"], location[0], location[1], night,
             nights=int(nights_input.value or 1),
@@ -157,7 +168,7 @@ def open_minima_dialog(
             "id": i,
             "date": f"{m.time:%Y-%m-%d}",
             "time": f"{m.time:%H:%M}",
-            "kind": "I" if m.primary else "II",
+            "kind": t("eb_kind_max") if eb.is_pulsating(m.star) else ("I" if m.primary else "II"),
             "star": m.name,
             "vartype": m.star.get("vartype") or "",
             "mag": _mag_range(m.star),
@@ -244,7 +255,7 @@ def open_minima_dialog(
     star_table.on("remove_star", _on_remove)
     update_button.on_click(lambda: _update(only_missing=False))
     add_button.on_click(_add)
-    for element in (nights_input, min_alt_input, darkness, secondary_cb, full_only_cb):
+    for element in (night_input, nights_input, min_alt_input, darkness, secondary_cb, full_only_cb):
         element.on_value_change(lambda _: _refresh_minima())
 
     _refresh_minima()

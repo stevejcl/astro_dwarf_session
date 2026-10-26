@@ -2,6 +2,15 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### Pulsating stars: their maxima
+    A pulsating star (VSX type SXPHE, DSCT, HADS, RR, CEP, CW...; user-requested Oct 2026: DY Peg listed as an eclipsing
+    binary's minimum) is shown with its maxima - "max" in the list, "Pulsating star ... maximum predicted" in the
+    program's description -, no secondary, a window of 0.6 period on each side (a whole cycle, 30 min to 1.5 h). The
+    dialog and its button named for both ("Variable star: minimum / maximum").
+    ### Eclipsing binary minima: from tonight
+    The minima list starts from tonight (site time), no longer from the program's own date, which may already be the
+    next day (user-reported Oct 2026: DY Peg's minimum picked at 19:30 dated the next day); a "Night of" field picks
+    another night.
     ### Archive in Dwarfium Scope Archive from a phone
     Clicked on a phone (or another device of the LAN - user-requested Oct 2026: the capture launched from the phone,
     its archive opened on the PC), the Scope Archive page opens on that device when Scope Archive answers on the LAN

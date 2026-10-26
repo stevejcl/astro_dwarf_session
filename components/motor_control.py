@@ -67,10 +67,18 @@ def build_motor_pad(session) -> None:
     ui.label(t("motor_pad_speed_hint")).classes("text-xs text-grey-6 -mt-2")
 
     moving = {"active": False}  # guards against a stray extra start/stop pair
+    # One command at a time, in the order the events came (user-reported
+    # Oct 2026, phone: "parfois il continue de tourner" - a start and a
+    # stop ran side by side, the start landing last). asyncio.Lock is FIFO.
+    order = asyncio.Lock()
 
-    async def _stop() -> None:
-        if not moving["active"]:
-            return  # already stopped - e.g. mouseup firing right after mouseleave already handled it
+    async def _stop(force: bool = False) -> None:
+        async with order:
+            await _stop_now(force)
+
+    async def _stop_now(force: bool = False) -> None:
+        if not moving["active"] and not force:
+            return  # already stopped - e.g. pointerup firing right after pointerleave already handled it
         # SAFETY-CRITICAL (user-reported Sep 2026: "le dwarf bouge mais
         # ne s'arrête pas" - field-confirmed via the log: every single
         # stop attempt was silently denied because the slot was still
@@ -96,8 +104,12 @@ def build_motor_pad(session) -> None:
         status_label.set_text("")
 
     async def _start(angle: int) -> None:
+        async with order:
+            await _start_now(angle)
+
+    async def _start_now(angle: int) -> None:
         if moving["active"]:
-            await _stop()  # switching direction mid-press - stop the previous one first
+            await _stop_now()  # switching direction mid-press - stop the previous one first
         moving["active"] = True
         if not connection_health.try_acquire_command_slot(dwarf_uid, caller="motor_pad.start"):
             moving["active"] = False
@@ -119,20 +131,29 @@ def build_motor_pad(session) -> None:
     with ui.grid(columns=3).classes("w-48 gap-1 mx-auto"):
         for cell in _GRID_ORDER:
             if cell is None:
-                ui.button(icon="stop", on_click=_stop).props("round color=negative").classes("w-12 h-12")
+                # Always sent, whatever this pad thinks (user-reported Oct
+                # 2026: "le stop semble inoperant" - it did nothing while
+                # the pad believed the mount stopped)
+                ui.button(icon="stop", on_click=lambda: _stop(force=True)) \
+                    .props("round color=negative").classes("w-12 h-12")
                 continue
             angle = _DIRECTIONS[cell]
-            btn = ui.button(icon=_DIRECTION_ICONS[cell]).props("round outline").classes("w-12 h-12")
+            btn = ui.button(icon=_DIRECTION_ICONS[cell]).props("round outline").classes("w-12 h-12") \
+                .style("touch-action: none; user-select: none; -webkit-user-select: none; "
+                       "-webkit-touch-callout: none")
             # press-and-hold: start on press, stop on release OR if the
             # pointer/finger leaves the button without a clean "up"
-            # (mouseleave/touchcancel) - otherwise a drag-off would leave
+            # (pointerleave/pointercancel) - otherwise a drag-off would leave
             # the mount slewing with no way to stop it from the pad.
-            btn.on("mousedown", lambda _, a=angle: _start(a))
-            btn.on("touchstart", lambda _, a=angle: _start(a))
-            btn.on("mouseup", lambda _: _stop())
-            btn.on("mouseleave", lambda _: _stop())
-            btn.on("touchend", lambda _: _stop())
-            btn.on("touchcancel", lambda _: _stop())
+            # Pointer events only (user-reported Oct 2026, phone): with
+            # touch AND mouse listeners a phone sent both - its browser
+            # follows each touch with emulated mouse events, a second
+            # start / stop pair. No long-press menu either.
+            btn.on("pointerdown", lambda _, a=angle: _start(a))
+            btn.on("pointerup", lambda _: _stop())
+            btn.on("pointerleave", lambda _: _stop())
+            btn.on("pointercancel", lambda _: _stop())
+            btn.on("contextmenu", js_handler="(e) => e.preventDefault()")
 
     ui.label(t("motor_pad_hint")).classes("text-xs text-grey-6 text-center")
     # Fixed height reserved (user-reported Sep 2026: "l'info motor_pad_

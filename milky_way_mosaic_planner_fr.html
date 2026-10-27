@@ -255,7 +255,7 @@
         </select>
       </div>
     </div>
-    <p class="hint">Chaque tuile est planifiée séquentiellement, sur son créneau où elle est visible au-dessus de cette altitude minimum, en partant de l'heure de début. Une tuile qui ne redescend jamais assez tôt/haut cette nuit est marquée "non planifiable" plutôt que d'être forcée. Seuls les créneaux de nuit sont utilisés (Soleil sous la limite choisie), sur toute la durée de la tuile.</p>
+    <p class="hint">Chaque tuile est planifiée séquentiellement, sur son créneau où elle est visible au-dessus de cette altitude minimum, en partant de l'heure de début. Une tuile jamais assez haute cette nuit, ou pour laquelle il ne reste plus de temps avant l'aube, est marquée "non planifiable" plutôt que d'être reportée à la nuit suivante. Seuls les créneaux de nuit sont utilisés (Soleil sous la limite choisie), sur toute la durée de la tuile.</p>
   </fieldset>
 
   <div class="btn-row">
@@ -1069,12 +1069,30 @@ function slotIsUsable(tile, lat, lon, start, end, minAltitude, sunLimit) {
 const DECOR_MAX_FRAMES = 5;
 const DECOR_MIN_ALTITUDE = 0;
 
+// The night a start time reaches: its first dark moment (Sun below
+// sunLimit) from the start, within 24h - a daylight start reaches the
+// coming night -, and the dawn after it (Sun above sunLimit again).
+function nightWindow(lat, lon, startDate, sunLimit, stepMinutes = 5) {
+  const step = stepMinutes * 60000;
+  let t = startDate.getTime();
+  const limit = t + 24 * 3600000;
+  while (t < limit && sunAltitude(new Date(t), lat, lon) > sunLimit) t += step;
+  const nightStart = new Date(t);
+  while (t < limit + 24 * 3600000 && sunAltitude(new Date(t), lat, lon) <= sunLimit) t += step;
+  return { nightStart, nightEnd: new Date(t) };
+}
+
 function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIndex, sunLimit = -18,
                        getAutofocusForIndex = i => i === 0) {
   const stepMinutes = 5;
-  // 24h, not 12h: a start time in daylight must still reach the coming
-  // night now that daylight slots are refused.
-  const maxHorizonMinutes = 24 * 60;
+  // One night only (user-reported Oct 2026: the first 3 tiles tonight,
+  // the next ones the following night). The search used to run 24h from
+  // the start, so a daylight start still reaches the coming night - but a
+  // tile with no room left tonight (the earlier ones up to dawn, or too
+  // low already) then took a slot the next night, and every following
+  // tile came after it. The window now ends at the dawn of the night the
+  // start time reaches: what doesn't fit is "not schedulable".
+  const { nightEnd } = nightWindow(lat, lon, startDate, sunLimit, stepMinutes);
   let cursor = new Date(startDate);
   const results = [];
 
@@ -1085,7 +1103,7 @@ function scheduleTiles(tiles, lat, lon, startDate, minAltitude, getDurationForIn
     const minAlt = tile.decor ? DECOR_MIN_ALTITUDE : minAltitude;
     let found = null;
     let probe = new Date(cursor);
-    const deadline = new Date(startDate.getTime() + maxHorizonMinutes * 60000);
+    const deadline = nightEnd;
 
     while (probe < deadline) {
       const { alt } = altAz(tile.ra, tile.dec, lat, lon, probe);
@@ -1267,7 +1285,7 @@ function renderTiles() {
     ? `Nuit cibl\u00e9e : ${pad(targetDate.getDate())}/${pad(targetDate.getMonth() + 1)} \u00e0 partir de ${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}. `
     : '';
   summary.textContent = dateLine + `${scheduledTiles.length} tuiles · ${ok} planifiables cette nuit` +
-    (failed ? ` · ${failed} non planifiables (jamais assez hautes dans la fenêtre)` : '') +
+    (failed ? ` · ${failed} non planifiables (pas assez hautes, ou plus de temps avant l'aube)` : '') +
     (lastGenerationParams && lastGenerationParams.decorPass && lastGenerationParams.decorPass !== 'none' ? ` · passe d\u00e9cor ${lastGenerationParams.decorPass === 'start' ? 'au d\u00e9but' : '\u00e0 la fin'} (${lastGenerationParams.decorCount} images par tuile)` : '') +
     (lastSpacingScale < 1 ? ` · espacement resserré de ${Math.round((1 - lastSpacingScale) * 100)} % pour que les tuiles se recouvrent aussi aux coins (marge de pointage ±${TILE_MARGIN_DEG}°)` : '');
 

@@ -30,6 +30,7 @@ from components.session_dirs import session_dirs_for
 from components.task_check import open_task_check, program_task
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
+from device_registry import name_and_uid
 
 
 def _list_json_files(directory: str) -> list[str]:
@@ -160,7 +161,7 @@ def build_programs_page() -> None:
             # apply to, would otherwise be completely invisible to the
             # user. Shown explicitly here so it's never a guess.
             ui.label(t("programs_title")).classes("text-xl")
-            ui.label(session.dwarf_uid).classes("text-sm text-grey-6 -mt-2")
+            ui.label(name_and_uid(session)).classes("text-sm text-grey-6 -mt-2")
 
             with ui.tabs().classes("w-full") as tabs:
                 editor_tab = ui.tab(t("tab_editor"))

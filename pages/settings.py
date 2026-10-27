@@ -53,7 +53,7 @@ from dwarf_python_api.get_config_data import set_config_data
 from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import get_manager
 
-from device_registry import find_shared_config_value
+from device_registry import find_shared_config_value, name_and_uid, rename_device, device_name
 from device_provisioning import update_dwarf_ip
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
@@ -156,7 +156,29 @@ def build_settings_page() -> None:
             # which device these settings actually apply to - would
             # otherwise be invisible.
             ui.label(t("settings_title")).classes("text-xl")
-            ui.label(session.dwarf_uid).classes("text-sm text-grey-6 -mt-2")
+            name_label = ui.label(name_and_uid(session)).classes("text-sm text-grey-6 -mt-2")
+
+            # The Dwarf's name (user-reported Oct 2026: typed when it was
+            # added, then neither shown nor editable) - its display name
+            # only, the dwarf_uid and the config files stay
+            def _handle_rename() -> None:
+                new_name = (name_input.value or "").strip()
+                if not new_name:
+                    ui.notify(t("settings_device_name_required"), type="negative")
+                    return
+                if not rename_device(session, new_name):
+                    ui.notify(t("settings_device_name_failed"), type="negative")
+                    return
+                name_label.set_text(name_and_uid(session))
+                ui.notify(t("settings_device_name_saved", name=new_name), type="positive")
+
+            with ui.row().classes("w-full items-center gap-2 no-wrap"):
+                name_input = ui.input(
+                    t("settings_device_name"),
+                    value="" if device_name(session) == session.dwarf_uid else device_name(session),
+                ).classes("flex-1").on("keydown.enter", _handle_rename)
+                ui.button(icon="save", on_click=_handle_rename).props("flat round") \
+                    .tooltip(t("settings_device_name_save"))
             ui.label(t("settings_location_hint")).classes("text-sm text-grey-6")
 
             geolocation_status = ui.label("").classes("text-xs")

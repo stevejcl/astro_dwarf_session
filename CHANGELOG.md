@@ -2,6 +2,11 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### A Dwarf's name: shown, and renamed in its Settings
+    The name typed when a Dwarf was added (Bluetooth pairing, manual configuration) was kept in devices.json but
+    shown nowhere - every page showed its uid (user-reported Oct 2026). It is now the title of its dashboard card, its
+    page, its Programs and Settings and its Watch page, the uid under it; a "Dwarf name" field in its Settings renames
+    it - its display name only, the uid and the config files stay (programs, Scope Archive link and Hub untouched).
     ### HTTPS for phones: the app full screen on Android
     Optional, in a device's Settings ("HTTPS for phones"; user-requested Oct 2026, from a fork's commit by
     nhat-bui-dk): Android installs the app full screen only over HTTPS. Once on, this PC also answers in HTTPS on port
@@ -147,6 +152,11 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Milky Way planner: the tiles kept on one night
+    The first tiles tonight, the next ones the following night (user-reported Oct 2026): the slot search ran 24 h from
+    the start time, so a tile with no room left before dawn (the earlier ones up to dawn, or too low already) took a
+    slot the next night, and every following tile came after it. The search now ends at the dawn of the night the start
+    time reaches; a tile that doesn't fit is "not schedulable" (English and French pages).
     ### Manual positioning pad on a phone: the mount kept turning, Stop did nothing
     User-reported Oct 2026. The phone sent each press twice (touch, then its emulated mouse events), the starts and stops ran side by side,
     a start could land last; Stop was skipped while the pad believed the mount stopped. Now pointer events only, one

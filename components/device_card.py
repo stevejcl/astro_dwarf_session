@@ -30,6 +30,7 @@ from components.camera_stream import (
     dashboard_thumbnail_should_show,
 )
 from components.i18n import t
+from device_registry import device_name
 from components.status_banner import status_banner
 
 
@@ -187,10 +188,15 @@ class DeviceCardView:
                         # full name is still available in the title
                         # attribute and via the session page this card
                         # opens.
-                        ui.label(session.dwarf_uid).classes("font-medium truncate").props(
+                        # The name given at its addition, its uid under it
+                        # (user-reported Oct 2026: only the uid was shown)
+                        name = device_name(session)
+                        ui.label(name).classes("font-medium truncate").props(
                             f"title='{session.dwarf_uid}'"
                         )
-                        ui.label(session.config.dwarf_ip or t("unknown_ip")).classes(
+                        ui.label(" · ".join(x for x in (
+                            session.dwarf_uid if name != session.dwarf_uid else "",
+                            session.config.dwarf_ip or t("unknown_ip")) if x)).classes(
                             "text-xs text-grey-6 truncate"
                         )
                 with ui.row().classes("items-center gap-1"):

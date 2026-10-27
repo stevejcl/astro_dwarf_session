@@ -52,6 +52,7 @@ from components.i18n import t
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme, theme_toggle_button
 from components.status_banner import status_banner
+from device_registry import device_name
 from dwarf_session import _ir_filter_display_name
 
 _POLL_INTERVAL_S = 2.0
@@ -164,8 +165,11 @@ def build_watch_device_page() -> None:
                 ui.label(t("device_not_found")).classes("text-negative")
                 return
 
-            ui.label(dwarf_uid).classes("text-xl font-medium")
-            ui.label(session.config.dwarf_ip or t("unknown_ip")).classes(
+            name = device_name(session)
+            ui.label(name).classes("text-xl font-medium")
+            ui.label(" · ".join(x for x in (
+                dwarf_uid if name != dwarf_uid else "",
+                session.config.dwarf_ip or t("unknown_ip")) if x)).classes(
                 "text-xs text-grey-6"
             )
 

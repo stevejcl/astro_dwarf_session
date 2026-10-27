@@ -26,6 +26,7 @@ been successfully paired (dwarf_uid confirmed).
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
@@ -75,6 +76,45 @@ def add_device_entry(name: str, config_py: str, config_ini: str) -> DeviceEntry:
     entries.append(entry)
     _write_entries(entries)
     return entry
+
+
+def _same_file(a: str, b: str) -> bool:
+    return os.path.normcase(os.path.abspath(a or "")) == os.path.normcase(os.path.abspath(b or ""))
+
+
+def entry_for(config) -> DeviceEntry | None:
+    """The devices.json entry of a loaded Dwarf (its DwarfConfig), by its
+    config.py - the natural key, see remove_device_entry()."""
+    path = getattr(config, "config_py_path", "") or ""
+    return next((e for e in _read_entries() if _same_file(e.config_py, path)), None)
+
+
+def device_name(session) -> str:
+    """The name given to the Dwarf when it was added (user-reported Oct
+    2026: typed at pairing / manual configuration, then shown nowhere -
+    every page showed its dwarf_uid), else its dwarf_uid."""
+    entry = entry_for(session.config)
+    return (entry.name.strip() if entry and entry.name else "") or session.dwarf_uid
+
+
+def name_and_uid(session) -> str:
+    """"Name (dwarf_uid)", or the dwarf_uid alone when it has no name."""
+    name = device_name(session)
+    return name if name == session.dwarf_uid else f"{name} ({session.dwarf_uid})"
+
+
+def rename_device(session, name: str) -> bool:
+    """Its display name only: the dwarf_uid and the config files stay, so
+    programs, the Scope Archive link and the Hub are untouched. False when
+    the Dwarf has no devices.json entry."""
+    entries = _read_entries()
+    path = getattr(session.config, "config_py_path", "") or ""
+    for e in entries:
+        if _same_file(e.config_py, path):
+            e.name = name.strip()
+            _write_entries(entries)
+            return True
+    return False
 
 
 def remove_device_entry(config_py: str) -> None:

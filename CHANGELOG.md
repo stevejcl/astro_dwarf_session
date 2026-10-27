@@ -2,6 +2,11 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### A Dwarf's name: shown, and renamed in its Settings
+    The name typed when a Dwarf was added (Bluetooth pairing, manual configuration) was kept in devices.json but
+    shown nowhere - every page showed its uid (user-reported Oct 2026). It is now the title of its dashboard card, its
+    page, its Programs and Settings and its Watch page, the uid under it; a "Dwarf name" field in its Settings renames
+    it - its display name only, the uid and the config files stay (programs, Scope Archive link and Hub untouched).
     ### HTTPS for phones: the app full screen on Android
     Optional, in a device's Settings ("HTTPS for phones"; user-requested Oct 2026, from a fork's commit by
     nhat-bui-dk): Android installs the app full screen only over HTTPS. Once on, this PC also answers in HTTPS on port

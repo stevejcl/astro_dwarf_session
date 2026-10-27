@@ -59,6 +59,7 @@ from components.status_banner import status_banner
 from components.task_check import open_task_check
 from components.pwa import add_pwa_head_tags
 from components.theme import apply_theme
+from device_registry import device_name
 
 # Dwarf uids with a user action currently in flight (connect/disconnect/
 # capture...). Keyed by dwarf_uid, shared across pages - that's fine,
@@ -783,8 +784,11 @@ def build_session_page() -> None:
                     with ui.row().classes("items-center gap-2 w-full"):
                         ui.icon("satellite_alt").classes("text-2xl text-grey-6")
                         with ui.column().classes("gap-0 flex-1"):
-                            ui.label(session.dwarf_uid).classes("font-medium")
-                            ui.label(session.config.dwarf_ip or t("unknown_ip")).classes(
+                            name = device_name(session)
+                            ui.label(name).classes("font-medium")
+                            ui.label(" · ".join(x for x in (
+                                session.dwarf_uid if name != session.dwarf_uid else "",
+                                session.config.dwarf_ip or t("unknown_ip")) if x)).classes(
                                 "text-xs text-grey-6"
                             )
                         ui.icon("circle").classes(

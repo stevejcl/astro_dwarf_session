@@ -124,21 +124,49 @@ def remove_device_entry(config_py: str) -> None:
     _write_entries(entries)
 
 
+# Why a devices.json entry wasn't loaded at startup (user-reported Oct
+# 2026: after a reinstall, 2 Dwarfs shown out of 3, nothing said why) -
+# logged, and shown on the dashboard
+BOOT_PROBLEMS: list[str] = []
+
+
 def bootstrap_devices(manager: DwarfManager) -> None:
     """Registers one DwarfSession per known entry in devices.json. An
-    entry whose files are missing, or without a usable dwarf_uid, is
-    silently skipped rather than crashing startup - the device can
-    always be re-paired later via pages/pairing.py."""
+    entry whose files are missing, without a usable dwarf_uid, or with
+    the dwarf_uid of an entry already loaded (two entries of one Dwarf:
+    the second would replace the first) is skipped rather than crashing
+    startup - and said in BOOT_PROBLEMS. The device can always be
+    re-paired later via pages/pairing.py."""
+    import dwarf_python_api.lib.my_logger as log
+
+    BOOT_PROBLEMS.clear()
+    loaded: dict[str, str] = {}
     for entry in _read_entries():
+        label = entry.name or entry.config_py
+        if not os.path.isfile(entry.config_py):
+            BOOT_PROBLEMS.append(f"{label}: {os.path.abspath(entry.config_py)} not found")
+            continue
         try:
             cfg = DwarfConfig.from_files(entry.config_py, entry.config_ini)
         except FileNotFoundError:
+            BOOT_PROBLEMS.append(f"{label}: {entry.config_ini} not found")
+            continue
+        except Exception as e:   # an unreadable file: the others still loaded
+            BOOT_PROBLEMS.append(f"{label}: {entry.config_py} unreadable ({e})")
             continue
 
         if not cfg.dwarf_uid:
+            BOOT_PROBLEMS.append(f"{label}: no dwarf_uid in {entry.config_py}")
+            continue
+        if cfg.dwarf_uid in loaded:
+            BOOT_PROBLEMS.append(f"{label}: same dwarf_uid ({cfg.dwarf_uid}) as {loaded[cfg.dwarf_uid]} "
+                                 f"in {entry.config_py} - only the first is shown")
             continue
 
         manager.add(cfg)
+        loaded[cfg.dwarf_uid] = label
+    for problem in BOOT_PROBLEMS:
+        log.warning(f"Dwarf not loaded - {problem}")
 
 
 def find_shared_config_value(manager: DwarfManager, getter, exclude_uid: str = ""):

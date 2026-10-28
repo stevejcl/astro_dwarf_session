@@ -200,6 +200,12 @@ def build_dashboard_page() -> None:
                     theme_toggle_button()
 
             empty_label = ui.label(t("no_devices_configured")).classes("text-grey-6 text-sm")
+            # A devices.json entry not loaded at startup, and why
+            from device_registry import BOOT_PROBLEMS
+            if BOOT_PROBLEMS:
+                from components.status_banner import status_banner
+                status_banner(t("devices_not_loaded", count=len(BOOT_PROBLEMS)), kind="warning",
+                              detail=" · ".join(BOOT_PROBLEMS))
             cards_container = ui.grid(columns=columns).classes("w-full gap-3")
 
             # dwarf_uid -> DeviceCardView, kept for the lifetime of this

@@ -41,6 +41,7 @@ _pairing_lock therefore serializes pairing: only one at a time, even
 with several NiceGUI tabs/clients open."""
 from __future__ import annotations
 
+import os
 import threading
 
 from nicegui import run, ui
@@ -113,6 +114,13 @@ def _do_pairing(
     cfg = DwarfConfig.from_files(config_py, config_ini)
     if not cfg.dwarf_uid:
         return False, t("pairing_uid_not_written", config_py=config_py)
+    # A Dwarf already registered: not a second entry (the second replaced
+    # the first in the list - user-reported Oct 2026)
+    same = next((s for s in get_manager().all() if s.dwarf_uid == cfg.dwarf_uid
+                 and os.path.abspath(s.config.config_py_path) != os.path.abspath(config_py)), None)
+    if same is not None:
+        from device_registry import device_name as _name_of
+        return False, t("device_uid_exists", uid=cfg.dwarf_uid, name=_name_of(same))
 
     # Persisted for later reuse by settings.py's "Force Bluetooth"
     # (user-requested Sep 2026) - config.ini already had ble_psd/

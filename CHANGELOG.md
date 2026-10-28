@@ -202,6 +202,10 @@
     answering at that IP is asked who it is (its HTTP deviceInfo, 2 s at most, checked again every 5 min or when
     the IP changes): another Dwarf there - not connected, the message names it and says to update the IP; a
     program doesn't start on it either. A Dwarf without that API, or not answering, connects as before.
+    A Dwarf's HTTP name isn't always its uid (user-reported Oct 2026: DWARF3_3AD946 answers DWARF3_3AD246 - taken
+    for another Dwarf): another Dwarf is now one answering with another registered Dwarf's uid or HTTP name, or
+    with a name unlike this one's; a close name (same model, at most 2 characters apart) is kept the first time as
+    this Dwarf's HTTP name (~/.astro_dwarf_session/http_names.json).
     Force Bluetooth goes to this Dwarf by its Bluetooth name (its dwarf_uid) when it is found, without a choice;
     when it isn't, it says so - another Dwarf answering alone is no longer connected on its own, and none is
     preselected in a list (user-found Oct 2026: Force Bluetooth done with the other DWARF 3 was the cause).

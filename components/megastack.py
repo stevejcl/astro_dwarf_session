@@ -375,12 +375,19 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
     if check is None:
         step(STEP_CHECK, False, "no answer")
         raise RuntimeError("Megastack: the Dwarf didn't answer the check")
-    if not check["ok"]:
-        darks = check.get("need_dark_frames") or []
+    darks = check.get("need_dark_frames") or []
+    if check["code_name"] == "CODE_ASTRO_RESTACK_DARKFRAME_MISMATCH":
+        # Darks missing: the official app only warns and lets the megastack
+        # go on (user-reported Oct 2026) - stacked without them
+        detail = f"{len(darks) or 'some'} dark frame(s) missing - stacked without them"
+        log.warning(f"Megastack: {detail}: {darks}")
+        step(STEP_CHECK, True, f"{len(folders)} sessions, {detail}")
+    elif not check["ok"]:
         detail = check["code_name"] + (f", {len(darks)} dark frame(s) missing" if darks else "")
         step(STEP_CHECK, False, detail)
         raise RuntimeError(f"Megastack refused by the Dwarf: {detail}")
-    step(STEP_CHECK, True, f"{len(folders)} sessions")
+    else:
+        step(STEP_CHECK, True, f"{len(folders)} sessions")
     if interrupted():
         return
 

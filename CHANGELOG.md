@@ -152,6 +152,10 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Megastack: missing darks no longer stop it
+    The Dwarf's check answered CODE_ASTRO_RESTACK_DARKFRAME_MISMATCH when dark frames are missing, and the megastack
+    ended in Error. The official app only warns and lets it go on (user-reported Oct 2026): it now goes on too,
+    stacked without those darks, the check step saying how many were missing.
     ### Milky Way planner: the tiles kept on one night
     The first tiles tonight, the next ones the following night (user-reported Oct 2026): the slot search ran 24 h from
     the start time, so a tile with no room left before dawn (the earlier ones up to dawn, or too low already) took a

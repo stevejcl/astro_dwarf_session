@@ -1024,6 +1024,11 @@ def _camera_value(kind, dwarf_id, session):
     cam = params.get("cameras", {}).get(0) if isinstance(params, dict) else None
     info = (cam or {}).get(kind) or {}
     if kind == "exposure":
+        # In Auto the stored manual value is read back but not used (user-
+        # reported Oct 2026: a DWARF 3 stuck in Auto, the official app
+        # couldn't set it either): not the value wanted
+        if info and not info.get("mode"):
+            return "Auto"
         name = info.get("name")
         if name is None and info.get("value") is not None:
             name = get_exposure_name_by_index(info.get("value"), str(config_to_dwarf_id_str(dwarf_id)))
@@ -1061,7 +1066,9 @@ def _set_checked(kind, wanted, send, dwarf_id, session):
     if _same_value(kind, current, wanted):
         log.notice(f"The Dwarf refused the {kind} ({result}) but already has {current}: going on")
         return 0
-    log.error(f"The Dwarf refused the {kind} {wanted} ({result}); it has {current if current is not None else 'an unknown value'}")
+    log.error(f"The Dwarf refused the {kind} {wanted} ({result}); it has {current if current is not None else 'an unknown value'}"
+              + (" - its exposure stays automatic: restart the Dwarf (the official app can't set it either then)"
+                 if current == "Auto" else ""))
     return False
 
 
@@ -1099,6 +1106,8 @@ def print_camera_data(session=None):
         if exposure_info:
             auto_mode = exposure_info.get("mode")
             log.notice(f"The exposition mode is: {'Manual' if auto_mode else 'Auto'}")
+            if not auto_mode:
+                log.warning("The exposure is automatic: the exposure value below is not the one used")
             camera_exposure = exposure_info.get("name")
             if camera_exposure is None:
                 # fallback: resolve name from the raw index ourselves

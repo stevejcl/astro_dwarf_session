@@ -197,6 +197,9 @@
     answering at that IP is asked who it is (its HTTP deviceInfo, 2 s at most, checked again every 5 min or when
     the IP changes): another Dwarf there - not connected, the message names it and says to update the IP; a
     program doesn't start on it either. A Dwarf without that API, or not answering, connects as before.
+    Force Bluetooth goes to this Dwarf by its Bluetooth name (its dwarf_uid) when it is found, without a choice;
+    when it isn't, it says so - another Dwarf answering alone is no longer connected on its own, and none is
+    preselected in a list (user-found Oct 2026: Force Bluetooth done with the other DWARF 3 was the cause).
     ### Megastack: missing darks no longer stop it
     The Dwarf's check answered CODE_ASTRO_RESTACK_DARKFRAME_MISMATCH when dark frames are missing, and the megastack
     ended in Error. The official app only warns and lets it go on (user-reported Oct 2026): it now goes on too,

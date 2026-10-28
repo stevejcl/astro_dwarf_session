@@ -466,16 +466,26 @@ def build_settings_page() -> None:
                         ble_status_label.set_text(t("pairing_connection_failed"))
                         return
 
-                    if outcome == "single":
-                        await _finish_force_ble("")
+                    # This Dwarf by its Bluetooth name, which is its dwarf_uid
+                    # (user-reported Oct 2026: Force Bluetooth done with the
+                    # other DWARF 3, which then got this one's place) - straight
+                    # to it when found, never another one on its own
+                    if dwarf_uid in names:
+                        await _finish_force_ble(dwarf_uid)
                         return
-
-                    ble_status_label.set_text(t("pairing_multiple_found", count=len(names)))
+                    if outcome == "single":
+                        ble_status_label.set_text(t("settings_force_ble_other_found", name=dwarf_uid, found=names[0]))
+                    else:
+                        ble_status_label.set_text(t("pairing_multiple_found", count=len(names)) + " "
+                                                  + t("settings_force_ble_not_listed", name=dwarf_uid))
+                    ble_status_label.classes(replace="text-xs text-orange-800")
                     with ble_choice_container:
-                        ble_choice = ui.radio(names, value=names[0]).classes("w-full")
+                        ble_choice = ui.radio(names, value=None).classes("w-full")
                         ui.label(t("pairing_rescan_note")).classes("text-xs text-grey-5")
 
                         async def _connect_chosen() -> None:
+                            if not ble_choice.value:
+                                return
                             ble_choice_container.clear()
                             await _finish_force_ble(ble_choice.value)
 

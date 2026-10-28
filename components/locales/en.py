@@ -706,4 +706,6 @@ TRANSLATIONS: dict[str, str] = {
     "devices_not_loaded":          "{count} problem(s) with the Dwarfs of devices.json:",
     "device_uid_exists":           "This Dwarf ({uid}) is already registered as \u00ab{name}\u00bb - each Dwarf once. Wrong Dwarf? Check its IP (Identify).",
     "wrong_dwarf_at_ip":           "At {ip} answers {other}, not {name}: two Dwarfs with the same IP? Update {name}'s IP in its Settings (Manually update IP, or Force Bluetooth).",
+    "settings_force_ble_other_found": "Only {found} answers over Bluetooth, not this Dwarf ({name}): switch it on or bring the PC closer, then search again. Pick {found} only if it really is this Dwarf.",
+    "settings_force_ble_not_listed": "This Dwarf ({name}) is not among them: switch it on or bring the PC closer, then search again.",
 }

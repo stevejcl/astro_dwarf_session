@@ -188,6 +188,9 @@
     the first) was skipped silently. It is now in the log and in a warning at the top of the dashboard, with the
     file concerned. A Dwarf whose dwarf_uid is already registered is no longer added a second time (manual
     configuration, Bluetooth pairing): the message names the Dwarf that has it.
+    The cause, found by the user: Settings' Force Bluetooth, when another Dwarf answered, said "not applied" but
+    had already written that Dwarf's uid and IP into this one's config_*.py - after a restart the two had the same
+    uid. The file is now put back as it was when another Dwarf answers, or when the connection fails.
     ### Megastack: missing darks no longer stop it
     The Dwarf's check answered CODE_ASTRO_RESTACK_DARKFRAME_MISMATCH when dark frames are missing, and the megastack
     ended in Error. The official app only warns and lets it go on (user-reported Oct 2026): it now goes on too,

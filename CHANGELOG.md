@@ -182,6 +182,11 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Exposure / gain refused by the Dwarf: no longer taken for a success
+    A program's exposure and gain answered -1 by the Dwarf (refused) were logged "SUCCESS ... -> -1" and the step
+    went on as done (user-reported Oct 2026; the values happened to be right, left by the run before). Now a refusal
+    is logged and asked again once; still refused, the value read back from the Dwarf decides: already the one
+    wanted, the program goes on and says so; another one, the step fails.
     ### A Dwarf of devices.json not loaded: said why
     After a reinstall, 2 Dwarfs shown out of 3 and nothing said why (user-reported Oct 2026): an entry whose
     config_*.py is missing, has no DWARF_UID, or has the DWARF_UID of a Dwarf already loaded (the second replaced

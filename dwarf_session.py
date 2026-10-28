@@ -721,7 +721,10 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
         if take_photo:
             log.notice(f"Processing Astro Photo Session : {count_val} images")
             if exp_val:
-                continue_action = perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), session=session)
+                continue_action = _set_checked(
+                    "exposure", exp_val,
+                    lambda: perform_set_astro_exposure_by_name_v3(exp_val, dwarf_id=str(config_to_dwarf_id_str(dwarf_id)), session=session),
+                    dwarf_id, session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
                 # Actual-value traces (user-requested Sep 2026: "affichage
@@ -733,7 +736,9 @@ def start_dwarf_session(program, stop_event=None, session=None, progress_callbac
                 if progress_callback:
                     progress_callback(f"Exposure: {exp_val}", "success")
             if gain_val:
-                continue_action = perform_set_astro_gain_v3(int(gain_val), session=session)
+                continue_action = _set_checked(
+                    "gain", gain_val, lambda: perform_set_astro_gain_v3(int(gain_val), session=session),
+                    dwarf_id, session)
                 if interrupted(): return
                 verify_action(continue_action, "step_10", progress_callback=progress_callback)
                 if progress_callback:
@@ -1011,6 +1016,54 @@ def verify_action(result, action_step, progress_callback=None):
         if progress_callback:
             progress_callback(action_step, "failed")
         raise RuntimeError(f"Action failed at step: {STEP_DESCRIPTIONS.get(action_step, action_step)}")
+
+def _camera_value(kind, dwarf_id, session):
+    """The Tele's current exposure name / gain value read from the Dwarf
+    (HTTP API, as print_camera_data()), None when not read."""
+    params = perform_read_camera_params_http_v3(mode_id=2, session=session)
+    cam = params.get("cameras", {}).get(0) if isinstance(params, dict) else None
+    info = (cam or {}).get(kind) or {}
+    if kind == "exposure":
+        name = info.get("name")
+        if name is None and info.get("value") is not None:
+            name = get_exposure_name_by_index(info.get("value"), str(config_to_dwarf_id_str(dwarf_id)))
+        return None if name is None else str(name)
+    return None if info.get("value") is None else str(info.get("value"))
+
+
+def _same_value(kind, read, wanted) -> bool:
+    if read is None:
+        return False
+    if kind == "exposure":
+        return str(read).rstrip("s").strip() == str(wanted).rstrip("s").strip()
+    try:
+        return int(float(read)) == int(float(wanted))
+    except (TypeError, ValueError):
+        return False
+
+
+def _set_checked(kind, wanted, send, dwarf_id, session):
+    """Sends an exposure / gain setting and checks the Dwarf's answer (user-
+    reported Oct 2026: it answered -1 - refused - and verify_action() took
+    any answer for a success). Refused: asked again once; still refused,
+    the value read back from the Dwarf decides - already the one wanted
+    (the run before set it): goes on, said; else False (the step fails).
+    Returns the setting's result for verify_action()."""
+    result = send()
+    if result is False or result is True or result == 0:
+        return result
+    log.warning(f"Setting the {kind} to {wanted}: the Dwarf answered {result} (refused) - asked again")
+    time.sleep(2)
+    result = send()
+    if result is False or result is True or result == 0:
+        return result
+    current = _camera_value(kind, dwarf_id, session)
+    if _same_value(kind, current, wanted):
+        log.notice(f"The Dwarf refused the {kind} ({result}) but already has {current}: going on")
+        return 0
+    log.error(f"The Dwarf refused the {kind} {wanted} ({result}); it has {current if current is not None else 'an unknown value'}")
+    return False
+
 
 def print_camera_data(session=None):
     camera_exposure = False

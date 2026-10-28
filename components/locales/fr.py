@@ -300,7 +300,7 @@ TRANSLATIONS: dict[str, str] = {
     "settings_force_ble_button":    "Forcer la reconnexion Bluetooth",
     "settings_force_ble_failed":    "La connexion Bluetooth a \u00e9chou\u00e9.",
     "settings_force_ble_no_uid":    "Connect\u00e9, mais impossible de relire l'identifiant de l'appareil depuis son fichier de configuration.",
-    "settings_force_ble_uid_mismatch": "Un appareil diff\u00e9rent a \u00e9t\u00e9 trouv\u00e9 (attendu {expected}, obtenu {got}) - non appliqu\u00e9, pour \u00e9viter de m\u00e9langer deux Dwarf.",
+    "settings_force_ble_uid_mismatch": "Un appareil diff\u00e9rent a \u00e9t\u00e9 trouv\u00e9 (attendu {expected}, obtenu {got}) : rien n'est modifi\u00e9, pour ne pas m\u00e9langer deux Dwarf. \u00c9teins le Bluetooth de l'autre, ou choisis celui-ci dans la liste.",
     "settings_force_ble_success":   "Reconnect\u00e9 et enregistr\u00e9 automatiquement - nouvelle IP : {ip}",
     "settings_wake_title":        "R\u00e9veil depuis le t\u00e9l\u00e9phone (hotspot)",
     "settings_wake_hint":         "Si le Dwarf ne r\u00e9pond plus sur le Wi-Fi et que ce PC est trop loin pour le Bluetooth : ouvrez cette page sur le t\u00e9l\u00e9phone, pr\u00e8s du Dwarf - son Bluetooth bascule le Dwarf sur son hotspot, ce qui le r\u00e9veille, puis le remet sur le Wi-Fi de la maison.",

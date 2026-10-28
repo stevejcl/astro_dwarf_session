@@ -112,17 +112,38 @@ def _do_force_bluetooth(
         lock_file=config_py + ".lock",
     )
 
+    # connect_ble() writes what it found (uid, IP, model) into config_py
+    # as it goes: kept as it was unless it is this Dwarf (user-reported Oct
+    # 2026: another Dwarf answered, "not applied" was said, but its uid was
+    # in the file already - after a restart this Dwarf had the other one's
+    # identity, and one of the two vanished from the list)
+    try:
+        with open(config_py, "rb") as f:
+            saved = f.read()
+    except OSError:
+        saved = None
+
+    def _restore() -> None:
+        if saved is not None:
+            try:
+                with open(config_py, "wb") as f:
+                    f.write(saved)
+            except OSError:
+                pass
+
     connected = connect_ble(ble_psd, wifi_ssid, wifi_pwd, auto_select)
     if not connected:
+        _restore()
         return False, t("settings_force_ble_failed")
 
     fresh = DwarfConfig.from_files(config_py, config_ini)
     if not fresh.dwarf_uid:
+        _restore()
         return False, t("settings_force_ble_no_uid")
     if fresh.dwarf_uid != session.dwarf_uid:
-        # Shouldn't normally happen for the SAME physical device, but if
-        # BLE somehow matched a DIFFERENT Dwarf, don't silently merge
-        # its identity into this session.
+        # BLE matched a DIFFERENT Dwarf (several in range): its identity
+        # neither in this session nor in this Dwarf's file
+        _restore()
         return False, t(
             "settings_force_ble_uid_mismatch", expected=session.dwarf_uid, got=fresh.dwarf_uid
         )

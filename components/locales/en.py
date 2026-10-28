@@ -300,7 +300,7 @@ TRANSLATIONS: dict[str, str] = {
     "settings_force_ble_button":    "Force Bluetooth reconnect",
     "settings_force_ble_failed":    "Bluetooth connection failed.",
     "settings_force_ble_no_uid":    "Connected, but couldn't read back the device's UID from its config file.",
-    "settings_force_ble_uid_mismatch": "Found a different device (expected {expected}, got {got}) - not applied, to avoid mixing up two Dwarfs.",
+    "settings_force_ble_uid_mismatch": "Found a different device (expected {expected}, got {got}) - nothing changed, to avoid mixing up two Dwarfs. Turn the other one's Bluetooth off, or pick this one in the list.",
     "settings_force_ble_success":   "Reconnected and saved automatically - new IP: {ip}",
     "settings_wake_title":        "Wake up from the phone (hotspot)",
     "settings_wake_hint":         "If the Dwarf no longer answers on the Wi-Fi and this PC is too far for Bluetooth: open this page on the phone, close to the Dwarf - its Bluetooth switches the Dwarf to its hotspot, which wakes it up, then back to the home Wi-Fi.",

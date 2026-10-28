@@ -161,8 +161,10 @@ class DeviceCardView:
         on_toggle_hidden: Callable[[str], None] | None = None,
         hidden: bool = False,
         on_move: Callable[[str, str], None] | None = None,
+        watch: bool = False,
     ) -> None:
-        """on_toggle_hidden(uid): called by the card's hide/show button
+        """watch: on the watch dashboard - the image opens the watch's
+        full-screen view. on_toggle_hidden(uid): called by the card's hide/show button
         (the dashboard moves the card and saves the choice - see
         components/device_prefs.py). hidden: only the header is shown.
         on_move(uid, where): called by the card's order menu, where being
@@ -170,6 +172,8 @@ class DeviceCardView:
         self.dwarf_uid = session.dwarf_uid
         self._session = session         # the latest one (update()), for Identify
         self.hidden = hidden
+        self._live_url = f"/watch/{session.dwarf_uid}/live" if watch else f"/live/{session.dwarf_uid}"
+        self._adjust_version: str | None = None
         self._banner_kind: str | None = None
         self._dynamic_label: ui.label | None = None
         self._dynamic_detail: ui.label | None = None
@@ -355,7 +359,7 @@ class DeviceCardView:
                         )
                     self._idle_last_run_row.set_visibility(False)
                 with ui.column().classes("gap-2 w-full") as self._active_content:
-                    self._thumbnail, self._thumbnail_open_button = build_dashboard_thumbnail(session)
+                    self._thumbnail, self._thumbnail_open_button = build_dashboard_thumbnail(session, self._live_url)
                     # Small icon + Battery/Temperature/Disk, all in a
                     # single horizontal LINE below the full-width image
                     # (revised Sep 2026 - the user settled on this
@@ -550,6 +554,14 @@ class DeviceCardView:
             # active_session is already True here (this branch is only
             # reached in that case) - only camera availability itself
             # gates the thumbnail now.
+            # The display adjustments made in the full-screen view
+            # (components/live_view.py), followed when they change
+            if self._thumbnail is not None:
+                from components import live_view
+                version = live_view.adjust_version(self.dwarf_uid)
+                if version != self._adjust_version:
+                    self._adjust_version = version
+                    live_view.apply_adjustments(self.dwarf_uid)
             # A megastack: its stack's thumbnail instead of the Tele preview
             # (nothing to see there meanwhile), re-read on progress
             megastack_thumb = device_task.megastack_preview_url(session)

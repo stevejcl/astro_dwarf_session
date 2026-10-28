@@ -2,6 +2,19 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### Full-screen live stacking view
+    The card's and the device page's full-screen button opened the Dwarf's raw image alone in a browser tab
+    (user-requested Oct 2026, issue #164). It now opens a view in the app (/live/<uid>): the last stacked image,
+    replaced once the next one is loaded, with the target, the progress (stacked / taken / total, end time) and the
+    camera's settings over it - hidden with a button, remembered by the browser. Display adjustments (brightness,
+    contrast, saturation, black point, gamma) kept by the app for each Dwarf, never sent to it nor written in a file;
+    zoom and pan (wheel, pinch, double click or tap to reset) each viewer's own. On a DWARF mini, the only one
+    stacking with both cameras, the other one in a small inset: swapped with a click, hidden with a button. A
+    megastack shows its stack and its progress. Watch: the device page shows the stacked image (no longer the
+    streams) as adjusted from the control app, a click opens the same view (/watch/<uid>/live) without the
+    adjustments; the dashboard cards' images are adjusted too. The image goes through this app
+    (/live/frame/<uid>/<cam>): one request to the Dwarf per new image whatever the number of viewers, seen from a
+    phone over HTTPS or Tailscale too.
     ### A Dwarf's name: shown, and renamed in its Settings
     The name typed when a Dwarf was added (Bluetooth pairing, manual configuration) was kept in devices.json but
     shown nowhere - every page showed its uid (user-reported Oct 2026). It is now the title of its dashboard card, its

@@ -4,9 +4,10 @@ d'ajouter ses propres objets, par exemple ceux obtenus dans Astro Dwarf
 Session par /catalog" - then "on pourrait creer un second fichier
 catalog_add_on, qu'on importe apres").
 
-A SECOND file, catalog_add_on.json, in the SAME folder as the
-dso_catalog.json in use (see dso_catalog.add_on_path()): Dwarfium Scope
-Archive's db/ when it is installed next to this app, else assets/.
+A SECOND file, catalog_add_on.json (see dso_catalog.add_on_path()):
+Dwarfium Scope Archive's db/ when it is installed next to this app, else
+the user's folder (~/.astro_dwarf_session - no longer assets/, which an
+update may replace; issue #162).
 dso_catalog.json itself is never written: it stays exactly as the
 Dwarfium notebook (notebooks/5_create_catalogues.ipynb) produces it,
 and Dwarfium Scope Archive can import catalog_add_on.json AFTER it with
@@ -20,7 +21,14 @@ came from, e.g. "catalog.html") and "addedAt" (ISO timestamp).
 dso_catalog.load_catalog() merges them after the shared catalog,
 skipping any the shared catalog already has.
 
-Today's only source: the /catalog page (JD's Deep Sky Catalog), when
+"My objects" (user-requested Oct 2026, issue #162): any target kept from
+the program editor - Stellarium, RA/Dec typed in, a variable star, a
+recent target - or added by hand in "Pick from catalog": only the name,
+RA and Dec are needed (entry_for_target()), source "stellarium",
+"manual", "variable-star", "recent" or "catalog-dialog"; edited or
+removed there.
+
+The first source: the /catalog page (JD's Deep Sky Catalog), when
 the user ticks "keep these targets in the catalog" (user-requested Oct
 2026: "il faut que l'utilisateur choisisse s'il conserve cette
 donnee") - every target it sends to /api/schedule carries a
@@ -218,6 +226,90 @@ def entry_from_catalog_page(meta: dict, ra_hours, dec_deg) -> dict | None:
         "source": "catalog.html",
         "addedAt": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+def entry_for_target(name: str, ra_hours: float, dec_deg: float, source: str, *, type_name: str = "",
+                     magnitude=None, notes: str = "", constellation: str = "") -> dict:
+    """A user's object from its name and coordinates (the rest optional) -
+    dso_catalog.json's schema, so both apps read it unchanged."""
+    name = name.strip()
+    category = {"Galaxy": "galaxies", "Open Cluster": "clusters", "Globular Cluster": "clusters",
+                "Star": "stars", "Variable Star": "stars"}.get(type_name, "nebulae" if "Nebula" in type_name else "other")
+    return {
+        "dec": format_dec(float(dec_deg)),
+        "designation": name,
+        "magnitude": _number(magnitude),
+        "type": type_name or "Other classification (see object notes)",
+        "typeCategory": category,
+        "ra": format_ra(float(ra_hours)),
+        "displayName": name,
+        "alternateNames": None,
+        "catalogue": "",
+        "objectNumber": None,
+        "constellation": constellation,
+        "size": "",
+        "notes": notes,
+        "favorite": False,
+        "source": source,
+        "addedAt": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+def add_target(name: str, ra_hours: float, dec_deg: float, source: str, **fields) -> tuple[bool, str]:
+    """Keeps a target in "my objects". (added, designation): False with the
+    known object's designation when the catalog or the file has it
+    already (same name, or within DUPLICATE_RADIUS_ARCMIN)."""
+    from components import dso_catalog
+
+    entry = entry_for_target(name, ra_hours, dec_deg, source, **fields)
+    with _lock:
+        known = dso_catalog.load_catalog(force_reload=True)
+        same = find_duplicate(entry, float(ra_hours) % 24, float(dec_deg), known)
+        if same is not None:
+            return False, same.get("designation") or name
+        path = dso_catalog.add_on_path()
+        stored = read_entries(path)
+        stored.append(entry)
+        _write_entries(path, stored)
+        dso_catalog.load_catalog(force_reload=True)
+    return True, entry["designation"]
+
+
+def update_entry(designation: str, name: str, ra_hours: float, dec_deg: float, type_name: str = "",
+                 magnitude=None, notes: str = "") -> bool:
+    """Edits one of "my objects" (its source and date kept). False when
+    it isn't in the file."""
+    from components import dso_catalog
+
+    with _lock:
+        path = dso_catalog.add_on_path()
+        stored = read_entries(path)
+        for i, item in enumerate(stored):
+            if isinstance(item, dict) and item.get("designation") == designation:
+                new = entry_for_target(name, ra_hours, dec_deg, item.get("source") or "manual",
+                                       type_name=type_name or item.get("type") or "", magnitude=magnitude,
+                                       notes=notes, constellation=item.get("constellation") or "")
+                new["addedAt"] = item.get("addedAt") or new["addedAt"]
+                if name.strip() == designation:   # the catalog page's fields kept
+                    new = {**item, **{k: v for k, v in new.items() if k in (
+                        "ra", "dec", "type", "typeCategory", "magnitude", "notes")}}
+                stored[i] = new
+                _write_entries(path, stored)
+                dso_catalog.load_catalog(force_reload=True)
+                return True
+    return False
+
+
+def known_object(name: str, ra_hours, dec_deg) -> dict | None:
+    """The catalog's object (shared or the user's) for this name or
+    position, None when unknown - or when the coordinates don't parse."""
+    from components import dso_catalog
+
+    try:
+        ra, dec = float(ra_hours) % 24, float(dec_deg)
+    except (TypeError, ValueError):
+        return None
+    return find_duplicate({"designation": name}, ra, dec, dso_catalog.load_catalog())
 
 
 # -- duplicates ------------------------------------------------------------

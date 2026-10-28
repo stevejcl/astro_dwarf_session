@@ -18,7 +18,7 @@ import re
 import uuid
 from datetime import datetime, timedelta
 
-from nicegui import run, ui
+from nicegui import app, run, ui
 
 from components.coords import parse_dec_degrees, parse_ra_hours
 from components.camera_settings import (
@@ -251,6 +251,9 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                     ).classes("w-36").tooltip(t("prog_dec_hint"))
 
             stellarium_status = ui.label("").classes("text-xs")
+            # Where the target came from: "catalog" (already kept), else it can
+            # be kept in "my objects" on save (user-requested Oct 2026, #162)
+            target_origin = {"source": "manual", "type": "", "mag": None}
 
             async def _fetch_from_stellarium() -> None:
                 stellarium_status.set_text(t("prog_stellarium_fetching"))
@@ -270,6 +273,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 dec_input.value = str(target.dec_degrees)
                 description.value = target.description
                 goto_mode.value = "manual"
+                target_origin.update(source="stellarium", type="", mag=None)
                 _update_goto_visibility()
                 stellarium_status.set_text(t("prog_stellarium_fetched", name=target.target_name))
                 stellarium_status.classes(replace="text-xs text-green-700")
@@ -285,6 +289,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 dec_input.value = f"{entry['dec_deg']:.6f}"
                 description.value = describe_catalog_entry(entry)
                 goto_mode.value = "manual"
+                target_origin.update(source="recent" if entry.get("_recentOnly") else "catalog", type="", mag=None)
                 _update_goto_visibility()
                 stellarium_status.set_text(t("prog_stellarium_fetched", name=name))
                 stellarium_status.classes(replace="text-xs text-green-700")
@@ -301,6 +306,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                 dec_input.value = f"{float(star['dec_deg']):.6f}"
                 description.value = describe_minimum(minimum)
                 goto_mode.value = "manual"
+                target_origin.update(source="variable-star", type="Variable Star", mag=star.get("mag"))
                 _update_goto_visibility()
                 if camera_choice.value == "none":
                     camera_choice.value = "tele"
@@ -340,6 +346,24 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
                         session, _apply_minimum, _current_night, tz=site_tz(session.config)
                     ),
                 ).props("flat dense").classes("icon-beside").bind_visibility_from(eclipsing_feature, "enabled")
+
+            # A target from Stellarium, typed in, a variable star or a recent
+            # one: kept in "my objects" on save if ticked (the choice
+            # remembered) - not shown for a catalog object, kept already
+            keep_cb = ui.checkbox(
+                t("prog_keep_my_objects"), value=bool(app.storage.general.get("keep_my_objects", False))
+            ).props("dense").classes("text-sm").tooltip(t("prog_keep_my_objects_hint"))
+
+            def _on_target_typed(_e=None) -> None:
+                target_origin.update(source="manual", type="", mag=None)
+                keep_cb.set_visibility(True)
+
+            manual_target.on_value_change(_on_target_typed)
+            # An edited program whose target the catalog has: nothing to keep
+            from components.catalog_add_on import known_object
+            if cmd["goto_manual"].get("target") and known_object(
+                    cmd["goto_manual"]["target"], cmd["goto_manual"].get("ra_coord"), cmd["goto_manual"].get("dec_coord")):
+                target_origin["source"] = "catalog"
 
             # Altitude over the night + best slot (user-requested Oct
             # 2026: "voir sa hauteur dans le ciel pour choisir le
@@ -414,6 +438,7 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
         def _update_goto_visibility() -> None:
             solar_section.set_visibility(goto_mode.value == "solar")
             manual_section.set_visibility(goto_mode.value == "manual")
+            keep_cb.set_visibility(target_origin["source"] != "catalog")
 
         goto_mode.on_value_change(lambda _: _update_goto_visibility())
         _update_goto_visibility()
@@ -975,6 +1000,18 @@ def build_program_editor(session, *, initial_program: dict | None = None, on_sav
             write_json_atomic(filepath, new_program)
 
             message = t("prog_saved", filename=filename)
+            if goto_mode.value == "manual" and keep_cb.visible:
+                app.storage.general["keep_my_objects"] = bool(keep_cb.value)
+                if keep_cb.value:
+                    from components import catalog_add_on
+                    goto = new_cmd["goto_manual"]
+                    try:
+                        added, name = catalog_add_on.add_target(
+                            goto["target"], goto["ra_coord"], goto["dec_coord"], target_origin["source"],
+                            type_name=target_origin["type"], magnitude=target_origin["mag"])
+                        message += " " + t("my_objects_added" if added else "my_objects_known", name=name)
+                    except (OSError, ValueError, TypeError) as e:
+                        message += " " + t("my_objects_not_saved", error=e)
             # Soft, non-blocking heads-up: mosaic was checked but both
             # framings are 1.00x, so _collect_cmd() already saved it as
             # a normal (non-mosaic) session - matching what dwarf_

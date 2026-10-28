@@ -20,9 +20,14 @@ Lookup order (first file found wins):
      replaceable file next to the .exe, same as catalog.html - see
      api_routes.py's _external_path()).
 
-Then catalog_add_on.json from the SAME folder (see components/
-catalog_add_on.py) is appended after it - a second file, so
-dso_catalog.json is never modified."""
+Then catalog_add_on.json (see components/catalog_add_on.py) is appended
+after it - a second file, so dso_catalog.json is never modified. It sits
+next to Dwarfium Scope Archive's catalog (that app reads it too), else in
+the user's folder (~/.astro_dwarf_session, components/my_targets.py), not
+in assets/ that an update may replace (issue #162; moved from there once).
+A user object that the shared catalog has too is not listed twice: the
+shared entry is kept, the user's name for it carried onto it
+(_userDesignation) so its favourite stays."""
 from __future__ import annotations
 
 import json
@@ -110,12 +115,17 @@ def load_catalog(force_reload: bool = False) -> list[dict]:
         entries, source = _with_coordinates(raw), path
         break
 
-    # A user object later added to the shared catalog itself is skipped
-    # here rather than shown twice.
+    # A user object later added to the shared catalog itself: the shared
+    # entry, with the user's name for it (its favourite kept)
     shared_count = len(entries)
     for item in _with_coordinates(catalog_add_on.read_entries(_add_on_path_for(source))):
-        if not catalog_add_on.find_duplicate(item, item["ra_hours"], item["dec_deg"], entries[:shared_count]):
+        same = catalog_add_on.find_duplicate(item, item["ra_hours"], item["dec_deg"], entries[:shared_count])
+        if same is None:
             entries.append({**item, "_addOn": True})
+            continue
+        index = next(i for i, e in enumerate(entries) if e is same)
+        if item.get("designation") and item["designation"] != same.get("designation"):
+            entries[index] = {**same, "_userDesignation": item["designation"]}
 
     _cache, _cache_source, _user_count = entries, source, len(entries) - shared_count
     return _cache
@@ -135,13 +145,28 @@ def _with_coordinates(raw: list) -> list[dict]:
 
 
 def _add_on_path_for(source: Path | None) -> Path:
-    folder = source.parent if source else _app_dir() / "assets"
-    return folder / "catalog_add_on.json"
+    """Next to Dwarfium Scope Archive's catalog (it reads the file too),
+    else in the user's folder - moved there once from assets/."""
+    from components.my_targets import USER_DIR
+
+    assets = _app_dir() / "assets"
+    if source and source.parent.resolve() != assets.resolve():
+        return source.parent / "catalog_add_on.json"
+    path = USER_DIR / "catalog_add_on.json"
+    old = assets / "catalog_add_on.json"
+    if not path.exists() and old.is_file():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(old.read_bytes())
+            old.rename(old.with_name("catalog_add_on.json.moved"))
+        except OSError:
+            return old if not path.exists() else path
+    return path
 
 
 def add_on_path() -> Path:
-    """catalog_add_on.json next to the dso_catalog.json in use (assets/
-    when none was found) - where new objects are written and read."""
+    """catalog_add_on.json in use (_add_on_path_for()) - where new objects
+    are written and read."""
     return _add_on_path_for(catalog_source())
 
 
@@ -169,8 +194,10 @@ def describe(entry: dict) -> str:
     """Same "Observation of X (Type) in Constellation (Mag: Y)" shape
     stellarium.py builds, so a program description reads the same
     whichever way its target was picked."""
+    if entry.get("_description"):   # a recent target: its program's own description
+        return entry["_description"]
     parts = [f"Observation of {short_name(entry)}"]
-    if entry.get("type"):
+    if entry.get("type") and not str(entry["type"]).startswith("Other classification"):
         parts.append(f"({entry['type']})")
     if entry.get("constellation"):
         parts.append(f"in {entry['constellation']}")

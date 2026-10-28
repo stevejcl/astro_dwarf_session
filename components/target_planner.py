@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 from nicegui import ui
 
-from components import catalog_add_on
+from components import catalog_add_on, my_targets
 from components.dso_catalog import add_on_path, catalog_source, load_catalog, max_dark_altitudes, user_entry_count
 from components.i18n import t
 import json
@@ -74,43 +74,87 @@ def earliest_start(start: datetime, now: datetime) -> datetime:
     return rounded if rounded == lead else rounded + timedelta(minutes=1)
 
 
+_VIEWS = ("all", "fav", "recent", "mine")
+# Types offered for "my objects" (dso_catalog.json's names)
+_MY_TYPES = ("", "Galaxy", "Emission Nebula", "Reflection Nebula", "Planetary Nebula", "Dark Nebula",
+             "Open Cluster", "Globular Cluster", "Variable Star", "Star")
+
+
 def open_catalog_dialog(
     session,
     on_pick: Callable[[dict], None],
     get_night: Callable[[], datetime],
     *,
     tz: tzinfo | None = None,
+    view: str = "all",
 ) -> None:
     """on_pick(entry): called with the chosen catalog entry (its
     ra_hours/dec_deg already parsed - see dso_catalog.load_catalog()).
-    tz: timezone of get_night()'s date (None = this PC's)."""
-    entries = load_catalog()
+    tz: timezone of get_night()'s date (None = this PC's).
+
+    Favourites (a star to tick), recent targets (the programs already run)
+    and "my objects" (catalog_add_on.json) first, then the catalog; a
+    filter shows one of them only (user-requested Oct 2026, issue #162 -
+    components/my_targets.py). "My objects" are added, edited and removed
+    here."""
+    from dwarf_python_api.lib.dwarf_session import get_manager
+
+    entries = list(load_catalog())
+    location = site_location(session)
+    night = get_night()
+
+    # Recent targets: their catalog object when it has one, else their own row
+    recent_by_index: dict[int, dict] = {}
+    try:
+        recent = my_targets.recent_targets(get_manager().all())
+    except Exception:
+        recent = []
+    for item in recent:
+        same = catalog_add_on.find_duplicate({"designation": item["name"]}, item["ra_hours"], item["dec_deg"], entries)
+        if same is not None:
+            index = next(i for i, e in enumerate(entries) if e is same)
+            recent_by_index.setdefault(index, item)
+        else:
+            entries.append({"designation": item["name"], "displayName": item["name"], "ra_hours": item["ra_hours"],
+                            "dec_deg": item["dec_deg"], "type": "", "_recentOnly": True,
+                            "_description": item["description"]})
+            recent_by_index[len(entries) - 1] = item
     if not entries:
         ui.notify(t("catalog_not_found"), type="warning")
         return
 
-    location = site_location(session)
-    night = get_night()
     altitudes = (
         max_dark_altitudes(entries, location[0], location[1], night, tz=tz) if location else [None] * len(entries)
     )
 
+    def _rank(row) -> tuple:
+        group = 0 if row["fav"] else 1 if row["recent"] else 2 if row["addOn"] else 3
+        return (group, row["lastSort"], -(row["alt"] if row["alt"] is not None else -99))
+
     rows = []
     for i, (entry, alt) in enumerate(zip(entries, altitudes)):
+        rec = recent_by_index.get(i)
         rows.append({
             "id": i,
             "designation": entry.get("designation", ""),
-            "name": entry.get("alternateNames") or "",
-            "type": entry.get("type") or "",
+            "name": entry.get("alternateNames") or (entry.get("_userDesignation") or ""),
+            "type": "" if str(entry.get("type") or "").startswith("Other classification") else entry.get("type") or "",
             "category": entry.get("typeCategory") or "",
             "constellation": entry.get("constellation") or "",
             "mag": entry.get("magnitude"),
             "size": entry.get("size") or "",
             "alt": round(alt) if alt is not None else None,
             "addOn": bool(entry.get("_addOn")),
+            "recentOnly": bool(entry.get("_recentOnly")),
+            "fav": my_targets.is_favorite(entry),
+            "recent": rec is not None,
+            "last": t("catalog_recent_last", date=rec["last"].strftime("%Y-%m-%d"), count=rec["count"]) if rec else "",
+            "lastSort": 0 if rec is None else -rec["last"].timestamp(),   # the last used first
         })
+    rows.sort(key=_rank)
 
     columns = [
+        {"name": "fav", "label": "", "field": "fav", "align": "center"},
         {"name": "designation", "label": t("catalog_col_designation"), "field": "designation", "sortable": True, "align": "left"},
         {"name": "name", "label": t("catalog_col_name"), "field": "name", "sortable": True, "align": "left"},
         {"name": "type", "label": t("catalog_col_type"), "field": "type", "sortable": True, "align": "left"},
@@ -120,22 +164,33 @@ def open_catalog_dialog(
     ]
     if location:
         columns.append({"name": "alt", "label": t("catalog_col_max_alt"), "field": "alt", "sortable": True})
-    has_add_on = any(r["addOn"] for r in rows)
-    if has_add_on:
-        columns.append({"name": "actions", "label": "", "field": "addOn"})
+    columns.append({"name": "actions", "label": "", "field": "addOn"})
+
+    def _reopen(new_view: str) -> None:
+        dialog.close()
+        open_catalog_dialog(session, on_pick, get_night, tz=tz, view=new_view)
 
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl"):
         ui.label(t("catalog_title")).classes("text-lg")
         source = catalog_source()
         user_count = user_entry_count()
         if source:
-            ui.label(t("catalog_source", path=str(source), count=len(entries) - user_count)).classes("text-xs text-grey-6")
+            ui.label(t("catalog_source", path=str(source), count=len(load_catalog()) - user_count)).classes("text-xs text-grey-6")
         if user_count:
             ui.label(t("catalog_add_on_source", path=str(add_on_path()), count=user_count)).classes("text-xs text-grey-6")
         if location:
             ui.label(t("catalog_alt_hint", date=night.strftime("%Y-%m-%d"))).classes("text-xs text-grey-6")
         else:
             ui.label(t("planner_no_location")).classes("text-xs text-amber-700")
+
+        with ui.row().classes("w-full gap-2 items-center"):
+            view_toggle = ui.toggle(
+                {v: t(f"catalog_view_{v}") for v in _VIEWS},
+                value=view if view in _VIEWS else "all",
+            ).props("dense no-caps")
+            ui.space()
+            ui.button(t("catalog_my_add"), icon="add_location_alt",
+                      on_click=lambda: _edit_my_object(None, lambda: _reopen("mine"))).props("flat dense no-caps")
 
         with ui.row().classes("w-full gap-2 items-end"):
             search = ui.input(t("catalog_search")).props("clearable autofocus").classes("flex-1 min-w-[200px]")
@@ -151,46 +206,111 @@ def open_catalog_dialog(
             columns=columns,
             rows=rows,
             row_key="id",
-            pagination={"rowsPerPage": 10, "sortBy": "alt" if location else "designation", "descending": bool(location)},
+            pagination={"rowsPerPage": 10},
         ).classes("w-full").props("dense flat")
         search.bind_value_to(table, "filter")
+        empty_label = ui.label("").classes("text-sm text-grey-6")
 
-        # Objects from catalog_add_on.json can be removed again (user-
-        # requested Oct 2026: the user chooses whether to keep them).
-        if has_add_on:
-            table.add_slot(
-                "body-cell-actions",
-                '<q-td :props="props">'
-                '<q-btn v-if="props.row.addOn" flat dense round size="sm" icon="delete_outline" color="negative"'
-                ' @click.stop="() => $parent.$emit(\'remove_add_on\', props.row)">'
-                f'<q-tooltip>{t("catalog_add_on_remove")}</q-tooltip></q-btn>'
-                '</q-td>',
-            )
+        table.add_slot(
+            "body-cell-fav",
+            '<q-td :props="props">'
+            '<q-btn flat dense round size="sm" :icon="props.row.fav ? \'star\' : \'star_border\'"'
+            ' :color="props.row.fav ? \'amber-8\' : \'grey-6\'"'
+            ' @click.stop="() => $parent.$emit(\'toggle_fav\', props.row)">'
+            f'<q-tooltip>{t("catalog_fav_toggle")}</q-tooltip></q-btn>'
+            '</q-td>',
+        )
+        table.add_slot(
+            "body-cell-designation",
+            '<q-td :props="props">{{ props.value }}'
+            '<q-icon v-if="props.row.recent" name="history" size="xs" color="primary" class="q-ml-xs">'
+            '<q-tooltip>{{ props.row.last }}</q-tooltip></q-icon>'
+            '<q-icon v-if="props.row.addOn" name="push_pin" size="xs" color="teal" class="q-ml-xs">'
+            f'<q-tooltip>{t("catalog_view_mine")}</q-tooltip></q-icon>'
+            '</q-td>',
+        )
+        # "My objects" can be edited and removed again (user-requested Oct
+        # 2026: the user chooses whether to keep them); a recent target
+        # that isn't in the catalog can be kept
+        table.add_slot(
+            "body-cell-actions",
+            '<q-td :props="props">'
+            '<q-btn v-if="props.row.addOn" flat dense round size="sm" icon="edit"'
+            ' @click.stop="() => $parent.$emit(\'edit_add_on\', props.row)">'
+            f'<q-tooltip>{t("catalog_my_edit")}</q-tooltip></q-btn>'
+            '<q-btn v-if="props.row.addOn" flat dense round size="sm" icon="delete_outline" color="negative"'
+            ' @click.stop="() => $parent.$emit(\'remove_add_on\', props.row)">'
+            f'<q-tooltip>{t("catalog_add_on_remove")}</q-tooltip></q-btn>'
+            '<q-btn v-if="props.row.recentOnly"'
+            ' flat dense round size="sm" icon="push_pin" color="teal"'
+            ' @click.stop="() => $parent.$emit(\'keep_recent\', props.row)">'
+            f'<q-tooltip>{t("catalog_keep_recent")}</q-tooltip></q-btn>'
+            '</q-td>',
+        )
 
-            def _on_remove(e) -> None:
-                row = e.args if isinstance(e.args, dict) else None
-                if not row:
-                    return
-                designation = entries[row["id"]].get("designation", "")
-                if catalog_add_on.remove_entry(designation):
-                    rows[:] = [r for r in rows if r["id"] != row["id"]]
-                    _apply_filters()
-                    ui.notify(t("catalog_add_on_removed", name=designation), type="positive")
+        def _row_of(e) -> dict | None:
+            return e.args if isinstance(e.args, dict) else None
 
-            table.on("remove_add_on", _on_remove)
+        def _on_toggle_fav(e) -> None:
+            row = _row_of(e)
+            if not row:
+                return
+            value = not row["fav"]
+            my_targets.set_favorite(entries[row["id"]], value)
+            for r in rows:
+                if r["id"] == row["id"]:
+                    r["fav"] = value
+            _apply_filters()
+
+        def _on_remove(e) -> None:
+            row = _row_of(e)
+            if not row:
+                return
+            designation = entries[row["id"]].get("designation", "")
+            if catalog_add_on.remove_entry(designation):
+                rows[:] = [r for r in rows if r["id"] != row["id"]]
+                _apply_filters()
+                ui.notify(t("catalog_add_on_removed", name=designation), type="positive")
+
+        def _on_edit(e) -> None:
+            row = _row_of(e)
+            if row:
+                _edit_my_object(entries[row["id"]], lambda: _reopen(view_toggle.value))
+
+        def _on_keep_recent(e) -> None:
+            row = _row_of(e)
+            if not row:
+                return
+            entry = entries[row["id"]]
+            added, name = catalog_add_on.add_target(entry["designation"], entry["ra_hours"], entry["dec_deg"], "recent")
+            ui.notify(t("my_objects_added" if added else "my_objects_known", name=name),
+                      type="positive" if added else "info")
+            _reopen("mine")
+
+        table.on("toggle_fav", _on_toggle_fav)
+        table.on("remove_add_on", _on_remove)
+        table.on("edit_add_on", _on_edit)
+        table.on("keep_recent", _on_keep_recent)
 
         def _apply_filters() -> None:
             wanted = category.value or ""
             floor = float(min_alt.value or 0) if location else 0
+            shown = view_toggle.value
             table.rows = [
                 r for r in rows
                 if (not wanted or r["category"] == wanted)
                 and (not floor or (r["alt"] is not None and r["alt"] >= floor))
+                and (shown == "all" or (shown == "fav" and r["fav"]) or (shown == "recent" and r["recent"])
+                     or (shown == "mine" and r["addOn"]))
             ]
+            if shown == "recent":   # the last used first
+                table.rows.sort(key=lambda r: r["lastSort"])
             table.update()
+            empty_label.set_text(t(f"catalog_view_{shown}_empty") if shown != "all" and not table.rows else "")
 
         category.on_value_change(lambda _: _apply_filters())
         min_alt.on_value_change(lambda _: _apply_filters())
+        view_toggle.on_value_change(lambda _: _apply_filters())
 
         def _on_row_click(e) -> None:
             row = e.args[1] if isinstance(e.args, list) and len(e.args) > 1 else None
@@ -203,6 +323,57 @@ def open_catalog_dialog(
         ui.label(t("catalog_click_hint")).classes("text-xs text-grey-6")
         with ui.row().classes("w-full justify-end"):
             ui.button(t("close"), on_click=dialog.close).props("flat")
+    _apply_filters()
+    dialog.open()
+
+
+def _edit_my_object(entry: dict | None, on_done: Callable[[], None]) -> None:
+    """Adds (entry None) or edits one of "my objects": name, RA, Dec
+    (decimal or sexagesimal), type, magnitude, notes."""
+    from components.coords import parse_dec_degrees, parse_ra_hours
+
+    with ui.dialog() as dialog, ui.card().classes("w-full max-w-md"):
+        ui.label(t("catalog_my_edit" if entry else "catalog_my_add")).classes("text-lg")
+        name = ui.input(t("prog_target_name"), value=(entry or {}).get("designation", "")).classes("w-full")
+        with ui.row().classes("w-full gap-2 no-wrap"):
+            ra = ui.input(t("prog_ra"), value=f"{entry['ra_hours']:.6f}" if entry else "",
+                          validation={t("prog_ra_invalid"): lambda v: not v or parse_ra_hours(v) is not None}) \
+                .classes("flex-1").tooltip(t("prog_ra_hint"))
+            dec = ui.input(t("prog_dec"), value=f"{entry['dec_deg']:.6f}" if entry else "",
+                           validation={t("prog_dec_invalid"): lambda v: not v or parse_dec_degrees(v) is not None}) \
+                .classes("flex-1").tooltip(t("prog_dec_hint"))
+        current = (entry or {}).get("type") or ""
+        types = {k: k or "—" for k in _MY_TYPES}
+        if current and current not in types:
+            types[current] = current
+        type_select = ui.select(types, value=current if current in types else "", label=t("catalog_col_type")).classes("w-full")
+        mag = ui.number(t("catalog_col_mag"), value=(entry or {}).get("magnitude"), step=0.1).classes("w-32")
+        notes = ui.input(t("catalog_my_notes"), value=(entry or {}).get("notes") or "").classes("w-full")
+        status = ui.label("").classes("text-sm text-red-700")
+
+        def save() -> None:
+            ra_h, dec_d = parse_ra_hours(ra.value or ""), parse_dec_degrees(dec.value or "")
+            if not (name.value or "").strip() or ra_h is None or dec_d is None:
+                status.set_text(t("catalog_my_missing"))
+                return
+            if entry is None:
+                added, known = catalog_add_on.add_target(name.value, ra_h, dec_d, "catalog-dialog",
+                                                         type_name=type_select.value or "", magnitude=mag.value,
+                                                         notes=notes.value or "")
+                if not added:
+                    status.set_text(t("my_objects_known", name=known))
+                    return
+                ui.notify(t("my_objects_added", name=name.value.strip()), type="positive")
+            else:
+                catalog_add_on.update_entry(entry["designation"], name.value, ra_h, dec_d,
+                                            type_name=type_select.value or "", magnitude=mag.value,
+                                            notes=notes.value or "")
+            dialog.close()
+            on_done()
+
+        with ui.row().classes("w-full justify-end"):
+            ui.button(t("close"), on_click=dialog.close).props("flat")
+            ui.button(t("prog_save"), icon="save", on_click=save).props("color=primary")
     dialog.open()
 
 

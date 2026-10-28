@@ -704,4 +704,5 @@ TRANSLATIONS: dict[str, str] = {
     "catalog_search_hint":         "m42, M 42, Messier 42, orion, ngc224... - Enter picks the first result.",
     "catalog_search_none":         "Nothing found for \u00ab{query}\u00bb - add it with \"Add an object\", or take it from Stellarium.",
     "devices_not_loaded":          "{count} Dwarf(s) of devices.json not loaded:",
+    "device_uid_exists":           "This Dwarf ({uid}) is already registered as \u00ab{name}\u00bb - each Dwarf once. Wrong Dwarf? Check its IP (Identify).",
 }

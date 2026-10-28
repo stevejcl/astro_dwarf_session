@@ -186,7 +186,8 @@
     After a reinstall, 2 Dwarfs shown out of 3 and nothing said why (user-reported Oct 2026): an entry whose
     config_*.py is missing, has no DWARF_UID, or has the DWARF_UID of a Dwarf already loaded (the second replaced
     the first) was skipped silently. It is now in the log and in a warning at the top of the dashboard, with the
-    file concerned.
+    file concerned. A Dwarf whose dwarf_uid is already registered is no longer added a second time (manual
+    configuration, Bluetooth pairing): the message names the Dwarf that has it.
     ### Megastack: missing darks no longer stop it
     The Dwarf's check answered CODE_ASTRO_RESTACK_DARKFRAME_MISMATCH when dark frames are missing, and the megastack
     ended in Error. The official app only warns and lets it go on (user-reported Oct 2026): it now goes on too,

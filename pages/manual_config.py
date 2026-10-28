@@ -135,6 +135,14 @@ def build_manual_config_page() -> None:
                     return
                 if not uid_input.value.strip() and not await read_from_dwarf():
                     return      # neither typed nor read: said by read_from_dwarf()
+                # Already known (user-reported Oct 2026: two entries with one
+                # dwarf_uid - the second replaced the first, a Dwarf vanished)
+                from device_registry import device_name as _name_of
+                same = next((s for s in get_manager().all() if s.dwarf_uid == uid_input.value.strip()), None)
+                if same is not None:
+                    status_label.set_text(t("device_uid_exists", uid=same.dwarf_uid, name=_name_of(same)))
+                    status_label.classes(replace="text-sm text-red-700")
+                    return
 
                 data = ManualDeviceInput(
                     device_name=device_name.value.strip(),

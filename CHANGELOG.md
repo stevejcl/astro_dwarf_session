@@ -186,7 +186,10 @@
     A program's exposure and gain answered -1 by the Dwarf (refused) were logged "SUCCESS ... -> -1" and the step
     went on as done (user-reported Oct 2026; the values happened to be right, left by the run before). Now a refusal
     is logged and asked again once; still refused, the value read back from the Dwarf decides: already the one
-    wanted, the program goes on and says so; another one, the step fails.
+    wanted, the program goes on and says so; another one, the step fails. An exposure read back in Auto is not the
+    one wanted (user-found Oct 2026: a DWARF 3 stuck in Auto refused every manual exposure - the official app too -
+    while its stored 15 s was read back): the step fails and says to restart the Dwarf; the camera summary warns
+    when the exposure is automatic.
     ### A Dwarf of devices.json not loaded: said why
     After a reinstall, 2 Dwarfs shown out of 3 and nothing said why (user-reported Oct 2026): an entry whose
     config_*.py is missing, has no DWARF_UID, or has the DWARF_UID of a Dwarf already loaded (the second replaced

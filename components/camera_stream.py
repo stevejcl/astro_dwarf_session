@@ -297,6 +297,11 @@ def _build_display_source_toggle(session, previews: list) -> None:
             {_DISPLAY_STACKED: t("display_source_stacked"), _DISPLAY_LAST_FRAME: t("display_source_last_frame")},
             value=None,
         ).props("dense no-caps")
+        # The full-screen view (components/live_view.py) at the right of the
+        # same line (user-asked Oct 2026)
+        ui.space()
+        ui.button(t("live_open"), icon="fullscreen",
+                  on_click=lambda: ui.navigate.to(f"/live/{uid}")).props("flat dense no-caps")
 
     previous = {"value": None}
 
@@ -447,10 +452,7 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
     ]
 
     if show_links:
-        _build_display_source_toggle(session, previews)
-        # The full-screen view (components/live_view.py, user-requested Oct 2026)
-        ui.button(t("live_open"), icon="fullscreen",
-                  on_click=lambda: ui.navigate.to(f"/live/{session.dwarf_uid}")).props("flat dense no-caps")
+        _build_display_source_toggle(session, previews)   # with the full-screen button
 
     for preview in previews:
         def _on_expansion_change(e, preview=preview) -> None:

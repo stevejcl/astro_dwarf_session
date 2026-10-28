@@ -14,12 +14,12 @@ HTTP image alone in a browser tab.
 Zoom and pan are each viewer's own (browser side, not kept). Hiding the
 info or the other camera's inset is remembered by the browser.
 
-The image goes through this app (/live/frame/<uid>/<cam>), not straight
-from the Dwarf (http://<ip>:8092/mainstream): one request to the Dwarf per
-new stacked image whatever the number of viewers, a phone over HTTPS
-(no mixed content) or Tailscale (the Dwarf's address unreachable) sees it
-too. The Dwarf's endpoint gives a snapshot per request, not a stream (see
-camera_stream.py): a new one is asked when its counters change.
+The image goes through this app (/live/frame/<uid>/<cam>): stacked.jpg of
+the capture's folder on the Dwarf, read a few seconds after each progress
+notification (as the official app and the megastack do), else the 8092
+stream - one request to the Dwarf per new stacked image whatever the
+number of viewers, and a phone over HTTPS (no mixed content) or Tailscale
+(the Dwarf's address unreachable) sees it too.
 
 Only a DWARF mini stacks with both cameras at once: there the other one
 is shown as a small inset, swapped with a click, hidden by a button."""
@@ -153,14 +153,130 @@ def frame_key(session, cam: int) -> tuple:
     return (s.get("takeWidePhotoCount"), s.get("takeWidePhotoStacked"))
 
 
-def _complete_jpeg(data: bytes | None) -> bool:
-    return bool(data) and data[:2] == b"\xff\xd8" and data.rstrip(b"\0")[-2:] == b"\xff\xd9"
+_MAX_BYTES = 16 * 1024 * 1024
+_last_warning: dict[tuple[str, int], float] = {}
+
+
+def _first_part(buf: bytes, boundary: bytes) -> bytes | None:
+    """The first complete JPEG of a multipart (MJPEG) body read so far."""
+    import re
+    start = buf.find(b"\xff\xd8")
+    if start < 0:
+        return None
+    length = re.search(rb"Content-Length:\s*(\d+)", buf[:start], re.I)
+    if length:
+        end = start + int(length.group(1))
+        return buf[start:end] if len(buf) >= end else None
+    nxt = buf.find(b"--" + boundary, start) if boundary else -1
+    if nxt < 0:
+        return None
+    eoi = buf.rfind(b"\xff\xd9", start, nxt)
+    return buf[start:eoi + 2] if eoi > start else None
+
+
+def _read_jpeg(url: str) -> tuple[bytes | None, str]:
+    """(the image, why not). The Dwarf's endpoint may answer one image or
+    an MJPEG stream that never ends (user-reported Oct 2026: "no stacked
+    image yet" with 180 stacked - a plain read waited for the end of a
+    stream, or rejected an image followed by other bytes): its first
+    image, a few seconds at most."""
+    try:
+        with requests.get(url, timeout=_TIMEOUT_S, stream=True) as response:
+            if not response.ok:
+                return None, f"HTTP {response.status_code}"
+            ctype = response.headers.get("Content-Type", "")
+            boundary = ctype.split("boundary=", 1)[1].strip().strip('"').encode() if "boundary=" in ctype else b""
+            buf, deadline = b"", time.monotonic() + _TIMEOUT_S
+            for chunk in response.iter_content(65536):
+                buf += chunk
+                if "multipart" in ctype.lower():
+                    image = _first_part(buf, boundary.lstrip(b"-"))
+                    if image:
+                        return image, ""
+                if time.monotonic() > deadline or len(buf) > _MAX_BYTES:
+                    break
+    except requests.RequestException as e:
+        return None, str(e)
+    start, end = buf.find(b"\xff\xd8"), buf.rfind(b"\xff\xd9")
+    if start >= 0 and end > start:
+        return buf[start:end + 2], ""
+    return None, f"no JPEG in the answer ({len(buf)} bytes, {ctype or 'no Content-Type'})"
+
+
+# The stacked image read from the capture's folder on the Dwarf, as the
+# official app and the megastack do (user-asked Oct 2026: not the 8092
+# stream, which showed nothing with 180 images stacked) - a few seconds
+# after the progress notification, the Dwarf writing it meanwhile
+_WRITE_DELAY_S = 3
+_FOLDER_RETRY_S = 20
+_FOLDER_MAX_AGE_H = 12
+_folders: dict[tuple[str, int], dict] = {}
+
+
+def _capture_folder(session, cam: int) -> str | None:
+    """The running capture's folder on the Dwarf ("/DWARF3/Astronomy/<session>/"):
+    the newest DWARF_RAW_TELE_ (WIDE_) session of its album, of the last 12
+    hours - read once per capture (again when the stacked count goes back,
+    a new capture), None when not found (tried again 20 s later). Not on a
+    DWARF II during a program: its HTTP API polled during a capture crashed
+    it (pages/watch_device.py) - the stream instead."""
+    import re
+    from datetime import datetime, timedelta
+
+    uid = session.dwarf_uid
+    if config_to_dwarf_id_str(session.config.dwarf_model_id) == "2" and scheduler_runner.is_running(uid):
+        return None
+    stacked = frame_key(session, cam)[1] or 0
+    known = _folders.get((uid, cam))
+    now = time.monotonic()
+    if known and known["folder"] and stacked >= known["stacked"]:
+        known["stacked"] = stacked
+        return known["folder"]
+    if known and not known["folder"] and now - known["at"] < _FOLDER_RETRY_S:
+        return None
+    from dwarf_python_api.lib.dwarf_utils import perform_list_astro_sessions_http
+
+    entries = perform_list_astro_sessions_http(session=session, timeout=5)
+    prefix = ("DWARF_RAW_TELE_", "DWARF_RAW_WIDE_")[1 if cam == 1 else 0]
+    oldest = (datetime.now() - timedelta(hours=_FOLDER_MAX_AGE_H)).strftime("%Y-%m-%d-%H-%M-%S")
+    best = None
+    for entry in entries or []:
+        path = entry.get("thumbnailPath") or entry.get("filePath") or ""
+        folder = path.rsplit("/", 1)[0]
+        name = folder.rsplit("/", 1)[-1]
+        date = re.search(r"(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})-\d{3}$", name)
+        if name.startswith(prefix) and date and date.group(1) >= oldest and (best is None or date.group(1) > best[0]):
+            best = (date.group(1), folder + "/")
+    _folders[(uid, cam)] = {"folder": best[1] if best else None, "at": now, "stacked": stacked}
+    return best[1] if best else None
+
+
+def _read_stacked(ip: str, folder: str) -> tuple[bytes | None, str]:
+    """stacked.jpg of the folder (its thumbnail when it can't be read), a
+    complete JPEG only - half-written, asked again 2 s later once."""
+    why = ""
+    for name in ("stacked.jpg", "stacked_thumbnail.jpg"):
+        for attempt in range(2):
+            try:
+                response = requests.get(f"http://{ip}{folder}{name}", timeout=10)
+                data = response.content if response.ok else None
+                why = f"{name}: HTTP {response.status_code}" if not response.ok else f"{name}: incomplete"
+            except requests.RequestException as e:
+                data, why = None, f"{name}: {e}"
+            if data and data[:2] == b"\xff\xd8" and data.rstrip(b"\0")[-2:] == b"\xff\xd9":
+                return data, ""
+            if data is None:
+                break   # not there: the next name
+            time.sleep(2)
+    return None, why
 
 
 def frame_bytes(dwarf_uid: str, cam: int) -> bytes | None:
-    """The camera's last image, asked from the Dwarf only when its counters
-    changed (or _REFETCH_S later) - blocking, a few seconds at most. The
-    previous image while a new one fails or is incomplete."""
+    """The camera's last stacked image, asked from the Dwarf only when its
+    counters changed (or _REFETCH_S later), _WRITE_DELAY_S after the change
+    - blocking, a few seconds at most: stacked.jpg of the capture's folder
+    (_capture_folder()), else the 8092 stream. The previous image while a
+    new one fails or is incomplete."""
     session = get_manager().get(dwarf_uid)
     ip = session.config.dwarf_ip if session is not None else None
     if not ip or _client(session) is None:
@@ -168,23 +284,36 @@ def frame_bytes(dwarf_uid: str, cam: int) -> bytes | None:
     key = frame_key(session, cam)
     with _frames_lock:
         entry = _frames.setdefault((dwarf_uid, cam), {"key": None, "data": None, "at": 0.0,
+                                                      "seen": None, "changed": 0.0,
                                                       "lock": threading.Lock()})
+        if entry["seen"] != key:    # a progress notification: when it came
+            entry["seen"], entry["changed"] = key, time.monotonic()
     with entry["lock"]:        # one request to the Dwarf for every viewer
         now = time.monotonic()
         fresh = entry["key"] == key and now - entry["at"] < (_REFETCH_S if entry["data"] else _RETRY_S)
         if not fresh:
-            url = f"http://{ip}:8092/{'mainstream' if cam == 0 else 'secondstream'}"
-            try:
-                response = requests.get(url, timeout=_TIMEOUT_S)
-                data = response.content if response.ok else None
-            except requests.RequestException as e:
-                log.debug(f"[{dwarf_uid}] live view: {url}: {e}")
-                data = None
-            entry["at"] = now
-            if _complete_jpeg(data):
+            wait = _WRITE_DELAY_S - (time.monotonic() - entry["changed"])
+            if wait > 0:        # the Dwarf writes the new stacked.jpg meanwhile
+                time.sleep(wait)
+            folder = _capture_folder(session, cam)
+            data, why, url = None, "", ""
+            if folder:
+                url = f"http://{ip}{folder}stacked.jpg"
+                data, why = _read_stacked(ip, folder)
+            if not data:        # no folder found, or not readable: the stream
+                stream = f"http://{ip}:8092/{'mainstream' if cam == 0 else 'secondstream'}"
+                data, why_stream = _read_jpeg(stream)
+                why, url = (f"{why}; " if why else "") + f"stream: {why_stream}", url or stream
+            entry["at"] = time.monotonic()
+            if data:
                 entry["key"], entry["data"] = key, data
-            elif entry["data"] is None:
-                entry["key"] = key
+            else:
+                if entry["data"] is None:
+                    entry["key"] = key
+                # Why, in the log - once a minute per camera
+                if time.monotonic() - _last_warning.get((dwarf_uid, cam), 0) > 60:
+                    _last_warning[(dwarf_uid, cam)] = time.monotonic()
+                    log.warning(f"[{dwarf_uid}] live view: no image from {url}: {why}")
         return entry["data"]
 
 

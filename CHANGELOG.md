@@ -182,6 +182,14 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Full-screen view: "no stacked image yet" with 180 stacked
+    (user-reported Oct 2026) The image was read from the Dwarf as one whole answer and kept only if it ended
+    exactly as a JPEG: an MJPEG stream (never ending) or a JPEG followed by other bytes gave nothing. Now its first
+    image is taken (multipart parts, with or without Content-Length, or the JPEG inside the answer), a few seconds
+    at most; when none comes, the log says why (once a minute). Above all, the image is now the capture's
+    stacked.jpg on the Dwarf (user-asked: as the official app and the megastack), read 3 s after each progress
+    notification - the capture's folder found once in the Dwarf's album (its newest DWARF_RAW_TELE_ / WIDE_ session
+    of the last 12 hours); the stream only when it isn't found, and on a DWARF II during a program.
     ### Exposure / gain refused by the Dwarf: no longer taken for a success
     A program's exposure and gain answered -1 by the Dwarf (refused) were logged "SUCCESS ... -> -1" and the step
     went on as done (user-reported Oct 2026; the values happened to be right, left by the run before). Now a refusal

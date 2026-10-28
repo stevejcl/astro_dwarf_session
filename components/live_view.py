@@ -153,8 +153,54 @@ def frame_key(session, cam: int) -> tuple:
     return (s.get("takeWidePhotoCount"), s.get("takeWidePhotoStacked"))
 
 
-def _complete_jpeg(data: bytes | None) -> bool:
-    return bool(data) and data[:2] == b"\xff\xd8" and data.rstrip(b"\0")[-2:] == b"\xff\xd9"
+_MAX_BYTES = 16 * 1024 * 1024
+_last_warning: dict[tuple[str, int], float] = {}
+
+
+def _first_part(buf: bytes, boundary: bytes) -> bytes | None:
+    """The first complete JPEG of a multipart (MJPEG) body read so far."""
+    import re
+    start = buf.find(b"\xff\xd8")
+    if start < 0:
+        return None
+    length = re.search(rb"Content-Length:\s*(\d+)", buf[:start], re.I)
+    if length:
+        end = start + int(length.group(1))
+        return buf[start:end] if len(buf) >= end else None
+    nxt = buf.find(b"--" + boundary, start) if boundary else -1
+    if nxt < 0:
+        return None
+    eoi = buf.rfind(b"\xff\xd9", start, nxt)
+    return buf[start:eoi + 2] if eoi > start else None
+
+
+def _read_jpeg(url: str) -> tuple[bytes | None, str]:
+    """(the image, why not). The Dwarf's endpoint may answer one image or
+    an MJPEG stream that never ends (user-reported Oct 2026: "no stacked
+    image yet" with 180 stacked - a plain read waited for the end of a
+    stream, or rejected an image followed by other bytes): its first
+    image, a few seconds at most."""
+    try:
+        with requests.get(url, timeout=_TIMEOUT_S, stream=True) as response:
+            if not response.ok:
+                return None, f"HTTP {response.status_code}"
+            ctype = response.headers.get("Content-Type", "")
+            boundary = ctype.split("boundary=", 1)[1].strip().strip('"').encode() if "boundary=" in ctype else b""
+            buf, deadline = b"", time.monotonic() + _TIMEOUT_S
+            for chunk in response.iter_content(65536):
+                buf += chunk
+                if "multipart" in ctype.lower():
+                    image = _first_part(buf, boundary.lstrip(b"-"))
+                    if image:
+                        return image, ""
+                if time.monotonic() > deadline or len(buf) > _MAX_BYTES:
+                    break
+    except requests.RequestException as e:
+        return None, str(e)
+    start, end = buf.find(b"\xff\xd8"), buf.rfind(b"\xff\xd9")
+    if start >= 0 and end > start:
+        return buf[start:end + 2], ""
+    return None, f"no JPEG in the answer ({len(buf)} bytes, {ctype or 'no Content-Type'})"
 
 
 def frame_bytes(dwarf_uid: str, cam: int) -> bytes | None:
@@ -174,17 +220,17 @@ def frame_bytes(dwarf_uid: str, cam: int) -> bytes | None:
         fresh = entry["key"] == key and now - entry["at"] < (_REFETCH_S if entry["data"] else _RETRY_S)
         if not fresh:
             url = f"http://{ip}:8092/{'mainstream' if cam == 0 else 'secondstream'}"
-            try:
-                response = requests.get(url, timeout=_TIMEOUT_S)
-                data = response.content if response.ok else None
-            except requests.RequestException as e:
-                log.debug(f"[{dwarf_uid}] live view: {url}: {e}")
-                data = None
-            entry["at"] = now
-            if _complete_jpeg(data):
+            data, why = _read_jpeg(url)
+            entry["at"] = time.monotonic()
+            if data:
                 entry["key"], entry["data"] = key, data
-            elif entry["data"] is None:
-                entry["key"] = key
+            else:
+                if entry["data"] is None:
+                    entry["key"] = key
+                # Why, in the log - once a minute per camera
+                if time.monotonic() - _last_warning.get((dwarf_uid, cam), 0) > 60:
+                    _last_warning[(dwarf_uid, cam)] = time.monotonic()
+                    log.warning(f"[{dwarf_uid}] live view: no image from {url}: {why}")
         return entry["data"]
 
 

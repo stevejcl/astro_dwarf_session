@@ -348,6 +348,54 @@ def is_actually_connected(session: DwarfSession) -> bool:
     return _last_check_ok.get(uid, True)
 
 
+# Who answers at a Dwarf's IP (user-reported Oct 2026: two Dwarfs with one
+# IP in their configs - connecting one reached the other, and Force
+# Bluetooth then took the other's identity): uid -> (ip, the other uid
+# answering there or None, when checked)
+_IDENTITY_TTL_S = 300
+_identity: dict[str, tuple[str, str | None, float]] = {}
+
+
+def check_identity(session) -> str | None:
+    """Blocking (2 s at most). The uid of ANOTHER Dwarf answering at this
+    Dwarf's IP (its HTTP deviceInfo), else None - also when nothing answers
+    there or the model has no such API: the connection then goes on as
+    before. Checked again after _IDENTITY_TTL_S, or when the IP changed."""
+    from device_provisioning import read_device_identity
+
+    uid, ip = session.dwarf_uid, (session.config.dwarf_ip or "").strip()
+    if not ip:
+        return None
+    cached = _identity.get(uid)
+    if cached and cached[0] == ip and time.monotonic() - cached[2] < _IDENTITY_TTL_S:
+        return cached[1]
+    info = read_device_identity(ip, timeout=2)
+    other = info["uid"] if info and info.get("uid") and info["uid"] != uid else None
+    _identity[uid] = (ip, other, time.monotonic())
+    if other:
+        log.warning(f"[{uid}] {ip} is answered by another Dwarf ({other}): not connected - "
+                    "two Dwarfs with the same IP? Update this one's IP (Settings).")
+    return other
+
+
+def wrong_dwarf(uid: str) -> str | None:
+    """The other Dwarf found at this one's IP by the last check_identity()
+    (no network), None when none."""
+    cached = _identity.get(uid)
+    return cached[1] if cached else None
+
+
+def wrong_dwarf_text(session) -> str:
+    from components.i18n import t
+    from device_registry import device_name
+    from dwarf_python_api.lib.dwarf_session import get_manager
+
+    other = wrong_dwarf(session.dwarf_uid) or ""
+    same = next((s for s in get_manager().all() if s.dwarf_uid == other), None)
+    return t("wrong_dwarf_at_ip", ip=session.config.dwarf_ip, name=device_name(session),
+             other=device_name(same) if same is not None else other)
+
+
 async def connect_and_enter_astro_mode(session) -> bool:
     """Shared by the manual Reconnect button (pages/session.py) and this
     module's own auto-reconnect below. perform_enter_astro_mode() alone
@@ -361,6 +409,8 @@ async def connect_and_enter_astro_mode(session) -> bool:
     connect."""
     if not device_lock.claim(session.dwarf_uid):
         # Another Astro Dwarf Session instance on this PC uses this Dwarf
+        return False
+    if await run.io_bound(check_identity, session):   # another Dwarf at its IP
         return False
     result = await run.io_bound(perform_enter_astro_mode, session=session)
     if result is False:
@@ -466,6 +516,8 @@ async def _auto_reconnect(session: DwarfSession) -> None:
         return
     _auto_reconnect_in_progress.add(uid)
     try:
+        if await run.io_bound(check_identity, session):   # another Dwarf at its IP: not this one
+            return
         for attempt in range(1, _MAX_AUTO_RECONNECT_ATTEMPTS + 1):
             if not try_acquire_command_slot(uid, caller="auto_reconnect"):
                 return

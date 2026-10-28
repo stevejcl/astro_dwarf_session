@@ -191,6 +191,12 @@
     The cause, found by the user: Settings' Force Bluetooth, when another Dwarf answered, said "not applied" but
     had already written that Dwarf's uid and IP into this one's config_*.py - after a restart the two had the same
     uid. The file is now put back as it was when another Dwarf answers, or when the connection fails.
+    ### Two Dwarfs with the same IP: said, and the other one never connected as this one
+    Two configs had one IP (user-reported Oct 2026): connecting one Dwarf reached the other. Now the startup
+    warning lists two Dwarfs sharing an IP; before connecting (manual, Connect all, auto-reconnect) the Dwarf
+    answering at that IP is asked who it is (its HTTP deviceInfo, 2 s at most, checked again every 5 min or when
+    the IP changes): another Dwarf there - not connected, the message names it and says to update the IP; a
+    program doesn't start on it either. A Dwarf without that API, or not answering, connects as before.
     ### Megastack: missing darks no longer stop it
     The Dwarf's check answered CODE_ASTRO_RESTACK_DARKFRAME_MISMATCH when dark frames are missing, and the megastack
     ended in Error. The official app only warns and lets it go on (user-reported Oct 2026): it now goes on too,

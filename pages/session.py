@@ -540,6 +540,8 @@ async def _handle_connect(session, dwarf_uid: str, refresh_view: Callable[[], No
         error_code = perform_get_last_connection_error(session=session)
         translation_key = f"conn_error_{error_code.lower()}" if error_code else None
         specific_reason = t(translation_key) if translation_key and translation_key in _known_conn_error_keys else None
+        if connection_health.wrong_dwarf(dwarf_uid):   # another Dwarf answers at its IP
+            specific_reason = connection_health.wrong_dwarf_text(session)
         _finish_ongoing_notification(notification, specific_reason or t("connection_failed"), "negative")
     else:
         _finish_ongoing_notification(notification, t("connected"), "positive")

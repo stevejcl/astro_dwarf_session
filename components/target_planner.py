@@ -75,6 +75,48 @@ def earliest_start(start: datetime, now: datetime) -> datetime:
 
 
 _VIEWS = ("all", "fav", "recent", "mine")
+
+
+def search_key(text) -> str:
+    """A name as the search compares it (user-requested Oct 2026, issue
+    #162: "m42" = "M 42" = "Messier 42", "Andromède" = "andromede"): no
+    case, accents, spaces or punctuation, "Messier" as "M", no leading
+    zeros ("NGC 0224" = "NGC 224")."""
+    import re
+    import unicodedata
+    text = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode().lower()
+    text = re.sub(r"\bmessier\b", "m", text)
+    text = re.sub(r"[^a-z0-9]+", "", text)
+    return re.sub(r"(?<![0-9])0+(?=[0-9])", "", text)
+
+
+def _entry_search_keys(entry: dict) -> list[str]:
+    import re
+    names = [entry.get("designation"), entry.get("_userDesignation")]
+    names += re.split(r",| - ", str(entry.get("displayName") or ""))
+    names += str(entry.get("alternateNames") or "").split(",")
+    return [k for k in dict.fromkeys(search_key(n) for n in names if n) if k]
+
+
+def match_score(query: str, keys: list[str]) -> int | None:
+    """0 exact, 1 starts with, 2 contains, 3 every word found - None when
+    the query doesn't match."""
+    q = search_key(query)
+    if not q:
+        return 0
+    if q in keys:
+        return 0
+    if any(k.startswith(q) for k in keys):
+        return 1
+    if any(q in k for k in keys):
+        return 2
+    # several words ("orion nebula", "great orion"): each found - short
+    # ones left out ("messier 42": "m" and "42" are in many names)
+    words = [w for w in (search_key(w) for w in str(query).split()) if len(w) >= 3]
+    joined = " ".join(keys)
+    if len(words) > 1 and all(w in joined for w in words):
+        return 3
+    return None
 # Types offered for "my objects" (dso_catalog.json's names)
 _MY_TYPES = ("", "Galaxy", "Emission Nebula", "Reflection Nebula", "Planetary Nebula", "Dark Nebula",
              "Open Cluster", "Globular Cluster", "Variable Star", "Star")
@@ -152,17 +194,24 @@ def open_catalog_dialog(
             "lastSort": 0 if rec is None else -rec["last"].timestamp(),   # the last used first
         })
     rows.sort(key=_rank)
+    search_keys = {i: _entry_search_keys(entry) for i, entry in enumerate(entries)}
 
     columns = [
         {"name": "fav", "label": "", "field": "fav", "align": "center"},
         {"name": "designation", "label": t("catalog_col_designation"), "field": "designation", "sortable": True, "align": "left"},
         # wrapped: the long alternate names pushed Max alt. out of sight
         {"name": "name", "label": t("catalog_col_name"), "field": "name", "sortable": True, "align": "left",
-         "style": "max-width: 260px; white-space: normal", "headerStyle": "max-width: 260px"},
-        {"name": "type", "label": t("catalog_col_type"), "field": "type", "sortable": True, "align": "left"},
-        {"name": "constellation", "label": t("catalog_col_constellation"), "field": "constellation", "sortable": True, "align": "left"},
-        {"name": "mag", "label": t("catalog_col_mag"), "field": "mag", "sortable": True},
-        {"name": "size", "label": t("catalog_col_size"), "field": "size"},
+         "style": "max-width: 260px; white-space: normal", "headerStyle": "max-width: 260px",
+         "classes": "gt-xs", "headerClasses": "gt-xs"},
+        # On a phone (user-requested Oct 2026): the name and type under the
+        # designation, the other columns hidden
+        {"name": "type", "label": t("catalog_col_type"), "field": "type", "sortable": True, "align": "left",
+         "classes": "gt-xs", "headerClasses": "gt-xs"},
+        {"name": "constellation", "label": t("catalog_col_constellation"), "field": "constellation", "sortable": True,
+         "align": "left", "classes": "gt-sm", "headerClasses": "gt-sm"},
+        {"name": "mag", "label": t("catalog_col_mag"), "field": "mag", "sortable": True,
+         "classes": "gt-xs", "headerClasses": "gt-xs"},
+        {"name": "size", "label": t("catalog_col_size"), "field": "size", "classes": "gt-sm", "headerClasses": "gt-sm"},
     ]
     if location:
         columns.append({"name": "alt", "label": t("catalog_col_max_alt"), "field": "alt", "sortable": True})
@@ -172,7 +221,10 @@ def open_catalog_dialog(
         dialog.close()
         open_catalog_dialog(session, on_pick, get_night, tz=tz, view=new_view)
 
-    with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl"):
+    # On a phone: almost the whole screen (narrow margins)
+    ui.add_css("@media (max-width: 599px) { .catalog-dialog.q-dialog__inner--minimized { padding: 4px; }"
+               " .catalog-dialog .q-card { max-height: calc(100vh - 8px) !important; padding: 8px; } }")
+    with ui.dialog().props('content-class="catalog-dialog"') as dialog, ui.card().classes("w-full max-w-5xl"):
         # The help and the files behind an info button (user-asked Oct 2026:
         # four lines of help took the room of the list)
         with ui.row().classes("w-full items-center no-wrap gap-1"):
@@ -200,20 +252,22 @@ def open_catalog_dialog(
             view_toggle = ui.toggle(
                 {v: t(f"catalog_view_{v}") for v in _VIEWS},
                 value=view if view in _VIEWS else "all",
-            ).props("dense no-caps")
+            ).props("dense no-caps").style("flex-wrap: wrap")
             ui.space()
             ui.button(t("catalog_my_add"), icon="add_location_alt",
                       on_click=lambda: _edit_my_object(None, lambda: _reopen("mine"))).props("flat dense no-caps")
 
         with ui.row().classes("w-full gap-2 items-end"):
-            search = ui.input(t("catalog_search")).props("clearable autofocus").classes("flex-1 min-w-[200px]")
-            category = ui.select(
-                {"": t("catalog_all_types"), **{c: t(f"catalog_cat_{c}") for c in _TYPE_CATEGORIES}},
-                value="",
-                label=t("catalog_col_type"),
-            ).classes("w-40")
-            min_alt = ui.number(t("catalog_min_alt"), value=0, min=0, max=90, step=5).classes("w-36")
-            min_alt.set_visibility(bool(location))
+            search = ui.input(t("catalog_search")).props("clearable autofocus debounce=250") \
+                .classes("flex-1 min-w-[200px]").tooltip(t("catalog_search_hint"))
+            with ui.row().classes("gap-2 no-wrap items-end"):   # side by side on a phone too
+                category = ui.select(
+                    {"": t("catalog_all_types"), **{c: t(f"catalog_cat_{c}") for c in _TYPE_CATEGORIES}},
+                    value="",
+                    label=t("catalog_col_type"),
+                ).classes("w-40")
+                min_alt = ui.number(t("catalog_min_alt"), value=0, min=0, max=90, step=5).classes("w-32")
+                min_alt.set_visibility(bool(location))
 
         table = ui.table(
             columns=columns,
@@ -221,7 +275,6 @@ def open_catalog_dialog(
             row_key="id",
             pagination={"rowsPerPage": 10},
         ).classes("w-full").props("dense flat")
-        search.bind_value_to(table, "filter")
         empty_label = ui.label("").classes("text-sm text-grey-6")
 
         table.add_slot(
@@ -235,11 +288,12 @@ def open_catalog_dialog(
         )
         table.add_slot(
             "body-cell-designation",
-            '<q-td :props="props">{{ props.value }}'
+            '<q-td :props="props" style="white-space: normal">{{ props.value }}'
             '<q-icon v-if="props.row.recent" name="history" size="xs" color="primary" class="q-ml-xs">'
             '<q-tooltip>{{ props.row.last }}</q-tooltip></q-icon>'
             '<q-icon v-if="props.row.addOn" name="push_pin" size="xs" color="teal" class="q-ml-xs">'
             f'<q-tooltip>{t("catalog_view_mine")}</q-tooltip></q-icon>'
+            '<div class="lt-sm text-xs text-grey-7">{{ [props.row.name, props.row.type].filter(Boolean).join(" · ") }}</div>'
             '</q-td>',
         )
         # "My objects" can be edited and removed again (user-requested Oct
@@ -309,21 +363,40 @@ def open_catalog_dialog(
             wanted = category.value or ""
             floor = float(min_alt.value or 0) if location else 0
             shown = view_toggle.value
-            table.rows = [
-                r for r in rows
-                if (not wanted or r["category"] == wanted)
-                and (not floor or (r["alt"] is not None and r["alt"] >= floor))
-                and (shown == "all" or (shown == "fav" and r["fav"]) or (shown == "recent" and r["recent"])
-                     or (shown == "mine" and r["addOn"]))
-            ]
-            if shown == "recent":   # the last used first
-                table.rows.sort(key=lambda r: r["lastSort"])
+            query = search.value or ""
+            kept = []
+            for r in rows:
+                if wanted and r["category"] != wanted:
+                    continue
+                if floor and (r["alt"] is None or r["alt"] < floor):
+                    continue
+                if not (shown == "all" or (shown == "fav" and r["fav"]) or (shown == "recent" and r["recent"])
+                        or (shown == "mine" and r["addOn"])):
+                    continue
+                score = match_score(query, search_keys[r["id"]]) if query.strip() else 0
+                if score is not None:
+                    kept.append((score, r))
+            # Best match first (the order above among equals: favourites,
+            # recent, mine), the last used first in Recent
+            kept.sort(key=lambda p: (p[0], p[1]["lastSort"]) if shown == "recent" else p[0])
+            table.rows = [r for _, r in kept]
             table.update()
-            empty_label.set_text(t(f"catalog_view_{shown}_empty") if shown != "all" and not table.rows else "")
+            if query.strip() and not table.rows:
+                empty_label.set_text(t("catalog_search_none", query=query.strip()))
+            else:
+                empty_label.set_text(t(f"catalog_view_{shown}_empty") if shown != "all" and not table.rows else "")
 
         category.on_value_change(lambda _: _apply_filters())
         min_alt.on_value_change(lambda _: _apply_filters())
         view_toggle.on_value_change(lambda _: _apply_filters())
+        search.on_value_change(lambda _: _apply_filters())
+
+        def _pick_first() -> None:   # Enter: the best match
+            if table.rows:
+                dialog.close()
+                on_pick(entries[table.rows[0]["id"]])
+
+        search.on("keydown.enter", _pick_first)
 
         def _on_row_click(e) -> None:
             row = e.args[1] if isinstance(e.args, list) and len(e.args) > 1 else None

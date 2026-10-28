@@ -701,4 +701,6 @@ TRANSLATIONS: dict[str, str] = {
     "prog_keep_my_objects":        "Keep in my objects",
     "prog_keep_my_objects_hint":   "Saves the target (name, RA, Dec) in \"Pick from catalog\" - My objects, to find it again in one click.",
     "catalog_help":                "Help and catalog files",
+    "catalog_search_hint":         "m42, M 42, Messier 42, orion, ngc224... - Enter picks the first result.",
+    "catalog_search_none":         "Nothing found for \u00ab{query}\u00bb - add it with \"Add an object\", or take it from Stellarium.",
 }

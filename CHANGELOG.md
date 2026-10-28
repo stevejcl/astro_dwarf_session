@@ -13,6 +13,12 @@
     my objects edited or removed there. catalog_add_on.json, when Scope Archive isn't installed next to the app, now
     lives in ~/.astro_dwarf_session (moved once from assets/, which an update may replace); a user object later
     found in the shared catalog is shown once, its favourite kept.
+    ### Pick from catalog: a search that finds what you mean, and a phone layout
+    (user-requested Oct 2026, issue #162) Case, accents, spaces, punctuation and leading zeros ignored, "Messier"
+    read as "M" - "m42", "M 42", "Messier 42", "NGC 01976" find M 42 -, across the designation, the display name
+    and the alternate names; best match first (exact, starts with, contains, then every word found), Enter picks
+    the first result, "nothing found" says how to add it. On a phone the name and type under the designation, the
+    other columns hidden, the filters side by side. The help and the files' paths behind an info button.
     ### Full-screen live stacking view
     The card's and the device page's full-screen button opened the Dwarf's raw image alone in a browser tab
     (user-requested Oct 2026, issue #164). It now opens a view in the app (/live/<uid>): the last stacked image,

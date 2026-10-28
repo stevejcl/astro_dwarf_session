@@ -2,6 +2,36 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### My objects, favourites and recent targets in "Pick from catalog"
+    (user-requested Oct 2026, issue #162) A target from Stellarium, typed in, a variable star or a recent one is
+    kept in "my objects" (catalog_add_on.json, read by Scope Archive too) when "Keep in my objects" is ticked on
+    saving the program - its name, RA and Dec are enough, the choice remembered; not offered for a catalog object.
+    In "Pick from catalog": a star marks a favourite (favorites.json in the user's folder - using a target doesn't
+    make it one); the recent targets are those of the programs run (Done / Error of every Dwarf), with their last
+    use, a recent one not in the catalog picked with its program's description or kept in my objects with a pin;
+    favourites, recent targets and my objects listed first, a filter shows one of them only; "Add an object", and
+    my objects edited or removed there. catalog_add_on.json, when Scope Archive isn't installed next to the app, now
+    lives in ~/.astro_dwarf_session (moved once from assets/, which an update may replace); a user object later
+    found in the shared catalog is shown once, its favourite kept.
+    ### Pick from catalog: a search that finds what you mean, and a phone layout
+    (user-requested Oct 2026, issue #162) Case, accents, spaces, punctuation and leading zeros ignored, "Messier"
+    read as "M" - "m42", "M 42", "Messier 42", "NGC 01976" find M 42 -, across the designation, the display name
+    and the alternate names; best match first (exact, starts with, contains, then every word found), Enter picks
+    the first result, "nothing found" says how to add it. On a phone the name and type under the designation, the
+    other columns hidden, the filters side by side. The help and the files' paths behind an info button.
+    ### Full-screen live stacking view
+    The card's and the device page's full-screen button opened the Dwarf's raw image alone in a browser tab
+    (user-requested Oct 2026, issue #164). It now opens a view in the app (/live/<uid>): the last stacked image,
+    replaced once the next one is loaded, with the target, the progress (stacked / taken / total, end time) and the
+    camera's settings over it - hidden with a button, remembered by the browser. Display adjustments (brightness,
+    contrast, saturation, black point, gamma) kept by the app for each Dwarf, never sent to it nor written in a file;
+    zoom and pan (wheel, pinch, double click or tap to reset) each viewer's own. On a DWARF mini, the only one
+    stacking with both cameras, the other one in a small inset: swapped with a click, hidden with a button. A
+    megastack shows its stack and its progress. Watch: the device page shows the stacked image (no longer the
+    streams) as adjusted from the control app, a click opens the same view (/watch/<uid>/live) without the
+    adjustments; the dashboard cards' images are adjusted too. The image goes through this app
+    (/live/frame/<uid>/<cam>): one request to the Dwarf per new image whatever the number of viewers, seen from a
+    phone over HTTPS or Tailscale too.
     ### A Dwarf's name: shown, and renamed in its Settings
     The name typed when a Dwarf was added (Bluetooth pairing, manual configuration) was kept in devices.json but
     shown nowhere - every page showed its uid (user-reported Oct 2026). It is now the title of its dashboard card, its

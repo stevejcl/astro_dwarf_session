@@ -8,8 +8,9 @@ no code path here that could ever send a command to the device, regardless
 of future edits.
 
 Reused as-is from the control app, both already read-only by construction:
-- components.camera_stream.build_camera_stream_section(session): pseudo-live
-  HTTP preview + embedded RTSP worker, no capture controls.
+- components.live_view.build_stacked_preview(session): the stacked image
+  (not the stream, user-asked Oct 2026), as adjusted from the control app;
+  a click opens the full-screen view (/watch/<uid>/live), display only.
 - dwarf_python_api.lib.dwarf_session_socket.get_client_status(session): the
   same status cache pages/session.py reads for battery/temperature/storage,
   here also read for the capture counters - takePhotoCount/takeWidePhotoCount
@@ -44,7 +45,7 @@ from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 from dwarf_python_api.lib.dwarf_utils import perform_read_camera_params_http_v3
 
-from components.camera_stream import build_camera_stream_section
+from components.live_view import build_stacked_preview
 from components.camera_settings import ir_filter_display_label
 from components import current_activity, device_task, scheduler_runner
 from dwarf_python_api.get_config_data import config_to_dwarf_id_str
@@ -187,7 +188,11 @@ def build_watch_device_page() -> None:
                 # block below the preview is for opening the stream in
                 # an external player from the control app, not useful
                 # to a read-only spectator here.
-                build_camera_stream_section(session, show_links=False)
+                #
+                # The stacked image, not the stream (user-asked Oct 2026,
+                # issue #164), as adjusted from the control app - a click
+                # opens the full-screen view with the session's info
+                build_stacked_preview(session, f"/watch/{dwarf_uid}/live")
 
             # ui.grid(), not ui.row() (user-reported Sep 2026: cards
             # still weren't matching heights within a row despite

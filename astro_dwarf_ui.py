@@ -122,6 +122,7 @@ from pages.manual_config import build_manual_config_page
 from pages.sites import build_sites_page
 from pages.watch_dashboard import build_watch_dashboard_page
 from pages.watch_device import build_watch_device_page
+from components.live_view import build_live_pages, register_live_routes
 
 
 def _port_in_use(port: int) -> bool:
@@ -291,6 +292,7 @@ def main() -> None:
     # session to the Dwarf" button) - GET /api/dwarfs, POST /api/schedule.
     # See components/api_routes.py's module docstring.
     register_api_routes()
+    register_live_routes()
 
     build_dashboard_page()
     build_explorer_page()
@@ -306,6 +308,8 @@ def main() -> None:
     # anywhere in their code - see their own module docstrings.
     build_watch_dashboard_page()
     build_watch_device_page()
+    # Full-screen live stacking view, control and watch (components/live_view.py)
+    build_live_pages()
 
     # Global, client-independent (see components/scheduler_loop.py's
     # module docstring for why app.timer, not ui.timer) - a scheduled

@@ -67,7 +67,7 @@ def build_watch_dashboard_page() -> None:
                     with cards_container:
                         for session, (_uid, hidden) in zip(sessions, layout):
                             cards[session.dwarf_uid] = DeviceCardView(
-                                session, on_open=_open_device, hidden=hidden
+                                session, on_open=_open_device, hidden=hidden, watch=True
                             )
                     built_layout[:] = layout
                     empty_label.set_visibility(not sessions)

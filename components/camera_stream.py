@@ -164,7 +164,7 @@ def _build_preview(cam_config: dict, url: str, rtsp_url: str, show_links: bool) 
     )
 
 
-def build_dashboard_thumbnail(session) -> tuple[ui.image, ui.button] | tuple[None, None]:
+def build_dashboard_thumbnail(session, live_url: str) -> tuple[ui.image, ui.button] | tuple[None, None]:
     """Compact-ish, read-only preview for the dashboard's "mission
     control" card (user-requested Sep 2026: monitor running sessions
     across devices with a way to jump to the live stacking view) - the
@@ -186,6 +186,11 @@ def build_dashboard_thumbnail(session) -> tuple[ui.image, ui.button] | tuple[Non
     idle-icon's square box, which this layout no longer shares. Tailwind
     classes ONLY (no inline width/height style, which would win by CSS
     specificity and defeat the responsiveness).
+
+    live_url: the full-screen live view the open button goes to
+    (components/live_view.py, user-requested Oct 2026 - it opened the
+    Dwarf's raw image in a new tab). The image shows the Dwarf's display
+    adjustments made there.
 
     Returns (image, open_button) so the caller can wire up its own
     pseudo-live refresh polling (matching build_camera_stream_section()'s
@@ -215,8 +220,10 @@ def build_dashboard_thumbnail(session) -> tuple[ui.image, ui.button] | tuple[Non
     # placeholder so the card doesn't collapse to nothing before the
     # first frame arrives.
     _size_classes = "w-full h-auto min-h-32"
+    from components import live_view
+    live_view.add_adjust_support(session.dwarf_uid)
     with ui.element("div").classes(f"relative {_size_classes}"):
-        image = ui.image(url).classes(f"rounded bg-neutral-900 {_size_classes}")
+        image = ui.image(url).classes(f"rounded bg-neutral-900 {_size_classes} {live_view.adjust_class(session.dwarf_uid)}")
         # click.stop: this sits inside the dashboard card's own
         # click-to-open-session-page handler (device_card.py) - without
         # stopping propagation, opening the external tab would ALSO
@@ -224,7 +231,8 @@ def build_dashboard_thumbnail(session) -> tuple[ui.image, ui.button] | tuple[Non
         open_button = ui.button(icon="open_in_new").props("flat dense round size=sm color=white").classes(
             "absolute top-0.5 right-0.5 bg-black/40 min-w-0 p-1"
         )
-        open_button.on("click.stop", lambda: ui.navigate.to(url, new_tab=True))
+        open_button.on("click.stop", lambda: ui.navigate.to(live_url))
+    live_view.apply_adjustments(session.dwarf_uid)
     return image, open_button
 
 
@@ -440,6 +448,9 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
 
     if show_links:
         _build_display_source_toggle(session, previews)
+        # The full-screen view (components/live_view.py, user-requested Oct 2026)
+        ui.button(t("live_open"), icon="fullscreen",
+                  on_click=lambda: ui.navigate.to(f"/live/{session.dwarf_uid}")).props("flat dense no-caps")
 
     for preview in previews:
         def _on_expansion_change(e, preview=preview) -> None:

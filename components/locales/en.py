@@ -700,4 +700,5 @@ TRANSLATIONS: dict[str, str] = {
     "my_objects_not_saved":        "Not kept in my objects: {error}",
     "prog_keep_my_objects":        "Keep in my objects",
     "prog_keep_my_objects_hint":   "Saves the target (name, RA, Dec) in \"Pick from catalog\" - My objects, to find it again in one click.",
+    "catalog_help":                "Help and catalog files",
 }

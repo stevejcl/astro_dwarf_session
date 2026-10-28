@@ -700,4 +700,5 @@ TRANSLATIONS: dict[str, str] = {
     "my_objects_not_saved":        "Non gard\u00e9 dans mes objets : {error}",
     "prog_keep_my_objects":        "Garder dans mes objets",
     "prog_keep_my_objects_hint":   "Enregistre la cible (nom, RA, Dec) dans \u00ab Pick from catalog \u00bb - Mes objets, pour la retrouver en un clic.",
+    "catalog_help":                "Aide et fichiers du catalogue",
 }

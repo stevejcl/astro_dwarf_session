@@ -156,7 +156,9 @@ def open_catalog_dialog(
     columns = [
         {"name": "fav", "label": "", "field": "fav", "align": "center"},
         {"name": "designation", "label": t("catalog_col_designation"), "field": "designation", "sortable": True, "align": "left"},
-        {"name": "name", "label": t("catalog_col_name"), "field": "name", "sortable": True, "align": "left"},
+        # wrapped: the long alternate names pushed Max alt. out of sight
+        {"name": "name", "label": t("catalog_col_name"), "field": "name", "sortable": True, "align": "left",
+         "style": "max-width: 260px; white-space: normal", "headerStyle": "max-width: 260px"},
         {"name": "type", "label": t("catalog_col_type"), "field": "type", "sortable": True, "align": "left"},
         {"name": "constellation", "label": t("catalog_col_constellation"), "field": "constellation", "sortable": True, "align": "left"},
         {"name": "mag", "label": t("catalog_col_mag"), "field": "mag", "sortable": True},
@@ -171,16 +173,27 @@ def open_catalog_dialog(
         open_catalog_dialog(session, on_pick, get_night, tz=tz, view=new_view)
 
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl"):
-        ui.label(t("catalog_title")).classes("text-lg")
-        source = catalog_source()
-        user_count = user_entry_count()
-        if source:
-            ui.label(t("catalog_source", path=str(source), count=len(load_catalog()) - user_count)).classes("text-xs text-grey-6")
-        if user_count:
-            ui.label(t("catalog_add_on_source", path=str(add_on_path()), count=user_count)).classes("text-xs text-grey-6")
-        if location:
-            ui.label(t("catalog_alt_hint", date=night.strftime("%Y-%m-%d"))).classes("text-xs text-grey-6")
-        else:
+        # The help and the files behind an info button (user-asked Oct 2026:
+        # four lines of help took the room of the list)
+        with ui.row().classes("w-full items-center no-wrap gap-1"):
+            ui.label(t("catalog_title")).classes("text-lg")
+            info_button = ui.button(icon="info_outline").props("flat dense round size=sm color=grey-7") \
+                .tooltip(t("catalog_help"))
+        with ui.column().classes("w-full gap-0") as help_box:
+            ui.label(t("catalog_click_hint")).classes("text-xs text-grey-6")
+            if location:
+                ui.label(t("catalog_alt_hint", date=night.strftime("%Y-%m-%d"))).classes("text-xs text-grey-6")
+            source = catalog_source()
+            user_count = user_entry_count()
+            if source:
+                ui.label(t("catalog_source", path=str(source), count=len(load_catalog()) - user_count)) \
+                    .classes("text-xs text-grey-6 break-all")
+            if user_count:
+                ui.label(t("catalog_add_on_source", path=str(add_on_path()), count=user_count)) \
+                    .classes("text-xs text-grey-6 break-all")
+        help_box.set_visibility(False)
+        info_button.on("click", lambda: help_box.set_visibility(not help_box.visible))
+        if not location:   # a warning, kept in sight
             ui.label(t("planner_no_location")).classes("text-xs text-amber-700")
 
         with ui.row().classes("w-full gap-2 items-center"):
@@ -320,7 +333,6 @@ def open_catalog_dialog(
             on_pick(entries[row["id"]])
 
         table.on("rowClick", _on_row_click)
-        ui.label(t("catalog_click_hint")).classes("text-xs text-grey-6")
         with ui.row().classes("w-full justify-end"):
             ui.button(t("close"), on_click=dialog.close).props("flat")
     _apply_filters()

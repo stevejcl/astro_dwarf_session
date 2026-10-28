@@ -357,10 +357,11 @@ _identity: dict[str, tuple[str, str | None, float]] = {}
 
 
 def check_identity(session) -> str | None:
-    """Blocking (2 s at most). The uid of ANOTHER Dwarf answering at this
-    Dwarf's IP (its HTTP deviceInfo), else None - also when nothing answers
-    there or the model has no such API: the connection then goes on as
-    before. Checked again after _IDENTITY_TTL_S, or when the IP changed."""
+    """Blocking (2 s at most). The uid (or HTTP name) of ANOTHER Dwarf
+    answering at this Dwarf's IP (its HTTP deviceInfo, see _other_dwarf()),
+    else None - also when nothing answers there or the model has no such
+    API: the connection then goes on as before. Checked again after
+    _IDENTITY_TTL_S, or when the IP changed."""
     from device_provisioning import read_device_identity
 
     uid, ip = session.dwarf_uid, (session.config.dwarf_ip or "").strip()
@@ -370,12 +371,75 @@ def check_identity(session) -> str | None:
     if cached and cached[0] == ip and time.monotonic() - cached[2] < _IDENTITY_TTL_S:
         return cached[1]
     info = read_device_identity(ip, timeout=2)
-    other = info["uid"] if info and info.get("uid") and info["uid"] != uid else None
+    other = _other_dwarf(uid, info["uid"]) if info and info.get("uid") else None
     _identity[uid] = (ip, other, time.monotonic())
     if other:
         log.warning(f"[{uid}] {ip} is answered by another Dwarf ({other}): not connected - "
                     "two Dwarfs with the same IP? Update this one's IP (Settings).")
     return other
+
+
+_HTTP_NAMES_FILE = "http_names.json"
+
+
+def _http_names() -> dict:
+    import json
+    from components.my_targets import USER_DIR
+    try:
+        data = json.loads((USER_DIR / _HTTP_NAMES_FILE).read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _remember_http_name(uid: str, name: str) -> None:
+    from components.json_files import write_json_atomic
+    from components.my_targets import USER_DIR
+    names = _http_names()
+    if names.get(uid) == name:
+        return
+    names[uid] = name
+    try:
+        USER_DIR.mkdir(parents=True, exist_ok=True)
+        write_json_atomic(str(USER_DIR / _HTTP_NAMES_FILE), names)
+    except OSError as e:
+        log.warning(f"[{uid}] its HTTP name not kept: {e}")
+
+
+def _other_dwarf(uid: str, name: str) -> str | None:
+    """Whether the deviceName answering at this Dwarf's IP is another
+    Dwarf's. It isn't always the dwarf_uid (its Bluetooth name - user-
+    reported Oct 2026: DWARF3_3AD946 answers DWARF3_3AD246 over HTTP), so:
+    this uid or the name this Dwarf gave before -> itself; another
+    registered Dwarf's uid or HTTP name -> that one; else, the first time,
+    kept as this Dwarf's name; a name differing from the one kept -> another
+    Dwarf."""
+    from dwarf_python_api.lib.dwarf_session import get_manager
+
+    names = _http_names()
+    known = names.get(uid)
+    if name == uid or name == known:
+        return None
+    for session in get_manager().all():
+        if session.dwarf_uid != uid and name in (session.dwarf_uid, names.get(session.dwarf_uid)):
+            return session.dwarf_uid
+    if known is None and _close_names(uid, name):
+        log.notice(f"[{uid}] answers {name} over HTTP: kept as its name")
+        _remember_http_name(uid, name)
+        return None
+    return name
+
+
+def _close_names(uid: str, name: str) -> bool:
+    """The same model ("DWARF3_") and at most 2 characters apart - a
+    Dwarf's HTTP name next to its Bluetooth one (3AD946 / 3AD246), not
+    another Dwarf (3C2E2A): learning that one, with the IPs already
+    swapped, would hide the mix-up for good."""
+    prefix_a, _, rest_a = uid.rpartition("_")
+    prefix_b, _, rest_b = name.rpartition("_")
+    if prefix_a != prefix_b or len(rest_a) != len(rest_b):
+        return False
+    return sum(1 for x, y in zip(rest_a.upper(), rest_b.upper()) if x != y) <= 2
 
 
 def wrong_dwarf(uid: str) -> str | None:

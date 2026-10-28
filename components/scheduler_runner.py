@@ -1491,6 +1491,11 @@ def start_run(
     from components import device_lock  # local import, as connection_health's
     if not device_lock.claim(dwarf_uid):
         raise RuntimeError("This Dwarf is used by another Astro Dwarf Session instance on this PC.")
+    from components import connection_health
+    if connection_health.wrong_dwarf(dwarf_uid):
+        # Another Dwarf answers at its IP (last check, no network here): the
+        # program would run on that one
+        raise RuntimeError(connection_health.wrong_dwarf_text(session))
 
     # Marked here, BEFORE the background thread even starts (user-
     # reported Sep 2026: a real overnight log showed a scheduled

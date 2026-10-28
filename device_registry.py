@@ -141,6 +141,7 @@ def bootstrap_devices(manager: DwarfManager) -> None:
 
     BOOT_PROBLEMS.clear()
     loaded: dict[str, str] = {}
+    ips: dict[str, str] = {}
     for entry in _read_entries():
         label = entry.name or entry.config_py
         if not os.path.isfile(entry.config_py):
@@ -165,8 +166,16 @@ def bootstrap_devices(manager: DwarfManager) -> None:
 
         manager.add(cfg)
         loaded[cfg.dwarf_uid] = label
+        # Two Dwarfs at one IP: connecting one reaches the other (user-
+        # reported Oct 2026) - both loaded, said
+        ip = (cfg.dwarf_ip or "").strip()
+        if ip and ip in ips:
+            BOOT_PROBLEMS.append(f"{label}: same IP ({ip}) as {ips[ip]} - one of them has an old IP, "
+                                 "update it in its Settings")
+        elif ip:
+            ips[ip] = label
     for problem in BOOT_PROBLEMS:
-        log.warning(f"Dwarf not loaded - {problem}")
+        log.warning(f"devices.json - {problem}")
 
 
 def find_shared_config_value(manager: DwarfManager, getter, exclude_uid: str = ""):

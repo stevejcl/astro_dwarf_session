@@ -182,6 +182,11 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Exposure / gain refused by the Dwarf: no longer taken for a success
+    A program's exposure and gain answered -1 by the Dwarf (refused) were logged "SUCCESS ... -> -1" and the step
+    went on as done (user-reported Oct 2026; the values happened to be right, left by the run before). Now a refusal
+    is logged and asked again once; still refused, the value read back from the Dwarf decides: already the one
+    wanted, the program goes on and says so; another one, the step fails.
     ### A Dwarf of devices.json not loaded: said why
     After a reinstall, 2 Dwarfs shown out of 3 and nothing said why (user-reported Oct 2026): an entry whose
     config_*.py is missing, has no DWARF_UID, or has the DWARF_UID of a Dwarf already loaded (the second replaced
@@ -191,6 +196,15 @@
     The cause, found by the user: Settings' Force Bluetooth, when another Dwarf answered, said "not applied" but
     had already written that Dwarf's uid and IP into this one's config_*.py - after a restart the two had the same
     uid. The file is now put back as it was when another Dwarf answers, or when the connection fails.
+    ### Two Dwarfs with the same IP: said, and the other one never connected as this one
+    Two configs had one IP (user-reported Oct 2026): connecting one Dwarf reached the other. Now the startup
+    warning lists two Dwarfs sharing an IP; before connecting (manual, Connect all, auto-reconnect) the Dwarf
+    answering at that IP is asked who it is (its HTTP deviceInfo, 2 s at most, checked again every 5 min or when
+    the IP changes): another Dwarf there - not connected, the message names it and says to update the IP; a
+    program doesn't start on it either. A Dwarf without that API, or not answering, connects as before.
+    Force Bluetooth goes to this Dwarf by its Bluetooth name (its dwarf_uid) when it is found, without a choice;
+    when it isn't, it says so - another Dwarf answering alone is no longer connected on its own, and none is
+    preselected in a list (user-found Oct 2026: Force Bluetooth done with the other DWARF 3 was the cause).
     ### Megastack: missing darks no longer stop it
     The Dwarf's check answered CODE_ASTRO_RESTACK_DARKFRAME_MISMATCH when dark frames are missing, and the megastack
     ended in Error. The official app only warns and lets it go on (user-reported Oct 2026): it now goes on too,

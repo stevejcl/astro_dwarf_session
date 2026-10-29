@@ -182,10 +182,13 @@ class DeviceCardView:
         with ui.card().classes("w-full cursor-pointer").on(
             "click", lambda: on_open(self.dwarf_uid)
         ) as self.card:
+            # The name's block never wider than the card (user-reported Oct
+            # 2026: on a phone "DWARF3_3C2E2A · 192.168.1.93" ran out of it) -
+            # the buttons still go under it when the card is narrow
             with ui.row().classes("items-center justify-between w-full"):
-                with ui.row().classes("items-center gap-2 min-w-0"):
+                with ui.row().classes("items-center gap-2 min-w-0 max-w-full no-wrap"):
                     ui.icon("satellite_alt").classes("text-2xl text-grey-6 shrink-0")
-                    with ui.column().classes("gap-0 min-w-0"):
+                    with ui.column().classes("gap-0 min-w-0 flex-1"):
                         # truncate (user-reported Sep 2026: a long device
                         # name/UID could disrupt the card's layout) -
                         # ellipsis instead of wrapping/overflowing; the
@@ -201,7 +204,7 @@ class DeviceCardView:
                         ui.label(" · ".join(x for x in (
                             session.dwarf_uid if name != session.dwarf_uid else "",
                             session.config.dwarf_ip or t("unknown_ip")) if x)).classes(
-                            "text-xs text-grey-6 truncate"
+                            "text-xs text-grey-6 break-words"   # wraps after the "·" on a phone
                         )
                 with ui.row().classes("items-center gap-1"):
                     if on_move is not None:

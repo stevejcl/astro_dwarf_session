@@ -222,9 +222,12 @@ def open_catalog_dialog(
         open_catalog_dialog(session, on_pick, get_night, tz=tz, view=new_view)
 
     # On a phone: almost the whole screen (narrow margins)
-    ui.add_css("@media (max-width: 599px) { .catalog-dialog.q-dialog__inner--minimized { padding: 4px; }"
-               " .catalog-dialog .q-card { max-height: calc(100vh - 8px) !important; padding: 8px; } }")
-    with ui.dialog().props('content-class="catalog-dialog"') as dialog, ui.card().classes("w-full max-w-5xl"):
+    ui.add_css("@media (max-width: 599px) { .q-dialog__inner--minimized:has(.catalog-card) { padding: 4px; }"
+               " .catalog-card { max-height: calc(100vh - 8px) !important; padding: 8px !important; }"
+               " .catalog-card .lv-cat-desig > div { max-width: 46vw; overflow: hidden;"
+               " white-space: nowrap; text-overflow: ellipsis; }"
+               " .catalog-card .q-table td, .catalog-card .q-table th { padding: 2px 4px; } }")
+    with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl catalog-card"):
         # The help and the files behind an info button (user-asked Oct 2026:
         # four lines of help took the room of the list)
         with ui.row().classes("w-full items-center no-wrap gap-1"):
@@ -288,12 +291,17 @@ def open_catalog_dialog(
         )
         table.add_slot(
             "body-cell-designation",
-            '<q-td :props="props" style="white-space: normal">{{ props.value }}'
+            # One line per object on a phone (user-asked Oct 2026: the names
+            # and type wrapped over 3-8 lines, the pin under the name): the
+            # icons beside the designation, the names cut with an ellipsis
+            '<q-td :props="props" class="lv-cat-desig">'
+            '<div class="row no-wrap items-center">{{ props.value }}'
             '<q-icon v-if="props.row.recent" name="history" size="xs" color="primary" class="q-ml-xs">'
             '<q-tooltip>{{ props.row.last }}</q-tooltip></q-icon>'
             '<q-icon v-if="props.row.addOn" name="push_pin" size="xs" color="teal" class="q-ml-xs">'
-            f'<q-tooltip>{t("catalog_view_mine")}</q-tooltip></q-icon>'
-            '<div class="lt-sm text-xs text-grey-7">{{ [props.row.name, props.row.type].filter(Boolean).join(" · ") }}</div>'
+            f'<q-tooltip>{t("catalog_view_mine")}</q-tooltip></q-icon></div>'
+            '<div class="lt-sm text-xs text-grey-7 ellipsis">'
+            '{{ [props.row.name, props.row.type].filter(Boolean).join(" · ") }}</div>'
             '</q-td>',
         )
         # "My objects" can be edited and removed again (user-requested Oct

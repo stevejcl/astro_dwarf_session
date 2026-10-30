@@ -182,6 +182,12 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Connect during a capture: astro mode no longer switched
+    (user-reported Oct 2026) Connect clicked at 00:20 on a DWARF 3 capturing for 3 hours sent SWITCH_SHOOTING_MODE
+    (astro mode, for the live view) in the middle of the capture: the Dwarf never answered it nor any command after,
+    the capture stopped at 141 images, its stacked FITS never written. The manual Connect / Reconnect and the
+    dashboard's Connect all now do as the automatic connection: time, timezone and location, then astro mode only
+    when nothing runs - no program here, no capture, goto or focus reported by the Dwarf.
     ### Full-screen view: "no stacked image yet" with 180 stacked
     (user-reported Oct 2026) The image was read from the Dwarf as one whole answer and kept only if it ended
     exactly as a JPEG: an MJPEG stream (never ending) or a JPEG followed by other bytes gave nothing. Now its first

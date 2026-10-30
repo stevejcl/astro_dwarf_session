@@ -266,7 +266,7 @@ TRANSLATIONS: dict[str, str] = {
     "results_repair":                "Repair session",
     "results_repair_hint":           "The capture's images are on the Dwarf but not in its Album: a 2-image session, same settings, that Scope Archive fills with them",
     "results_repair_title":          "Repair a failed capture",
-    "results_repair_text":           "The same program runs again with 2 images (same target, exposure, gain and filter): a new session in the Dwarf's Album.\nThen in Dwarfium Scope Archive, Repair: the failed capture's images are moved into it and renamed, then reboot the Dwarf - the session appears in Album and Megastack with all its images.\nThe Dwarf moves to the target now.",
+    "results_repair_text":           "The same program runs again with 2 images (same target, exposure, gain and filter): a new session in the Dwarf's Album.\nThen in Dwarfium Scope Archive, Repair: the failed capture's images are moved into it and renamed. Reboot the Dwarf and run a Megastack on that session in the Dwarf app - its Album keeps the 2-image figures saved by the Dwarf, the Megastack stacks all the images.\nThe Dwarf moves to the target now.",
     "results_repair_start":          "Start the 2 images",
     "results_force_resume_done":    "Program back in progress - following the capture again.",
     "results_force_resume_failed":  "Could not resume now - the program is back in Current/ and will be resumed on the next check.",

@@ -61,8 +61,8 @@ capture may still be running fine on its side, and switching modes then
 could disrupt it. But a Dwarf that restarted has its camera closed
 (user log, Oct 2026: the Mini powered off and back on, auto-reconnected,
 then its autofocus refused CAMERA_TELE_CLOSED until a manual Reconnect).
-The manual Reconnect button in pages/session.py does the full
-connect_and_enter_astro_mode() unconditionally.
+The manual Connect / Reconnect (connect_and_enter_astro_mode()) does the
+same since Oct 2026 - astro mode switched during a capture hung a DWARF 3.
 
 If all auto-reconnect attempts fail, the device is left in the existing
 "connection lost" state for the user to retry manually via pages/
@@ -461,51 +461,29 @@ def wrong_dwarf_text(session) -> str:
 
 
 async def connect_and_enter_astro_mode(session) -> bool:
-    """Shared by the manual Reconnect button (pages/session.py) and this
-    module's own auto-reconnect below. perform_enter_astro_mode() alone
-    is enough to both establish the connection AND enter astro mode -
-    connect_socket() (dwarf_session_socket.py) already runs init_socket()
-    whenever session.client_instance is None/not started, and init_
-    socket()'s own send_message_init() sends an initial
-    CMD_GLOBAL_TASK_GET_DEVICE_STATE_INFO before whatever command was
-    actually asked for - so a separate perform_get_device_state_info()
-    call first would just send that same command twice on every fresh
-    connect."""
+    """The manual Connect / Reconnect (pages/session.py, the dashboard's
+    Connect all). Time, timezone and location pushed as the official app
+    does on every connection (the native schedule runs on the device
+    clock), then astro mode entered only when nothing runs
+    (_enter_astro_mode_if_idle())."""
     if not device_lock.claim(session.dwarf_uid):
         # Another Astro Dwarf Session instance on this PC uses this Dwarf
         return False
     if await run.io_bound(check_identity, session):   # another Dwarf at its IP
         return False
-    result = await run.io_bound(perform_enter_astro_mode, session=session)
-    if result is False:
+    # Connected first (SET_TIME opens the socket, which asks
+    # GET_DEVICE_STATE_INFO), astro mode only when nothing runs (user log,
+    # Oct 2026: Connect clicked at 00:20 on a DWARF 3 capturing for 3 h -
+    # its SWITCH_SHOOTING_MODE was never answered, nor any command after,
+    # the capture stopped at 141 images and its stacked FITS was never
+    # written). As the auto-reconnect does.
+    if await run.io_bound(perform_time, session=session) is False:
         return False
-    await sync_device_clock(session)
-    return True
-
-
-async def sync_device_clock(session) -> None:
-    """Pushes this PC's time, the configured timezone and the site location
-    to the Dwarf, as the official app does on every connection (SET_TIME /
-    SET_TIME_ZONE / SET_LOCATION, 13000/13001/13010 in every capture).
-    Called by connect_and_enter_astro_mode() (manual connect); the caller
-    holds the command slot. _auto_reconnect() (startup auto-connection and
-    reconnects) sends the same three commands itself, SET_TIME first since
-    it is what opens the connection there.
-
-    The native shooting schedule runs on the DEVICE clock: until now only
-    dwarf_session.py set it, so a Dwarf connected through this UI alone
-    could keep a wrong clock and reject valid windows (Oct 2026: two -16301
-    INVALID_SHOOTING_DURATION fitting a clock ~2 h ahead). Best effort: a
-    failure is logged, the connection itself is not failed."""
-    for label, func in (("time", perform_time), ("timezone", perform_timezone),
-                        ("location", perform_set_location)):
-        try:
-            ok = await run.io_bound(func, session=session)
-        except Exception as e:  # never break a connect over this
-            ok = False
-            log.warning(f"[{session.dwarf_uid}] Device {label} sync failed: {e}")
-        if ok is False:
+    for label, func in (("timezone", perform_timezone), ("location", perform_set_location)):
+        if await run.io_bound(func, session=session) is False:
             log.warning(f"[{session.dwarf_uid}] Device {label} not synced.")
+    await run.io_bound(_enter_astro_mode_if_idle, session)
+    return True
 
 
 def _device_busy(session: DwarfSession) -> bool:
@@ -551,15 +529,15 @@ def _enter_astro_mode_if_idle(session: DwarfSession) -> None:
     from components import scheduler_runner  # local import - imports this module
 
     if scheduler_runner.is_running(uid) or _device_busy(session):
-        log.notice(f"[{uid}] Automatic connection: device busy, astro mode not entered.")
+        log.notice(f"[{uid}] Connection: device busy (capture, goto...), astro mode not entered.")
         return
     try:
         ok = perform_enter_astro_mode(session=session)
     except Exception as e:  # never break a connect over this
         ok = False
-        log.warning(f"[{uid}] Automatic connection: entering astro mode failed: {e}")
+        log.warning(f"[{uid}] Connection: entering astro mode failed: {e}")
     if ok is False:
-        log.warning(f"[{uid}] Automatic connection: astro mode not entered.")
+        log.warning(f"[{uid}] Connection: astro mode not entered.")
 
 
 async def _auto_reconnect(session: DwarfSession) -> None:

@@ -2,6 +2,12 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### Repair session for a failed capture
+    (user-asked Oct 2026, from DwarfLab's procedure) A capture that failed (Dwarf hung, battery, reboot) keeps its
+    images on the Dwarf but has no stacked image: not in the Album nor the Megastack. In Results, an Error program
+    offers "Repair session": the same program again with 2 images (same target, exposure, gain and filter), a
+    session entry in the Album that Dwarfium Scope Archive's Repair fills with the failed capture's images
+    (repair_of in its file: the failed capture's start). Asked first - the Dwarf moves to the target.
     ### My objects, favourites and recent targets in "Pick from catalog"
     (user-requested Oct 2026, issue #162) A target from Stellarium, typed in, a variable star or a recent one is
     kept in "my objects" (catalog_add_on.json, read by Scope Archive too) when "Keep in my objects" is ticked on
@@ -182,6 +188,22 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### A capture ended short by the Dwarf says so - battery empty
+    (user-asked Oct 2026: the Mini powered off at 6 % at 20/60, a DWARF 3 stopped at 5 % at 139/400 - the second
+    read "Session completed successfully") The program's message adds "stopped by the Dwarf at 139/400", with
+    "battery empty (5%)" when the battery was at 10 % or less, not charging, or a POWER OFF was received; the level
+    kept in the program's file (battery_end). Not for a program stopped at its end time.
+    ### A capture that no longer moves is said
+    (user-reported Oct 2026: a hung DWARF 3 read "Capture in progress 141/500" all night, the same notification
+    over and over - the user thought it ran) The Dwarf's card says in its header "no new image for N min - the
+    Dwarf may be stuck" when the taken / stacked counts haven't changed for 10 min (or 4 x the exposure), and the log
+    says it once.
+    ### Connect during a capture: astro mode no longer switched
+    (user-reported Oct 2026) Connect clicked at 00:20 on a DWARF 3 capturing for 3 hours sent SWITCH_SHOOTING_MODE
+    (astro mode, for the live view) in the middle of the capture: the Dwarf never answered it nor any command after,
+    the capture stopped at 141 images, its stacked FITS never written. The manual Connect / Reconnect and the
+    dashboard's Connect all now do as the automatic connection: time, timezone and location, then astro mode only
+    when nothing runs - no program here, no capture, goto or focus reported by the Dwarf.
     ### Full-screen view: "no stacked image yet" with 180 stacked
     (user-reported Oct 2026) The image was read from the Dwarf as one whole answer and kept only if it ended
     exactly as a JPEG: an MJPEG stream (never ending) or a JPEG followed by other bytes gave nothing. Now its first

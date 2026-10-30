@@ -3,6 +3,7 @@
 /dwarf_python_api*
 *.log
 *.log.old
+*.log.old.*
 *.pyc
 *.tmp
 /build

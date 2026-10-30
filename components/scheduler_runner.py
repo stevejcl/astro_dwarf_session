@@ -643,6 +643,41 @@ _RESUME_BUSY_CHECK_EVERY_S = 20  # how often to cross-check with a FRESH device 
 _RESUME_ACQUIRE_ATTEMPTS = 3
 _RESUME_ACQUIRE_DELAY_S = 3
 
+_LOW_BATTERY_PCT = 10
+
+
+def _early_stop_note(id_command: dict, session, program: dict) -> str:
+    """" - stopped by the Dwarf at 139/400: battery empty (5%)" when the
+    capture ended short of its count, not at the program's end time
+    (user-asked Oct 2026: the Mini powered off at 6 %, a DWARF 3 stopped at
+    5 % - both read "Session completed successfully"); "" otherwise. The
+    battery is the client's last level (CMD_NOTIFY_ELE / device state),
+    a POWER OFF notification counts as empty. Also writes battery_end."""
+    camera = "setup_wide_camera" if (program.get("setup_wide_camera") or {}).get("do_action") \
+        and not (program.get("setup_camera") or {}).get("do_action") else "setup_camera"
+    try:
+        requested = int((program.get(camera) or {}).get("count") or 0)
+        taken = int(id_command.get("shots_taken") or 0)
+    except (TypeError, ValueError):
+        return ""
+    if not requested or taken >= requested:
+        return ""
+    end_time = _program_end_time(program, camera, session_now(session))
+    if end_time is not None and session_now(session) >= end_time - timedelta(minutes=2):
+        return ""   # its end time: stopped as asked
+    client = getattr(session, "client_instance", None)
+    battery = getattr(client, "BatteryLevelDwarf", None)
+    charging = getattr(client, "IsChargingDwarf", None)
+    power_off = bool(getattr(client, "PowerOffNotified", False))
+    if battery is not None:
+        id_command["battery_end"] = battery
+    note = f" - stopped by the Dwarf at {taken}/{requested}"
+    if power_off or (battery is not None and battery <= _LOW_BATTERY_PCT and charging is not True):
+        note += ": battery empty" + (f" ({battery}%)" if battery is not None else "")
+        log.warning(f"[{session.dwarf_uid}] Capture stopped by the Dwarf at {taken}/{requested}: battery empty"
+                    + (f" ({battery}%)" if battery is not None else " (power off)"))
+    return note
+
 def _program_end_time(program: dict, camera_key: str, now: datetime | None = None) -> datetime | None:
     """End time of a resumed program (user-reported Oct 2026: not applied
     after a restart, so a capture could run long past it). Anchored on the
@@ -836,7 +871,7 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
         id_command["message"] = (
             "Session completed successfully (resumed after restart)"
             if success else "Session failed (resumed after restart)"
-        )
+        ) + _early_stop_note(id_command, session, program)
         _update_process_status(full_program, "done", session=session)
 
         dest_dir = dirs["DONE_DIR"] if success else dirs["ERROR_DIR"]
@@ -1408,6 +1443,8 @@ def _run_blocking(
                 _capture_shots_result(id_command, session)
                 id_command["count_info"] = state.requested_count_tele if state.requested_count_tele else state.requested_count_wide
                 id_command["mosaic_info"] =  program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action")
+                if not id_command["mosaic_info"]:
+                    id_command["message"] += _early_stop_note(id_command, session, program)
             state.shots_taken = id_command.get("shots_taken")
             state.shots_stacked = id_command.get("shots_stacked")
             state.exposure_actual = id_command.get("exposure_actual") or ""

@@ -105,6 +105,7 @@ TRANSLATIONS: dict[str, str] = {
     "capture_progress_no_total":    "Capture en cours \u00b7 {current} captur\u00e9es \u00b7 {stacked} empil\u00e9es",
     "card_end_time":                "fin \u00e0 {time}",
     "capture_stalled":              "\u26a0 aucune nouvelle image depuis {minutes} min - le Dwarf est peut-\u00eatre bloqu\u00e9",
+    "card_build_failed":            "La carte de ce Dwarf n'a pas pu s'afficher ({error}) - détails dans le log",
     "card_schedule_target":         "Planning {schedule} \u00b7 {target}",
     "card_schedule_task":           "T\u00e2che {index}/{total}",
     "watch_target":                 "Cible : {target}",

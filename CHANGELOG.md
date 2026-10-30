@@ -188,6 +188,12 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Home screen: one Dwarf's card failing no longer hides the others - Connect all connects them all
+    (user-reported Oct 2026: after a change of Site, one card shown under "No Dwarf configured yet") The cards were
+    built one after the other and the message hidden at the end: an error on one card stopped the others, on every
+    refresh. Now each card is built on its own - one that fails says so in its place, the error and its traceback in
+    the log. Connect all stopped after the first Dwarf connected (a variable that didn't exist since its
+    reconciliation of interrupted programs was added): the next ones were never connected.
     ### A capture ended short by the Dwarf says so - battery empty
     (user-asked Oct 2026: the Mini powered off at 6 % at 20/60, a DWARF 3 stopped at 5 % at 139/400 - the second
     read "Session completed successfully") The program's message adds "stopped by the Dwarf at 139/400", with

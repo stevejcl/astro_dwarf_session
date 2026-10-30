@@ -12,6 +12,9 @@ enough to detect a connection that died mid-session (e.g. a Wi-Fi
 glitch causing a command timeout, rather than a clean disconnect)."""
 from __future__ import annotations
 
+import traceback
+
+import dwarf_python_api.lib.my_logger as log
 from nicegui import ui,run,app
 
 from dwarf_python_api.lib.dwarf_session import get_manager
@@ -71,7 +74,7 @@ async def _handle_connect_all(button: ui.button | None = None) -> None:
                 connected += 1
                 connection_health.mark_just_connected(session.dwarf_uid)
                 from components import scheduler_runner  # local import - avoids circular import
-                await run.io_bound(scheduler_runner.reconcile_orphaned_current_files, uid, session)
+                await run.io_bound(scheduler_runner.reconcile_orphaned_current_files, session.dwarf_uid, session)
             else:
                 failed += 1
     finally:
@@ -237,14 +240,27 @@ def build_dashboard_page() -> None:
                 if layout != built_layout:
                     cards_container.clear()
                     cards.clear()
+                    empty_label.set_visibility(not sessions)
                     with cards_container:
                         for session, (_uid, hidden) in zip(sessions, layout):
-                            cards[session.dwarf_uid] = DeviceCardView(
-                                session, on_open=_open_device,
-                                on_toggle_hidden=_toggle_hidden, hidden=hidden, on_move=_move,
-                            )
+                            # One Dwarf's card failing doesn't take the
+                            # others with it (user-reported Oct 2026: after
+                            # a change of Site, one card shown under "No
+                            # Dwarf configured yet" - the loop stopped at
+                            # the next one, on every tick): said on its
+                            # place, the error in the log
+                            try:
+                                cards[session.dwarf_uid] = DeviceCardView(
+                                    session, on_open=_open_device,
+                                    on_toggle_hidden=_toggle_hidden, hidden=hidden, on_move=_move,
+                                )
+                            except Exception as e:
+                                log.error(f"[{session.dwarf_uid}] Dashboard card not built: {e}\n"
+                                          + traceback.format_exc())
+                                with ui.card().classes("w-full"):
+                                    ui.label(session.dwarf_uid).classes("font-medium")
+                                    ui.label(t("card_build_failed", error=e)).classes("text-sm text-negative")
                     built_layout[:] = layout
-                    empty_label.set_visibility(not sessions)
                     return
 
                 # Common path: same devices as last tick - active
@@ -253,7 +269,14 @@ def build_dashboard_page() -> None:
                 # no DOM teardown for anything that hasn't changed.
                 for session in sessions:
                     await connection_health.maybe_check(session)
-                    cards[session.dwarf_uid].update(session)
+                    card = cards.get(session.dwarf_uid)
+                    if card is None:
+                        continue
+                    try:
+                        card.update(session)
+                    except Exception as e:
+                        log.error(f"[{session.dwarf_uid}] Dashboard card not updated: {e}\n"
+                                  + traceback.format_exc())
 
             # Watch-mode QR code (user-requested Sep 2026): opens a
             # dialog with a QR code + the plain URL for /watch, so a

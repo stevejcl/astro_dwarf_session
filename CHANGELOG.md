@@ -182,6 +182,11 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### A capture ended short by the Dwarf says so - battery empty
+    (user-asked Oct 2026: the Mini powered off at 6 % at 20/60, a DWARF 3 stopped at 5 % at 139/400 - the second
+    read "Session completed successfully") The program's message adds "stopped by the Dwarf at 139/400", with
+    "battery empty (5%)" when the battery was at 10 % or less, not charging, or a POWER OFF was received; the level
+    kept in the program's file (battery_end). Not for a program stopped at its end time.
     ### A capture that no longer moves is said
     (user-reported Oct 2026: a hung DWARF 3 read "Capture in progress 141/500" all night, the same notification
     over and over - the user thought it ran) The Dwarf's card says in its header "no new image for N min - the

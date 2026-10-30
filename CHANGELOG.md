@@ -8,6 +8,10 @@
     offers "Repair session": the same program again with 2 images (same target, exposure, gain and filter), a
     session entry in the Album that Dwarfium Scope Archive's Repair fills with the failed capture's images
     (repair_of in its file: the failed capture's start). Asked first - the Dwarf moves to the target.
+    Once that session is done, its result offers "Finish the repair in Scope Archive": Scope Archive's Repair opens
+    (in its window when it has one) with this session and the failed capture already found on the Dwarf - check,
+    Start Repair, reboot the Dwarf, then a Megastack in the Dwarf app. Shown when Scope Archive's URL and Dwarf Id are
+    set in the Dwarf's Settings.
     ### My objects, favourites and recent targets in "Pick from catalog"
     (user-requested Oct 2026, issue #162) A target from Stellarium, typed in, a variable star or a recent one is
     kept in "my objects" (catalog_add_on.json, read by Scope Archive too) when "Keep in my objects" is ticked on

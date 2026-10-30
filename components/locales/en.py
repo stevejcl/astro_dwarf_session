@@ -268,6 +268,8 @@ TRANSLATIONS: dict[str, str] = {
     "results_repair_title":          "Repair a failed capture",
     "results_repair_text":           "The same program runs again with 2 images (same target, exposure, gain and filter): a new session in the Dwarf's Album.\nThen in Dwarfium Scope Archive, Repair: the failed capture's images are moved into it and renamed. Reboot the Dwarf and run a Megastack on that session in the Dwarf app - its Album keeps the 2-image figures saved by the Dwarf, the Megastack stacks all the images.\nThe Dwarf moves to the target now.",
     "results_repair_start":          "Start the 2 images",
+    "results_repair_finish":         "Finish the repair in Scope Archive",
+    "results_repair_finish_hint":    "Opens Scope Archive's Repair with this session and the failed capture found on the Dwarf (USB or network): check, Start Repair, reboot the Dwarf, then Megastack",
     "results_force_resume_done":    "Program back in progress - following the capture again.",
     "results_force_resume_failed":  "Could not resume now - the program is back in Current/ and will be resumed on the next check.",
     "open_programs":                "Programs",

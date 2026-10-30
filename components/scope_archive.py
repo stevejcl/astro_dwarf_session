@@ -216,6 +216,27 @@ def page_url(config, page: str) -> str | None:
     return f"{base}{path}?{urlencode({'DwarfId': dwarf_id, **extra, **_dwarf_ip_param(config)})}"
 
 
+def repair_url(config, program: dict) -> str | None:
+    """Scope Archive's Repair for a finished Repair session (user-asked Oct
+    2026, see pages/programs.py): its Mosaic page in Repair mode, with what
+    finds both captures on the Dwarf - the target, camera, exposure and
+    gain, the repair program's start and the failed one's (id_command
+    repair_of). None when the URL / DwarfId isn't set or the program isn't
+    one."""
+    base, dwarf_id = scope_settings(config)
+    base = base.rstrip("/")
+    id_command = program.get("id_command") or {}
+    camera = program.get("setup_camera") or {}
+    target = (program.get("goto_manual") or {}).get("target") or ""
+    failed, started = id_command.get("repair_of") or "", id_command.get("starting_date") or ""
+    if not base or not dwarf_id or not (failed and started and target and camera.get("do_action")):
+        return None
+    query = {"DwarfId": dwarf_id, "mode": "Repair", "repair_failed": failed, "repair_new": started,
+             "repair_target": target, "repair_exp": camera.get("exposure", ""), "repair_gain": camera.get("gain", ""),
+             "repair_camera": "TELE"}
+    return f"{base}/Mosaic?{urlencode(query)}"
+
+
 async def open_page(url: str | None) -> None:
     """Shows a Scope Archive page: on the phone when clicked there and
     Scope Archive is on the LAN (open_for), else in its window when it

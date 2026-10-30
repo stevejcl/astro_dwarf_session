@@ -19,7 +19,7 @@ from nicegui import run, ui
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 
-from components import eclipsing_binaries, scheduler_loop, scheduler_runner, task_check_cache
+from components import eclipsing_binaries, scheduler_loop, scheduler_runner, scope_archive, task_check_cache
 from components.i18n import get_language, t
 from components.json_files import read_json, write_json_atomic
 from components.end_of_night_card import build_end_of_night_card
@@ -562,6 +562,17 @@ def build_programs_page() -> None:
                                                 ),
                                             ).props(
                                                 f"flat dense no-caps size=sm color={'primary' if kind == 'done' else 'negative'}"
+                                            )
+                                        # A finished Repair session: the rest in
+                                        # Scope Archive, both captures filled in
+                                        repair_link = scope_archive.repair_url(session.config, program) \
+                                            if kind == "done" else None
+                                        if repair_link:
+                                            ui.button(
+                                                t("results_repair_finish"), icon="build",
+                                                on_click=lambda u=repair_link: scope_archive.open_page(u),
+                                            ).props("flat dense no-caps size=sm color=primary").tooltip(
+                                                t("results_repair_finish_hint")
                                             )
                                         # A failed capture (no stacked image in the
                                         # Dwarf's Album): a 2-image session to

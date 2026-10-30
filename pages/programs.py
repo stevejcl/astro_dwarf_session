@@ -383,6 +383,63 @@ def build_programs_page() -> None:
                         )
                         render_results()
 
+                    def repair_session(filepath: str) -> None:
+                        """A failed capture whose images are on the Dwarf but
+                        not in its Album (user-asked Oct 2026, from DwarfLab's
+                        procedure - "How I Fixed My Failed Session"): the same
+                        program again with 2 images, a session entry in the
+                        Album that Scope Archive then fills with the failed
+                        one's images (Repair). Asked first: it moves the Dwarf."""
+                        data = _read_json(filepath)
+                        if data is None:
+                            _notify_unreadable(filepath)
+                            return
+                        with ui.dialog() as dialog, ui.card().classes("max-w-lg"):
+                            ui.label(t("results_repair_title")).classes("text-base font-medium")
+                            ui.label(t("results_repair_text")).classes("text-sm whitespace-pre-line")
+                            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                                ui.button(t("cancel"), on_click=dialog.close).props("flat")
+
+                                def _go() -> None:
+                                    dialog.close()
+                                    _start_repair_session(data)
+
+                                ui.button(t("results_repair_start"), icon="build", on_click=_go).props("color=primary")
+                        dialog.open()
+
+                    def _start_repair_session(data: dict) -> None:
+                        cmd = data.get("command", {})
+                        id_command = cmd.setdefault("id_command", {})
+                        failed = id_command.get("starting_date") or f"{id_command.get('date', '')} {id_command.get('time', '')}"
+                        for key in ("process", "result", "message", "nb_try", "starting_date", "processed_date",
+                                    "last_step", "last_step_time", "shots_taken", "shots_stacked", "battery_end"):
+                            id_command.pop(key, None)
+                        now = site_now(session.config)
+                        id_command["uuid"] = f"{uuid.uuid4()}-00001"
+                        id_command["date"] = now.strftime("%Y-%m-%d")
+                        id_command["time"] = now.strftime("%H:%M:%S")
+                        id_command["description"] = f"Repair session for the capture of {failed.strip()} - " + (
+                            id_command.get("description") or "")
+                        id_command["repair_of"] = failed.strip()
+                        # The same target, exposure, gain and filter - 2 images
+                        camera = cmd.get("setup_camera") or {}
+                        camera.update(count="2", end_time="", doMosaic=False)
+                        cmd["setup_camera"] = camera
+                        cmd.setdefault("setup_wide_camera", {})["do_action"] = False
+
+                        dirs = session_dirs_for(session)
+                        os.makedirs(dirs["TODO_DIR"], exist_ok=True)
+                        new_filename = f"{id_command['date']}-{id_command['time'].replace(':', '-')}-repair.json"
+                        new_filepath = os.path.join(dirs["TODO_DIR"], new_filename)
+                        write_json_atomic(new_filepath, {"command": cmd})
+                        try:
+                            scheduler_runner.start_run(dwarf_uid, cmd, session, source_filepath=new_filepath)
+                        except RuntimeError as exc:
+                            ui.notify(str(exc), type="warning")
+                            return
+                        ui.notify(t("program_running"), type="positive")
+                        ui.navigate.to(f"/session/{dwarf_uid}")
+
                     def render_results() -> None:
                         results_container.clear()
                         dirs = session_dirs_for(session)
@@ -506,6 +563,16 @@ def build_programs_page() -> None:
                                             ).props(
                                                 f"flat dense no-caps size=sm color={'primary' if kind == 'done' else 'negative'}"
                                             )
+                                        # A failed capture (no stacked image in the
+                                        # Dwarf's Album): a 2-image session to
+                                        # repair it with Scope Archive
+                                        if (kind == "error" and program.get("setup_camera", {}).get("do_action")
+                                                and not program.get("setup_camera", {}).get("doMosaic")
+                                                and id_command.get("starting_date")):
+                                            ui.button(
+                                                t("results_repair"), icon="build",
+                                                on_click=lambda p=filepath: repair_session(p),
+                                            ).props("flat dense no-caps size=sm").tooltip(t("results_repair_hint"))
                                         # The Dwarf is still capturing this
                                         # program's target (error < 15 h)
                                         if kind == "error" and scheduler_runner.can_force_resume(

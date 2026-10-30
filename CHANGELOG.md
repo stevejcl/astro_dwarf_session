@@ -2,6 +2,12 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### Repair session for a failed capture
+    (user-asked Oct 2026, from DwarfLab's procedure) A capture that failed (Dwarf hung, battery, reboot) keeps its
+    images on the Dwarf but has no stacked image: not in the Album nor the Megastack. In Results, an Error program
+    offers "Repair session": the same program again with 2 images (same target, exposure, gain and filter), a
+    session entry in the Album that Dwarfium Scope Archive's Repair fills with the failed capture's images
+    (repair_of in its file: the failed capture's start). Asked first - the Dwarf moves to the target.
     ### My objects, favourites and recent targets in "Pick from catalog"
     (user-requested Oct 2026, issue #162) A target from Stellarium, typed in, a variable star or a recent one is
     kept in "my objects" (catalog_add_on.json, read by Scope Archive too) when "Keep in my objects" is ticked on

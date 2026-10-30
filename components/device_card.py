@@ -716,7 +716,6 @@ class DeviceCardView:
                     last_step = f"{last_step} \u00b7 {end_bit}" if last_step else end_bit
                 self._dynamic_detail.set_text(last_step)
 
-    @staticmethod
     def _show_stall(self, minutes: int | None) -> None:
         if self._stall_label is None:
             return
@@ -724,6 +723,7 @@ class DeviceCardView:
             self._stall_label.set_text(t("capture_stalled", minutes=minutes))
         self._stall_label.set_visibility(minutes is not None)
 
+    @staticmethod
     def _build_dynamic_banner(
         *, icon: str, css: str, static_message: str | None = None, two_lines: bool = False
     ):

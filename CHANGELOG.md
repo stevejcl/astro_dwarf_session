@@ -188,6 +188,10 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Home screen: no Dwarf card shown since the "capture no longer moves" warning
+    (user-reported Oct 2026: "No Dwarf configured yet" with one card, then "_show_stall() missing 1 required
+    positional argument") The warning's method had been put between @staticmethod and the method it decorated: it
+    became static and every card failed on its first refresh. Not the change of Site.
     ### Home screen: one Dwarf's card failing no longer hides the others - Connect all connects them all
     (user-reported Oct 2026: after a change of Site, one card shown under "No Dwarf configured yet") The cards were
     built one after the other and the message hidden at the end: an error on one card stopped the others, on every

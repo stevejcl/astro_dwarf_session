@@ -23,7 +23,7 @@ from dwarf_python_api.get_config_data import config_to_dwarf_id_str
 from dwarf_python_api.lib.dwarf_session import DwarfSession
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
 
-from components import connection_health, current_activity, device_lock, device_task, scheduler_loop, scheduler_runner
+from components import connection_health, capture_stall, current_activity, device_lock, device_task, scheduler_loop, scheduler_runner
 from components.camera_stream import (
     build_dashboard_thumbnail,
     dashboard_thumbnail_refresh_source,
@@ -178,6 +178,7 @@ class DeviceCardView:
         self._dynamic_label: ui.label | None = None
         self._dynamic_detail: ui.label | None = None
         self._thumbnail: ui.image | None = None
+        self._stall_label: ui.label | None = None
 
         with ui.card().classes("w-full cursor-pointer").on(
             "click", lambda: on_open(self.dwarf_uid)
@@ -264,6 +265,13 @@ class DeviceCardView:
                     # frozen on the "on" wording forever).
                     self._scheduler_icon = ui.icon("schedule")
                     self._status_dot = ui.icon("circle")
+            # A capture whose count no longer moves, in the card's header
+            # (user-asked Oct 2026: a hung DWARF 3 read "Capture in progress
+            # 141/500" all night) - see components/capture_stall.py
+            self._stall_label = ui.label("").classes(
+                "w-full text-sm font-medium text-orange-9 bg-orange-1 rounded px-2 py-1"
+            )
+            self._stall_label.set_visibility(False)
             # "Mission control" row (user-requested Sep 2026: monitor
             # running sessions across devices with a way to jump to the
             # live stacking view) - a PERSISTENT row, ALWAYS visible,
@@ -645,6 +653,9 @@ class DeviceCardView:
 
         # Same kind as last tick: only refresh the bit of text that can
         # legitimately change on its own - no DOM rebuild.
+        if kind != "capturing":
+            self._show_stall(None)
+            capture_stall.forget(self.dwarf_uid)
         if kind == "capturing" and self._dynamic_label is not None:
             is_tele = scheduler_runner.resolve_active_camera_is_tele(self.dwarf_uid, full_status)
             run_state = scheduler_runner.get_run_state(self.dwarf_uid)
@@ -666,6 +677,8 @@ class DeviceCardView:
                 text += " \u00b7 " + t("card_end_time", time=run_state.end_time_display)
             elif activity and activity["source"] == "schedule" and activity["end"]:
                 text += " \u00b7 " + t("card_end_time", time=current_activity.format_time(session, activity["end"]))
+            stalled = capture_stall.stalled_minutes(self.dwarf_uid, is_tele, (current, stacked), run_state)
+            self._show_stall(stalled)
             self._dynamic_label.set_text(text)
             if self._dynamic_detail is not None:
                 self._dynamic_detail.set_text(_activity_title(activity))
@@ -704,6 +717,13 @@ class DeviceCardView:
                 self._dynamic_detail.set_text(last_step)
 
     @staticmethod
+    def _show_stall(self, minutes: int | None) -> None:
+        if self._stall_label is None:
+            return
+        if minutes is not None:
+            self._stall_label.set_text(t("capture_stalled", minutes=minutes))
+        self._stall_label.set_visibility(minutes is not None)
+
     def _build_dynamic_banner(
         *, icon: str, css: str, static_message: str | None = None, two_lines: bool = False
     ):

@@ -104,6 +104,7 @@ TRANSLATIONS: dict[str, str] = {
     "capture_progress_with_total":  "Capture in progress \u00b7 {current}/{total} \u00b7 {stacked} stacked",
     "capture_progress_no_total":    "Capture in progress \u00b7 {current} captured \u00b7 {stacked} stacked",
     "card_end_time":                "ends at {time}",
+    "capture_stalled":              "\u26a0 no new image for {minutes} min - the Dwarf may be stuck",
     "card_schedule_target":         "Schedule {schedule} \u00b7 {target}",
     "card_schedule_task":           "Task {index}/{total}",
     "watch_target":                 "Target: {target}",

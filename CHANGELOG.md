@@ -182,6 +182,11 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### A capture that no longer moves is said
+    (user-reported Oct 2026: a hung DWARF 3 read "Capture in progress 141/500" all night, the same notification
+    over and over - the user thought it ran) The Dwarf's card says in its header "no new image for N min - the
+    Dwarf may be stuck" when the taken / stacked counts haven't changed for 10 min (or 4 x the exposure), and the log
+    says it once.
     ### Connect during a capture: astro mode no longer switched
     (user-reported Oct 2026) Connect clicked at 00:20 on a DWARF 3 capturing for 3 hours sent SWITCH_SHOOTING_MODE
     (astro mode, for the live view) in the middle of the capture: the Dwarf never answered it nor any command after,

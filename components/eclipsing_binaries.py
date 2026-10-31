@@ -139,9 +139,55 @@ def load_stars() -> list[dict]:
     return stars
 
 
+# The elements typed in by the user (source "manual"), shared with Scope
+# Archive's Siril photometry script (user-asked Oct 2026: RZ Dra's VSX
+# elements of 1979 put its minimum 2 h early - the Krakow up-to-date ones
+# right; its O-C computed against them too): <user folder>/star_elements.json,
+# {"<name key>": {"name", "epoch_hjd", "period_d", "vartype"}}
+USER_ELEMENTS_FILE_NAME = "star_elements.json"
+
+
+def _user_elements_path() -> Path:
+    from components.my_targets import USER_DIR
+    return USER_DIR / USER_ELEMENTS_FILE_NAME
+
+
+def _sync_user_elements(star: dict) -> None:
+    """The star's typed-in elements written to (or, not manual any more,
+    removed from) the shared file. Best effort."""
+    path = _user_elements_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        if not isinstance(data, dict):
+            data = {}
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    key = _key(star.get("name"))
+    try:
+        typed_in = (star.get("source") == "manual" and float(star["epoch_hjd"]) > 2400000
+                    and float(star["period_d"]) > 0)
+    except (KeyError, TypeError, ValueError):
+        typed_in = False
+    if typed_in:
+        data[key] = {"name": star["name"], "epoch_hjd": float(star["epoch_hjd"]),
+                     "period_d": float(star["period_d"]), "vartype": star.get("vartype") or ""}
+    elif key in data:
+        del data[key]
+    else:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
 def save_star(star: dict) -> None:
     """Adds or replaces a star (same name), and brings it back if it had
     been removed."""
+    _sync_user_elements(star)
     with _lock:
         data = _read_file()
         key = _key(star.get("name"))
@@ -235,6 +281,21 @@ def fetch_vsx(name: str) -> dict:
         raise ValueError(f"{name}: not found in VSX")
     obj = payload.get("VSXObject") if isinstance(payload, dict) else None
     return parse_vsx_object(name, obj or {})
+
+
+def set_user_elements(star: dict, epoch_hjd: float, period_d: float) -> dict:
+    """The user's own elements for a star (e.g. the Krakow up-to-date ones),
+    kept over VSX's from then on - and saved."""
+    updated = {**star, "epoch_hjd": float(epoch_hjd), "period_d": float(period_d), "source": "manual"}
+    updated.pop("vsx_error", None)
+    save_star(updated)
+    return updated
+
+
+def back_to_vsx(star: dict) -> dict:
+    """The star's elements from VSX again, the user's dropped."""
+    star = {k: v for k, v in star.items() if k not in ("source", "epoch_hjd", "period_d")}
+    return update_from_vsx(star)
 
 
 def update_from_vsx(star: dict) -> dict:

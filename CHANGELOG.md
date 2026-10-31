@@ -2,6 +2,11 @@
 
 ## [3.2.6] - 2026-10-17
   ### Add
+    ### Eclipsing binaries: your own elements for a star
+    (user-asked Oct 2026: RZ Dra's VSX elements, of 1979, put its minimum at 21:01 - it came at about 22:58, the
+    Krakow up-to-date elements right) In the planner's star list, a pencil per star: a primary minimum (HJD) and the
+    period, kept over VSX's (refresh included), used for its minima; "Back to VSX's" drops them. They are shared with
+    Scope Archive's Siril photometry script (star_elements.json in the user folder) for the O-C.
     ### Repair session for a failed capture
     (user-asked Oct 2026, from DwarfLab's procedure) A capture that failed (Dwarf hung, battery, reboot) keeps its
     images on the Dwarf but has no stacked image: not in the Album nor the Megastack. In Results, an Error program

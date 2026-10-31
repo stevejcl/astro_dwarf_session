@@ -109,6 +109,11 @@ def program_task(program: dict, config) -> dict | None:
     if start is None:
         return None
     end = _site_epoch(id_command.get("processed_date"), config)
+    if id_command.get("result") is False or id_command.get("process") == "error":
+        # Filed in Error while the Dwarf may have gone on capturing (user's
+        # Mini, Oct 2026: filed at 00:45 on a lost connection, its session
+        # saved at 06:00 - Check found nothing): its session can be later
+        end = None
     return {
         "name": program_target(cmd),
         "startTime": start,

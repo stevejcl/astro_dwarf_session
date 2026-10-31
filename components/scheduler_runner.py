@@ -640,6 +640,7 @@ def _requeue_orphan_to_todo(dwarf_uid, dirs, filename, path, program, id_command
 
 _RESUME_POLL_INTERVAL_S = 2
 _RESUME_BUSY_CHECK_EVERY_S = 20  # how often to cross-check with a FRESH device query
+_RESUME_UNKNOWN_MAX_S = 30 * 60  # no answer and no new image that long: the end
 _RESUME_ACQUIRE_ATTEMPTS = 3
 _RESUME_ACQUIRE_DELAY_S = 3
 
@@ -754,6 +755,7 @@ def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted
     the target."""
     last_count = 0
     last_busy_check_at = 0.0
+    unknown_since = None    # the Dwarf not answering the busy check since
 
     while not interrupted():
         status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
@@ -774,10 +776,28 @@ def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted
         now = time.monotonic()
         if now - last_busy_check_at >= _RESUME_BUSY_CHECK_EVERY_S:
             last_busy_check_at = now
-            if not device_is_actively_capturing(session):
+            capturing = _device_capture_state(session)
+            if capturing is False:
                 # Confirmed by a fresh query, not the stale local flag -
                 # the device genuinely isn't shooting anymore.
                 return current_count
+            if capturing is None:
+                # No answer (user's Mini, Oct 2026: one GET_DEVICE_STATE_INFO
+                # timed out at 00:45, the run filed in Error at 30/200 - the
+                # Mini went on to 190 images): not an end. Given up only
+                # when it lasts and the count no longer moves.
+                if unknown_since is None:
+                    unknown_since = (now, current_count)
+                    log.warning(f"[{session.dwarf_uid}] Resumed capture: the Dwarf didn't answer its state - "
+                                "still followed.")
+                elif current_count != unknown_since[1]:
+                    unknown_since = (now, current_count)
+                elif now - unknown_since[0] >= _RESUME_UNKNOWN_MAX_S:
+                    log.warning(f"[{session.dwarf_uid}] Resumed capture: no answer and no new image for "
+                                f"{_RESUME_UNKNOWN_MAX_S // 60} min - its end taken as now.")
+                    return current_count
+            else:
+                unknown_since = None
 
         time.sleep(_RESUME_POLL_INTERVAL_S)
 
@@ -1190,6 +1210,31 @@ def device_is_actively_capturing(session) -> bool:
     if not session.is_connected:
         return False
     return perform_is_camera_actually_busy(session=session)
+
+def _device_capture_state(session) -> bool | None:
+    """True / False: a camera of the Dwarf runs an exclusive activity (a
+    capture) or not, from a fresh GET_DEVICE_STATE_INFO; None when it can't
+    be told - not connected, no answer (timeout), no state received. Unlike
+    device_is_actively_capturing(), which fails open (False) - right before
+    starting a program, wrong for a capture being followed."""
+    from dwarf_python_api.lib import websockets_utils
+    from dwarf_python_api.lib.dwarf_utils import perform_get_device_state_info
+    if not session.is_connected:
+        return None
+    code = perform_get_device_state_info(session=session)
+    if code == websockets_utils.ERROR_SLAVEMODE:
+        return True
+    if code != 0:
+        return None
+    info = getattr(getattr(session, "client_instance", None), "last_device_state_info", None)
+    if info is None:
+        return None
+    for camera in (info.tele_camera_state_info, info.wide_camera_state_info):
+        which = camera.exclusive_state.WhichOneof("current_state")
+        if which and getattr(getattr(camera.exclusive_state, which), "state", None) == 1:   # OPERATION_STATE_RUNNING
+            return True
+    return False
+
 
 # How long a run start waits for a health check already in flight to give
 # the slot back (usually a few seconds) before giving up for this try.

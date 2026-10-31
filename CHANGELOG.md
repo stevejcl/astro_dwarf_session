@@ -192,6 +192,14 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### A resumed capture no longer filed in Error when the Dwarf doesn't answer once
+    (user-reported Oct 2026: the Mini's program, resumed after a network drop and a restart, filed in Error at
+    30/200 at 00:45 on one state request timing out - the Mini went on to 190 images) A capture followed after a
+    restart or a reconnection ends when the Dwarf says it no longer captures; no answer is no longer taken as its end,
+    except after 30 min without an answer nor a new image.
+    ### Check finds the session of a program filed in Error before its capture ended
+    (same night: Check of the Mini's program found nothing - its session saved at 06:00, the program filed at 00:45)
+    A program in Error is looked for in the Dwarf's album up to 15 h after its start, not only up to its filing.
     ### Home screen: no Dwarf card shown since the "capture no longer moves" warning
     (user-reported Oct 2026: "No Dwarf configured yet" with one card, then "_show_stall() missing 1 required
     positional argument") The warning's method had been put between @staticmethod and the method it decorated: it

@@ -171,6 +171,13 @@ _command_in_flight_caller: dict[str, str] = {}
 # failed in a row - stop auto-retrying until the user manually
 # reconnects (which clears this, see mark_just_connected()).
 _auto_reconnect_exhausted: set[str] = set()
+# ... retried every _SLOW_RETRY_S while a program is in progress on it
+# (user-asked Oct 2026: the PC running Tailscale switched off at night, the
+# Dwarf not reconnected until morning - its program's end time, end of
+# capture and low battery missed). Never stops a capture: reconnecting only
+# follows it again (scheduler_runner.reconcile_orphaned_current_files).
+_SLOW_RETRY_S = 300
+_exhausted_at: dict[str, float] = {}
 _auto_reconnect_in_progress: set[str] = set()
 
 # uids where a HIGHER-PRIORITY acquire attempt is currently in flight -
@@ -605,6 +612,7 @@ async def _auto_reconnect(session: DwarfSession) -> None:
                 await asyncio.sleep(_AUTO_RECONNECT_DELAY_S)
 
         _auto_reconnect_exhausted.add(uid)
+        _exhausted_at[uid] = time.monotonic()
     finally:
         _auto_reconnect_in_progress.discard(uid)
 
@@ -644,6 +652,22 @@ async def _cleanup_stale_event_loop(session: DwarfSession) -> None:
         release_command_slot(uid)
 
 
+def _slow_retry_due(session: DwarfSession) -> bool:
+    """An exhausted auto-reconnect tried again: _SLOW_RETRY_S after the last
+    failed round, while a program is in progress on this Dwarf. Not when it
+    was taken over (another client, the official app: manual mode) or
+    disconnected by the user - the caller checks those."""
+    uid = session.dwarf_uid
+    if time.monotonic() - _exhausted_at.get(uid, 0.0) < _SLOW_RETRY_S:
+        return False
+    from components import scheduler_runner  # local import - imports this module
+    if not scheduler_runner.has_program_in_progress(session):
+        return False
+    _exhausted_at[uid] = time.monotonic()
+    log.notice(f"[{uid}] A program is in progress on this Dwarf: trying to reconnect again.")
+    return True
+
+
 async def maybe_check(session: DwarfSession) -> None:
     """Call this on every poll tick for a session that looks connected.
     Only actually probes the device every _CHECK_INTERVAL_S, and backs
@@ -662,7 +686,7 @@ async def maybe_check(session: DwarfSession) -> None:
             and uid not in _taken_over
             # Hidden on the dashboard: not used for now, no auto-connect
             and not device_prefs.is_hidden(uid)
-            and uid not in _auto_reconnect_exhausted
+            and (uid not in _auto_reconnect_exhausted or _slow_retry_due(session))
             and uid not in _auto_reconnect_in_progress
         ):
             background_tasks.create(_auto_reconnect(session), name=f"auto-reconnect-{uid}")

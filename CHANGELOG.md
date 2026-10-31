@@ -195,8 +195,22 @@
     ### A resumed capture no longer filed in Error when the Dwarf doesn't answer once
     (user-reported Oct 2026: the Mini's program, resumed after a network drop and a restart, filed in Error at
     30/200 at 00:45 on one state request timing out - the Mini went on to 190 images) A capture followed after a
-    restart or a reconnection ends when the Dwarf says it no longer captures; no answer is no longer taken as its end,
-    except after 30 min without an answer nor a new image.
+    restart or a reconnection ends when the Dwarf says it no longer captures; no answer is no longer taken as its end.
+    Silent 10 min with no new image while the connection looks open: reconnected, the follow-up resumed after it
+    (the program kept in progress). A follow-up handed back by the watchdog (connection lost) now stops - it went
+    on querying the Dwarf next to the resumed one, and could file the program in Error.
+    ### Once the capture started, a program is never run again from its goto
+    (user-set rule, Oct 2026: before the capture starts, an error may end or retry the program; once started, only
+    its end, the Dwarf's stop or Stop end it) An error while following a started capture made the retries run the
+    whole program again - its goto would stop the capture. Now the program stays in progress and is followed again:
+    at once when the Dwarf says it still captures, filed by what it saved when it says it stopped, else after the
+    reconnection. A Dwarf not answering is never taken as a capture over, at reconnection too.
+    ### Reconnection tried again every 5 min while a program is in progress
+    (user-asked Oct 2026: the PC running Tailscale switched off at night, 3 failed reconnections and nothing more until
+    the morning - the end time, the end of capture, a low battery missed) After the 3 quick attempts, the reconnection
+    is tried again every 5 min as long as a program of that Dwarf runs or waits in progress; reconnected, the capture
+    is followed again, never stopped. Not when another client took the Dwarf (the official app: manual mode) or after
+    a Disconnect; one Astro Dwarf Session per Dwarf, as before.
     ### Check finds the session of a program filed in Error before its capture ended
     (same night: Check of the Mini's program found nothing - its session saved at 06:00, the program filed at 00:45)
     A program in Error is looked for in the Dwarf's album up to 15 h after its start, not only up to its filing.

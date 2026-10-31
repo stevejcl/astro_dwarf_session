@@ -539,6 +539,53 @@ def check_stuck_runs() -> None:
             )
 
 
+def _capture_confirmed(state) -> bool:
+    """The Dwarf accepted this run's capture start (Tele or Wide)."""
+    return any(ev.key in ("step_11", "step_14") and ev.status == "success" for ev in state.steps)
+
+
+def _keep_following(session, state, program, id_command, current_path, error) -> None:
+    """A run whose capture started and whose following failed: left in
+    Current/, then followed again - at once when the Dwarf answers that it
+    still captures (_resume_capture), filed by what it saved when it says
+    it stopped, else left for the reconnection (reconcile_orphaned_current_
+    files). Never stops the capture."""
+    dwarf_uid = session.dwarf_uid
+    id_command["message"] = f"Capture going on on the Dwarf, its following interrupted: {error}"
+    if current_path is not None:
+        try:
+            _write_json(current_path, {"command": program})
+        except OSError:
+            pass
+    state.error = id_command["message"]
+    state.running = False
+    connection_health.release_command_slot(dwarf_uid)
+    log.warning(f"[{dwarf_uid}] {id_command['message']} - followed again.")
+    if current_path is None:
+        return
+    capturing = _device_capture_state(session)
+    if capturing is None:
+        return      # no answer: the reconnection follows it again
+    dirs = session_dirs_for(session)
+    filename = os.path.basename(current_path)
+    if capturing:
+        _resume_capture(dwarf_uid, session, dirs, filename, current_path, program, id_command)
+    else:
+        _finalize_orphan_ended_on_device(dwarf_uid, session, dirs, filename, current_path, program, id_command)
+
+
+def has_program_in_progress(session) -> bool:
+    """A program of this Dwarf running here, or left in its Current/ folder
+    (followed again once reconnected)."""
+    if is_running(session.dwarf_uid):
+        return True
+    try:
+        folder = session_dirs_for(session)["CURRENT_DIR"]
+        return any(f.lower().endswith(".json") for f in os.listdir(folder))
+    except (OSError, KeyError):
+        return False
+
+
 def reconcile_after_reconnect(dwarf_uid: str, session) -> None:
     """Called by connection_health._auto_reconnect() right after a
     successful reconnect - user-reported Sep 2026: a real network-drop
@@ -640,7 +687,8 @@ def _requeue_orphan_to_todo(dwarf_uid, dirs, filename, path, program, id_command
 
 _RESUME_POLL_INTERVAL_S = 2
 _RESUME_BUSY_CHECK_EVERY_S = 20  # how often to cross-check with a FRESH device query
-_RESUME_UNKNOWN_MAX_S = 30 * 60  # no answer and no new image that long: the end
+_RESUME_SILENT_RECONNECT_S = 10 * 60  # no answer and no new image that long: reconnected
+_RESUME_UNKNOWN_MAX_S = 40 * 60  # still that long (no reconnection): the end
 _RESUME_ACQUIRE_ATTEMPTS = 3
 _RESUME_ACQUIRE_DELAY_S = 3
 
@@ -756,6 +804,7 @@ def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted
     last_count = 0
     last_busy_check_at = 0.0
     unknown_since = None    # the Dwarf not answering the busy check since
+    reconnect_asked = False
 
     while not interrupted():
         status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
@@ -796,6 +845,18 @@ def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted
                     log.warning(f"[{session.dwarf_uid}] Resumed capture: no answer and no new image for "
                                 f"{_RESUME_UNKNOWN_MAX_S // 60} min - its end taken as now.")
                     return current_count
+                elif not reconnect_asked and now - unknown_since[0] >= _RESUME_SILENT_RECONNECT_S:
+                    # Silent while the connection looks open: closed, so the
+                    # watchdog hands the run back (kept in Current/), the
+                    # auto-reconnection reconnects and resumes following it
+                    reconnect_asked = True
+                    log.warning(f"[{session.dwarf_uid}] Resumed capture: no answer and no new image for "
+                                f"{_RESUME_SILENT_RECONNECT_S // 60} min - reconnecting.")
+                    try:
+                        from dwarf_python_api.lib.dwarf_utils import perform_disconnect
+                        perform_disconnect(session=session)
+                    except Exception as e:
+                        log.warning(f"[{session.dwarf_uid}] Disconnect before reconnecting failed: {e}")
             else:
                 unknown_since = None
 
@@ -844,7 +905,9 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
         return
 
     def interrupted() -> bool:
-        return state.stop_requested
+        # force_stopped: the watchdog took the run back (connection lost) -
+        # this thread stops following, the reconnection resumes it
+        return state.stop_requested or state.force_stopped
 
     success = True
     try:
@@ -853,6 +916,8 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
                 requested = _parse_requested_count(state.requested_count_tele)
                 end_time = _program_end_time(program, "setup_camera", session_now(session))
                 final_count = _wait_for_resumed_capture(session, "Tele", requested, interrupted, end_time)
+                if state.force_stopped:
+                    return      # left in Current/: resumed again on reconnection
                 if interrupted():
                     perform_stopAstroPhoto(session=session)
                     success = False
@@ -867,6 +932,8 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
                 requested = _parse_requested_count(state.requested_count_wide)
                 end_time = _program_end_time(program, "setup_wide_camera", session_now(session))
                 final_count = _wait_for_resumed_capture(session, "Wide", requested, interrupted, end_time)
+                if state.force_stopped:
+                    return
                 if interrupted():
                     perform_stopAstroWidePhoto(session=session)
                     success = False
@@ -1066,7 +1133,12 @@ def reconcile_orphaned_current_files(dwarf_uid: str, session) -> None:
         _finalize_orphan_to_error(dwarf_uid, dirs, filename, path, program, id_command)
 
     ts, filename, path, program, id_command = newest
-    device_busy = device_is_actively_capturing(session)
+    device_busy = _device_capture_state(session)
+    if device_busy is None:
+        # No answer: can't tell - left in Current/ for the next connection
+        # (never filed nor requeued on a guess)
+        log.warning(f"[{dwarf_uid}] Program in progress {filename}: the Dwarf didn't answer its state - left as is.")
+        return
     if device_busy:
         age = (session_now(session) - ts).total_seconds()
         # The Dwarf reports this program's target, or no target name yet
@@ -1422,6 +1494,7 @@ def _run_blocking(
     max_retries = max(1, min(10, max_retries))
 
     succeeded = False
+    capture_lost = False
     last_exception: Exception | None = None
     attempt = 0
 
@@ -1439,6 +1512,15 @@ def _run_blocking(
         except Exception as e:  # noqa: BLE001 - matches retry_procedure()'s own broad catch
             last_exception = e
             seq += 1
+            if _capture_confirmed(state) and not state.stop_event.is_set():
+                # The capture runs on the Dwarf (user-set rule, Oct 2026): only
+                # its end, the Dwarf's stop or Stop end it - never run again
+                # from its goto (that would stop it). Followed again below.
+                capture_lost = True
+                state.steps.append(StepEvent(
+                    key="retry", label=f"Capture following interrupted: {e} - followed again, the capture goes on",
+                    status="failed", seq=seq))
+                break
             will_retry = attempt < max_retries and not state.stop_event.is_set()
             state.steps.append(
                 StepEvent(
@@ -1462,6 +1544,10 @@ def _run_blocking(
 
     if state.force_stopped:
         log.warning(f"[{session.dwarf_uid}] Stuck call finally returned after force-stop - discarding its stale result.")
+        return
+
+    if capture_lost:
+        _keep_following(session, state, program, id_command, current_path, last_exception)
         return
 
     try:

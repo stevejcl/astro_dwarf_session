@@ -539,6 +539,18 @@ def check_stuck_runs() -> None:
             )
 
 
+def has_program_in_progress(session) -> bool:
+    """A program of this Dwarf running here, or left in its Current/ folder
+    (followed again once reconnected)."""
+    if is_running(session.dwarf_uid):
+        return True
+    try:
+        folder = session_dirs_for(session)["CURRENT_DIR"]
+        return any(f.lower().endswith(".json") for f in os.listdir(folder))
+    except (OSError, KeyError):
+        return False
+
+
 def reconcile_after_reconnect(dwarf_uid: str, session) -> None:
     """Called by connection_health._auto_reconnect() right after a
     successful reconnect - user-reported Sep 2026: a real network-drop

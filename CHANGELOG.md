@@ -199,6 +199,12 @@
     Silent 10 min with no new image while the connection looks open: reconnected, the follow-up resumed after it
     (the program kept in progress). A follow-up handed back by the watchdog (connection lost) now stops - it went
     on querying the Dwarf next to the resumed one, and could file the program in Error.
+    ### Reconnection tried again every 5 min while a program is in progress
+    (user-asked Oct 2026: the PC running Tailscale switched off at night, 3 failed reconnections and nothing more until
+    the morning - the end time, the end of capture, a low battery missed) After the 3 quick attempts, the reconnection
+    is tried again every 5 min as long as a program of that Dwarf runs or waits in progress; reconnected, the capture
+    is followed again, never stopped. Not when another client took the Dwarf (the official app: manual mode) or after
+    a Disconnect; one Astro Dwarf Session per Dwarf, as before.
     ### Check finds the session of a program filed in Error before its capture ended
     (same night: Check of the Mini's program found nothing - its session saved at 06:00, the program filed at 00:45)
     A program in Error is looked for in the Dwarf's album up to 15 h after its start, not only up to its filing.

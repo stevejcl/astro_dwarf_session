@@ -119,6 +119,9 @@ def open_minima_dialog(
             star_table.add_slot(
                 "body-cell-actions",
                 '<q-td :props="props">'
+                '<q-btn flat dense round size="sm" icon="edit" color="primary"'
+                ' @click.stop="() => $parent.$emit(\'edit_star\', props.row)">'
+                f'<q-tooltip>{t("eb_edit_elements")}</q-tooltip></q-btn>'
                 '<q-btn flat dense round size="sm" icon="delete_outline" color="negative"'
                 ' @click.stop="() => $parent.$emit(\'remove_star\', props.row)">'
                 f'<q-tooltip>{t("eb_remove")}</q-tooltip></q-btn>'
@@ -251,8 +254,52 @@ def open_minima_dialog(
         dialog.close()
         on_pick(state["minima"][row["id"]])
 
+    def _on_edit(e) -> None:
+        """The star's own elements typed in (user-asked Oct 2026: RZ Dra's
+        VSX epoch of 1979 put its minimum 2 h early - the Krakow up-to-date
+        elements right), or back to VSX's."""
+        row = e.args if isinstance(e.args, dict) else None
+        star = next((s for s in state["stars"] if row and s["name"] == row["name"]), None)
+        if star is None:
+            return
+        with ui.dialog() as edit, ui.card().classes("w-full max-w-md"):
+            ui.label(t("eb_edit_title", name=star["name"])).classes("text-base font-medium")
+            ui.label(t("eb_edit_hint")).classes("text-xs text-grey-6")
+            epoch_field = ui.input(t("eb_epoch"), value=f"{float(star['epoch_hjd']):.5f}"
+                                   if eb.has_elements(star) else "").classes("w-full")
+            period_field = ui.input(t("eb_period"), value=f"{float(star['period_d']):.7f}"
+                                    if eb.has_elements(star) else "").classes("w-full")
+
+            def _save() -> None:
+                epoch, period = _number(epoch_field.value), _number(period_field.value)
+                if epoch is None or period is None or epoch < 2400000 or period <= 0:
+                    ui.notify(t("eb_edit_invalid"), type="warning")
+                    return
+                eb.set_user_elements(star, epoch, period)
+                edit.close()
+                state["stars"] = eb.load_stars()
+                _refresh_minima()
+                ui.notify(t("eb_edit_saved", name=star["name"]), type="positive")
+
+            async def _vsx() -> None:
+                edit.close()
+                try:
+                    await run.io_bound(eb.back_to_vsx, star)
+                except (requests.RequestException, ValueError) as exc:
+                    ui.notify(t("eb_add_failed", name=star["name"], error=str(exc)), type="warning", multi_line=True)
+                state["stars"] = eb.load_stars()
+                _refresh_minima()
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                if star.get("source") == "manual":
+                    ui.button(t("eb_edit_back_vsx"), on_click=_vsx).props("flat")
+                ui.button(t("cancel"), on_click=edit.close).props("flat")
+                ui.button(t("eb_edit_save"), on_click=_save).props("color=primary")
+        edit.open()
+
     table.on("rowClick", _on_row_click)
     star_table.on("remove_star", _on_remove)
+    star_table.on("edit_star", _on_edit)
     update_button.on_click(lambda: _update(only_missing=False))
     add_button.on_click(_add)
     for element in (night_input, nights_input, min_alt_input, darkness, secondary_cb, full_only_cb):

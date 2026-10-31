@@ -640,7 +640,8 @@ def _requeue_orphan_to_todo(dwarf_uid, dirs, filename, path, program, id_command
 
 _RESUME_POLL_INTERVAL_S = 2
 _RESUME_BUSY_CHECK_EVERY_S = 20  # how often to cross-check with a FRESH device query
-_RESUME_UNKNOWN_MAX_S = 30 * 60  # no answer and no new image that long: the end
+_RESUME_SILENT_RECONNECT_S = 10 * 60  # no answer and no new image that long: reconnected
+_RESUME_UNKNOWN_MAX_S = 40 * 60  # still that long (no reconnection): the end
 _RESUME_ACQUIRE_ATTEMPTS = 3
 _RESUME_ACQUIRE_DELAY_S = 3
 
@@ -756,6 +757,7 @@ def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted
     last_count = 0
     last_busy_check_at = 0.0
     unknown_since = None    # the Dwarf not answering the busy check since
+    reconnect_asked = False
 
     while not interrupted():
         status = perform_read_astro_stacking_status_v3(session=session, type=camera_type)
@@ -796,6 +798,18 @@ def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted
                     log.warning(f"[{session.dwarf_uid}] Resumed capture: no answer and no new image for "
                                 f"{_RESUME_UNKNOWN_MAX_S // 60} min - its end taken as now.")
                     return current_count
+                elif not reconnect_asked and now - unknown_since[0] >= _RESUME_SILENT_RECONNECT_S:
+                    # Silent while the connection looks open: closed, so the
+                    # watchdog hands the run back (kept in Current/), the
+                    # auto-reconnection reconnects and resumes following it
+                    reconnect_asked = True
+                    log.warning(f"[{session.dwarf_uid}] Resumed capture: no answer and no new image for "
+                                f"{_RESUME_SILENT_RECONNECT_S // 60} min - reconnecting.")
+                    try:
+                        from dwarf_python_api.lib.dwarf_utils import perform_disconnect
+                        perform_disconnect(session=session)
+                    except Exception as e:
+                        log.warning(f"[{session.dwarf_uid}] Disconnect before reconnecting failed: {e}")
             else:
                 unknown_since = None
 
@@ -844,7 +858,9 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
         return
 
     def interrupted() -> bool:
-        return state.stop_requested
+        # force_stopped: the watchdog took the run back (connection lost) -
+        # this thread stops following, the reconnection resumes it
+        return state.stop_requested or state.force_stopped
 
     success = True
     try:
@@ -853,6 +869,8 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
                 requested = _parse_requested_count(state.requested_count_tele)
                 end_time = _program_end_time(program, "setup_camera", session_now(session))
                 final_count = _wait_for_resumed_capture(session, "Tele", requested, interrupted, end_time)
+                if state.force_stopped:
+                    return      # left in Current/: resumed again on reconnection
                 if interrupted():
                     perform_stopAstroPhoto(session=session)
                     success = False
@@ -867,6 +885,8 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
                 requested = _parse_requested_count(state.requested_count_wide)
                 end_time = _program_end_time(program, "setup_wide_camera", session_now(session))
                 final_count = _wait_for_resumed_capture(session, "Wide", requested, interrupted, end_time)
+                if state.force_stopped:
+                    return
                 if interrupted():
                     perform_stopAstroWidePhoto(session=session)
                     success = False

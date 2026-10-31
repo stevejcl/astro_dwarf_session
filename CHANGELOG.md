@@ -195,8 +195,10 @@
     ### A resumed capture no longer filed in Error when the Dwarf doesn't answer once
     (user-reported Oct 2026: the Mini's program, resumed after a network drop and a restart, filed in Error at
     30/200 at 00:45 on one state request timing out - the Mini went on to 190 images) A capture followed after a
-    restart or a reconnection ends when the Dwarf says it no longer captures; no answer is no longer taken as its end,
-    except after 30 min without an answer nor a new image.
+    restart or a reconnection ends when the Dwarf says it no longer captures; no answer is no longer taken as its end.
+    Silent 10 min with no new image while the connection looks open: reconnected, the follow-up resumed after it
+    (the program kept in progress). A follow-up handed back by the watchdog (connection lost) now stops - it went
+    on querying the Dwarf next to the resumed one, and could file the program in Error.
     ### Check finds the session of a program filed in Error before its capture ended
     (same night: Check of the Mini's program found nothing - its session saved at 06:00, the program filed at 00:45)
     A program in Error is looked for in the Dwarf's album up to 15 h after its start, not only up to its filing.

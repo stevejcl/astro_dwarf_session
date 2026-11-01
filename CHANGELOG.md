@@ -197,6 +197,15 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### The app no longer freezes while the Dwarf is busy (megastack)
+    (user-reported Nov 2026: the app hardly answered during a megastack) The Watch page read the camera's settings
+    from the Dwarf's HTTP API on each 2 s refresh, in the app's own loop: the busy Dwarf answering in 5 s (timeout),
+    the whole app froze, on every screen. Read in the background now, at most every 30 s, not during a megastack.
+    ### A megastack can be stopped
+    (user-reported Nov 2026: not sure it could be stopped) Stopping a megastack program now sends the Dwarf its stop
+    command (CMD_ASTRO_STOP_RESTACKED) and follows its task until it ends - before, the app only stopped following it
+    and the Dwarf went on stacking. The stop is seen within a second (not at the next 15 s poll). Needs
+    dwarf_python_api's perform_stop_restack(); without it, as before.
     ### Full-screen live view: the running capture's image
     (user-reported Nov 2026: the image hard to see during a session, its stacked.jpg seen over FTP) The view looked
     for the capture's folder in the Dwarf's album, which lists a capture once it ended: the previous capture of the

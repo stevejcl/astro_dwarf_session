@@ -213,14 +213,65 @@ _FOLDER_MAX_AGE_H = 12
 _folders: dict[tuple[str, int], dict] = {}
 
 
-def _capture_folder(session, cam: int) -> str | None:
-    """The running capture's folder on the Dwarf ("/DWARF3/Astronomy/<session>/"):
-    the newest DWARF_RAW_TELE_ (WIDE_) session of its album, of the last 12
-    hours - read once per capture (again when the stacked count goes back,
-    a new capture), None when not found (tried again 20 s later). Not on a
-    DWARF II during a program: its HTTP API polled during a capture crashed
-    it (pages/watch_device.py) - the stream instead."""
+_DATE_RE = r"(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})-\d{1,6}$"
+# The Dwarf's FTP root isn't the HTTP one (components/dwarf_media.py): its
+# Astronomy folder at /Astronomy (D3, mini) or /DWARF_II/Astronomy (D2)
+_FTP_ASTRO_ROOTS = ("/Astronomy", "/DWARF_II/Astronomy")
+
+
+def _newest(names, prefix: str, oldest: str):
+    """(date, name) of the newest capture folder among names, or None."""
     import re
+    best = None
+    for name in names:
+        date = re.search(_DATE_RE, name)
+        if name.startswith(prefix) and date and date.group(1) >= oldest and (best is None or date.group(1) > best[0]):
+            best = (date.group(1), name)
+    return best
+
+
+def _ftp_capture_folder(ip: str, prefix: str, oldest: str):
+    """(date, "ftp:<folder>/") of the newest capture folder on the Dwarf's
+    FTP, or None. The running capture is there from its start, the album
+    only lists it once it ended (user-reported Nov 2026: the full-screen
+    view hard to see during a session, its stacked.jpg seen over FTP)."""
+    from ftplib import FTP, all_errors
+    from components.dwarf_media import FTP_PORT
+    try:
+        ftp = FTP()
+        ftp.connect(ip.split(":")[0], FTP_PORT, timeout=5)
+        ftp.login("Anonymous", "")
+        ftp.set_pasv(True)
+    except all_errors as e:
+        log.debug(f"live view: no FTP on {ip} ({e})")
+        return None
+    try:
+        for root in _FTP_ASTRO_ROOTS:
+            try:
+                names = [n.rstrip("/").rsplit("/", 1)[-1] for n in ftp.nlst(root)]
+            except all_errors:
+                continue
+            best = _newest(names, prefix, oldest)
+            if best:
+                return best[0], f"ftp:{root}/{best[1]}/"
+        return None
+    finally:
+        try:
+            ftp.quit()
+        except all_errors:
+            pass
+
+
+def _capture_folder(session, cam: int) -> str | None:
+    """The running capture's folder on the Dwarf: the newest DWARF_RAW_TELE_
+    (WIDE_) session of the last 12 hours - over FTP (the running capture is
+    there from its start), else from its album (HTTP, "/DWARF3/Astronomy/
+    <session>/"; it lists a capture once it ended: alone, the previous
+    capture of the night was shown). An FTP folder is "ftp:<path>/". Read
+    once per capture (again when the stacked count goes back, a new
+    capture), None when not found (tried again 20 s later). Not on a DWARF
+    II during a program: its HTTP API polled during a capture crashed it
+    (pages/watch_device.py) - the stream instead."""
     from datetime import datetime, timedelta
 
     uid = session.dwarf_uid
@@ -234,35 +285,50 @@ def _capture_folder(session, cam: int) -> str | None:
         return known["folder"]
     if known and not known["folder"] and now - known["at"] < _FOLDER_RETRY_S:
         return None
+    prefix = ("DWARF_RAW_TELE_", "DWARF_RAW_WIDE_")[1 if cam == 1 else 0]
+    oldest = (datetime.now() - timedelta(hours=_FOLDER_MAX_AGE_H)).strftime("%Y-%m-%d-%H-%M-%S")
+    best = _ftp_capture_folder(session.config.dwarf_ip, prefix, oldest)
     from dwarf_python_api.lib.dwarf_utils import perform_list_astro_sessions_http
 
     entries = perform_list_astro_sessions_http(session=session, timeout=5)
-    prefix = ("DWARF_RAW_TELE_", "DWARF_RAW_WIDE_")[1 if cam == 1 else 0]
-    oldest = (datetime.now() - timedelta(hours=_FOLDER_MAX_AGE_H)).strftime("%Y-%m-%d-%H-%M-%S")
-    best = None
+    folders = {}
     for entry in entries or []:
         path = entry.get("thumbnailPath") or entry.get("filePath") or ""
         folder = path.rsplit("/", 1)[0]
-        name = folder.rsplit("/", 1)[-1]
-        date = re.search(r"(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})-\d{3}$", name)
-        if name.startswith(prefix) and date and date.group(1) >= oldest and (best is None or date.group(1) > best[0]):
-            best = (date.group(1), folder + "/")
+        folders[folder.rsplit("/", 1)[-1]] = folder + "/"
+    album = _newest(folders, prefix, oldest)
+    if album and (best is None or album[0] >= best[0]):
+        best = (album[0], folders[album[1]])        # the same capture: over HTTP
+    elif best and folders:
+        # The FTP's capture over HTTP: the album's own path for its folder name
+        any_folder = next(iter(folders.values()))
+        base = any_folder.rstrip("/").rsplit("/", 1)[0]
+        best = (best[0], f"{base}/{best[1].rstrip('/').rsplit('/', 1)[-1]}/")
     _folders[(uid, cam)] = {"folder": best[1] if best else None, "at": now, "stacked": stacked}
     return best[1] if best else None
 
 
 def _read_stacked(ip: str, folder: str) -> tuple[bytes | None, str]:
     """stacked.jpg of the folder (its thumbnail when it can't be read), a
-    complete JPEG only - half-written, asked again 2 s later once."""
+    complete JPEG only - half-written, asked again 2 s later once. An
+    "ftp:" folder read over the Dwarf's FTP."""
     why = ""
     for name in ("stacked.jpg", "stacked_thumbnail.jpg"):
         for attempt in range(2):
-            try:
-                response = requests.get(f"http://{ip}{folder}{name}", timeout=10)
-                data = response.content if response.ok else None
-                why = f"{name}: HTTP {response.status_code}" if not response.ok else f"{name}: incomplete"
-            except requests.RequestException as e:
-                data, why = None, f"{name}: {e}"
+            if folder.startswith("ftp:"):
+                from components.dwarf_media import _fetch_ftp_exact
+                data = _fetch_ftp_exact(ip, folder[len("ftp:"):] + name)
+                why = f"{name} (FTP): not readable" if data is None else f"{name} (FTP): incomplete"
+            else:
+                try:
+                    response = requests.get(f"http://{ip}{folder}{name}", timeout=10)
+                    data = response.content if response.ok else None
+                    why = f"{name}: HTTP {response.status_code}" if not response.ok else f"{name}: incomplete"
+                except requests.RequestException as e:
+                    data, why = None, f"{name}: {e}"
+                if data is None:   # not served over HTTP (yet): the same file over FTP
+                    from components.dwarf_media import _fetch_ftp
+                    data = _fetch_ftp(ip, folder + name)
             if data and data[:2] == b"\xff\xd8" and data.rstrip(b"\0")[-2:] == b"\xff\xd9":
                 return data, ""
             if data is None:
@@ -298,7 +364,8 @@ def frame_bytes(dwarf_uid: str, cam: int) -> bytes | None:
             folder = _capture_folder(session, cam)
             data, why, url = None, "", ""
             if folder:
-                url = f"http://{ip}{folder}stacked.jpg"
+                url = (f"ftp://{ip}{folder[4:]}stacked.jpg" if folder.startswith("ftp:")
+                       else f"http://{ip}{folder}stacked.jpg")
                 data, why = _read_stacked(ip, folder)
             if not data:        # no folder found, or not readable: the stream
                 stream = f"http://{ip}:8092/{'mainstream' if cam == 0 else 'secondstream'}"

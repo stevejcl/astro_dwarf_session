@@ -197,6 +197,11 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Full-screen live view: the running capture's image
+    (user-reported Nov 2026: the image hard to see during a session, its stacked.jpg seen over FTP) The view looked
+    for the capture's folder in the Dwarf's album, which lists a capture once it ended: the previous capture of the
+    night was shown, or the video stream. The folder is now found over the Dwarf's FTP (there from the capture's
+    start), its stacked.jpg read over HTTP, else over FTP; the album still used when the FTP can't be reached.
     ### A resumed capture no longer filed in Error when the Dwarf doesn't answer once
     (user-reported Oct 2026: the Mini's program, resumed after a network drop and a restart, filed in Error at
     30/200 at 00:45 on one state request timing out - the Mini went on to 190 images) A capture followed after a

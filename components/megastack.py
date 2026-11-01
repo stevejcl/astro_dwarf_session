@@ -23,6 +23,11 @@ from dwarf_python_api.lib.dwarf_utils import (
     perform_start_restack,
 )
 
+try:   # dwarf_python_api with the megastack stop (Nov 2026)
+    from dwarf_python_api.lib.dwarf_utils import perform_stop_restack
+except ImportError:
+    perform_stop_restack = None
+
 import dwarf_python_api.lib.my_logger as log
 
 STEP_CHECK = "step_m1"
@@ -346,11 +351,43 @@ def _in_album(session, result_dir: str) -> bool:
     return any((_session_folder(e) or "") == result_dir for e in entries)
 
 
+# After a stop, its end awaited this long (the Dwarf's task state)
+_STOP_WAIT_S = 90
+
+
+def _stop_on_dwarf(session, started_at: float, step) -> None:
+    """The run stopped (user-asked Nov 2026: a megastack couldn't be stopped
+    from here): the Dwarf's multi-stack task stopped too - its state then
+    followed until it ends. Without the command (an older dwarf_python_api)
+    or without an answer, the Dwarf goes on stacking: said."""
+    if perform_stop_restack is None:
+        log.notice("Megastack: no longer followed (stop requested) - the Dwarf goes on stacking")
+        step(STEP_STACKING, False, "stopped here - the Dwarf goes on stacking")
+        return
+    answer = perform_stop_restack(session=session)
+    if answer is None or not answer["ok"]:
+        detail = "no answer" if answer is None else answer["code_name"]
+        log.warning(f"Megastack: stop not accepted by the Dwarf ({detail}) - it may go on stacking")
+        step(STEP_STACKING, False, f"stop not accepted ({detail}) - the Dwarf may go on stacking")
+        return
+    deadline = time.monotonic() + _STOP_WAIT_S
+    while time.monotonic() < deadline:
+        perform_get_device_state_info(session=session)
+        task = get_task_state(session=session)
+        if task is not None and task["updated"] >= started_at and task["state"] in _DONE_STATES:
+            log.notice("Megastack stopped on the Dwarf")
+            step(STEP_STACKING, False, "stopped")
+            return
+        time.sleep(3)
+    log.warning("Megastack: stop sent, the Dwarf still reports its task running")
+    step(STEP_STACKING, False, "stop sent - the Dwarf still reports it running")
+
+
 def run(program: dict, session, interrupted, progress_callback=None) -> None:
     """The megastack of the program's sessions, followed to its end. Raises
     RuntimeError on a failure (the run then ends in Error with its
     message); returns when done or when the run is stopped (the Dwarf goes
-    on stacking - it has no known stop command for this)."""
+    stopped too: CMD_ASTRO_STOP_RESTACKED sent, followed until it ends)."""
     section = megastack_section(program) or {}
 
     def step(key: str, ok: bool, detail: str = "") -> None:
@@ -413,7 +450,7 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
     seen_running = False
     while True:
         if interrupted():
-            log.notice("Megastack: no longer followed (stop requested) - the Dwarf goes on stacking")
+            _stop_on_dwarf(session, started_at, step)
             return
         if time.monotonic() > deadline:
             step(STEP_STACKING, False, "too long")
@@ -431,7 +468,11 @@ def run(program: dict, session, interrupted, progress_callback=None) -> None:
                 break
         if seen_running and idle is not None and task is not None and idle["updated"] > task["updated"]:
             break
-        time.sleep(_POLL_S)
+        # Asked every _POLL_S, a stop seen within a second
+        for _ in range(_POLL_S):
+            if interrupted():
+                break
+            time.sleep(1)
 
     for _ in range(_ALBUM_TRIES):
         if _in_album(session, result_dir):

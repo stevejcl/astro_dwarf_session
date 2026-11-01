@@ -355,6 +355,19 @@ def _in_album(session, result_dir: str) -> bool:
 _STOP_WAIT_S = 90
 
 
+def _task_ended(session, started_at: float) -> bool:
+    """The Dwarf's multi-stack task over after a stop: reported STOPPING /
+    STOPPED / IDLE since it started, or no longer the Dwarf's running task
+    (dwarf_python_api's active_task_id cleared). The Dwarf sends STOPPING,
+    then nothing more about it (user's log, Nov 2026) - waiting for
+    STOPPED, the stop was said not taken."""
+    task = get_task_state(session=session)
+    if task is not None and task["updated"] >= started_at and task["state"] in _DONE_STATES + ("OPERATION_STATE_STOPPING",):
+        return True
+    client = getattr(session, "client_instance", None)
+    return client is not None and getattr(client, "active_task_id", "unknown") is None
+
+
 def _stop_on_dwarf(session, started_at: float, step) -> None:
     """The run stopped (user-asked Nov 2026: a megastack couldn't be stopped
     from here): the Dwarf's multi-stack task stopped too - its state then
@@ -365,6 +378,12 @@ def _stop_on_dwarf(session, started_at: float, step) -> None:
         step(STEP_STACKING, False, "stopped here - the Dwarf goes on stacking")
         return
     answer = perform_stop_restack(session=session)
+    if _task_ended(session, started_at):
+        # It answers once stopped (user's log, Nov 2026: STOPPING at once, the
+        # task over, its reply 40 s later)
+        log.notice("Megastack stopped on the Dwarf")
+        step(STEP_STACKING, False, "stopped")
+        return
     if answer is None or not answer["ok"]:
         detail = "no answer" if answer is None else answer["code_name"]
         log.warning(f"Megastack: stop not accepted by the Dwarf ({detail}) - it may go on stacking")
@@ -373,8 +392,7 @@ def _stop_on_dwarf(session, started_at: float, step) -> None:
     deadline = time.monotonic() + _STOP_WAIT_S
     while time.monotonic() < deadline:
         perform_get_device_state_info(session=session)
-        task = get_task_state(session=session)
-        if task is not None and task["updated"] >= started_at and task["state"] in _DONE_STATES:
+        if _task_ended(session, started_at):
             log.notice("Megastack stopped on the Dwarf")
             step(STEP_STACKING, False, "stopped")
             return

@@ -39,7 +39,9 @@ device's data into another's page.
 """
 from __future__ import annotations
 
-from nicegui import ui
+import time
+
+from nicegui import background_tasks, run, ui
 
 from dwarf_python_api.lib.dwarf_session import get_manager
 from dwarf_python_api.lib.dwarf_session_socket import get_client_status
@@ -57,6 +59,8 @@ from device_registry import device_name
 from dwarf_session import _ir_filter_display_name
 
 _POLL_INTERVAL_S = 2.0
+# The camera's settings read over HTTP at most this often (_http_params)
+_HTTP_EVERY_S = 30
 
 
 def _metric(
@@ -215,6 +219,28 @@ def build_watch_device_page() -> None:
                 gain_metric = ui.column()
                 filter_metric = ui.column()
 
+            # The camera's exposure / gain / filter from the Dwarf's HTTP API:
+            # read in the background at most every _HTTP_EVERY_S, the last
+            # answer shown meanwhile - read here on each 2 s refresh, its
+            # 5 s timeout froze the whole app while the Dwarf was busy (user-
+            # reported Nov 2026: a megastack, the app hardly answering). Not
+            # read during a megastack (no camera settings then).
+            http_cache = {"at": 0.0, "params": False, "busy": False}
+
+            def _http_params():
+                if (not http_cache["busy"] and time.monotonic() - http_cache["at"] >= _HTTP_EVERY_S
+                        and not device_task.megastack_running(session)):
+                    http_cache["busy"] = True
+
+                    async def _read() -> None:
+                        try:
+                            http_cache["params"] = await run.io_bound(
+                                perform_read_camera_params_http_v3, mode_id=2, session=session)
+                        finally:
+                            http_cache["at"], http_cache["busy"] = time.monotonic(), False
+                    background_tasks.create(_read(), name=f"watch-http-params-{dwarf_uid}")
+                return http_cache["params"]
+
             def _refresh() -> None:
                 connected_icon.classes(
                     replace="text-xs " + ("text-positive" if session.is_connected else "text-grey-5")
@@ -370,11 +396,7 @@ def build_watch_device_page() -> None:
                             run_state.ir_filter_actual if run_state else None,
                             value_classes="text-lg font-medium",
                         )
-                http_params = (
-                    perform_read_camera_params_http_v3(mode_id=2, session=session)
-                    if not skip_http_poll
-                    else False
-                )
+                http_params = _http_params() if not skip_http_poll else False
                 # Which camera's params to actually read (user-reported
                 # Sep 2026: this used to always read cameras[0] - Tele -
                 # even during a Wide-only capture, so exposure/gain

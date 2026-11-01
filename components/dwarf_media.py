@@ -118,6 +118,32 @@ def _fetch_ftp(dwarf_ip: str, path: str) -> bytes | None:
             pass
 
 
+def _fetch_ftp_exact(dwarf_ip: str, ftp_path: str) -> bytes | None:
+    """A file at its own FTP path ("/Astronomy/<session>/stacked.jpg"), or
+    None (the live view's running capture, found over FTP)."""
+    host = dwarf_ip.split(":")[0]
+    chunks: list[bytes] = []
+    try:
+        ftp = FTP()
+        ftp.connect(host, FTP_PORT, timeout=_FTP_TIMEOUT_S)
+        ftp.login("Anonymous", "")
+        ftp.set_pasv(True)
+    except all_errors as e:
+        log.debug(f"Dwarf FTP: no connection to {host} ({e})")
+        return None
+    try:
+        ftp.retrbinary(f"RETR {ftp_path}", chunks.append)
+        return b"".join(chunks)
+    except all_errors as e:
+        log.debug(f"Dwarf FTP: {ftp_path} unreadable ({e})")
+        return None
+    finally:
+        try:
+            ftp.quit()
+        except all_errors:
+            pass
+
+
 def fetch(dwarf_ip: str, path: str) -> bytes | None:
     """The file's bytes, over HTTP then FTP, or None."""
     return _fetch_http(dwarf_ip, path) or _fetch_ftp(dwarf_ip, path)

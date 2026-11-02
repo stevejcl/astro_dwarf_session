@@ -157,6 +157,19 @@ def _write_file(target: Path, data: bytes) -> None:
     target.write_bytes(data)
 
 
+async def _in_app_window(client) -> bool:
+    """The click comes from this app's own window on the PC (pywebview),
+    not from a browser - a phone included (user-reported Nov 2026: with the
+    app in its window on the PC, a download asked from a phone opened the
+    Save dialog on the PC and saved the image there, nothing on the phone)."""
+    if getattr(app.native, "main_window", None) is None:
+        return False
+    try:
+        return bool(await client.run_javascript("!!window.pywebview", timeout=2.0))
+    except Exception:
+        return False
+
+
 async def _save_path(name: str) -> Path | None:
     """Where to save in the native window (pywebview): the user's own
     Save dialog, else the Downloads folder (user-reported Oct 2026: the
@@ -452,14 +465,15 @@ def build_explorer_page() -> None:
 
             async def _download_current(kind: str) -> None:
                 """JPG (the album's own stacked.jpg) or the session's PNG.
-                In the native window the file is written here and the
-                path shown; in a browser it is the browser's download."""
+                Asked from the app's window, the file is written on the PC
+                and its path shown; from a browser (a phone too), it is the
+                browser's download."""
                 download_menu.close()
                 path = current_png[0] if kind == "png" else current_path[0]
                 if not path:
                     return
                 name = _download_name(path)
-                if getattr(app.native, "main_window", None) is None:
+                if not await _in_app_window(ui.context.client):
                     ui.download.from_url(
                         f"/session/{dwarf_uid}/explorer/download?path={quote(path)}", filename=name
                     )

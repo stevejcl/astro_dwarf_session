@@ -197,6 +197,11 @@
     treated as secure") - the page says so and shows the address; iPhone: the Bluefy browser (no Web Bluetooth in
     Safari). Close the official app first: the Dwarf takes one Bluetooth connection.
   ### BugFix
+    ### Explorer: an image downloaded from a phone
+    (user-reported Nov 2026: the download of a stacked image didn't work on a phone) With the app in its window on
+    the PC, a download asked from a phone opened the Save dialog on the PC and saved the image there. Whether the
+    click comes from the app's window is now asked to the page itself: from a phone or any browser, the browser's
+    own download.
     ### A stopped megastack said stopped
     (user's log, Nov 2026) The Dwarf stopped the megastack at once (its task STOPPING, then over), answering the stop
     40 s later - the app waited for a STOPPED state it never sends, and said after 90 s "the Dwarf still reports it

@@ -13,7 +13,6 @@ config.lock
 /Astro_Sessions
 /Devices_Sessions
 *.pyd
-/old_test
 /doc
 /.vscode
 /__pycache__
@@ -21,3 +20,7 @@ config.lock
 version.py
 /end_of_night.json
 /eclipsing_binaries.json
+/.nicegui
+/dist
+/sync_backups
+/AstroDwarfUI-unknown

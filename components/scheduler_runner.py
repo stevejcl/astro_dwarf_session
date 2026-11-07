@@ -1589,7 +1589,7 @@ def _run_blocking(
                 _capture_eq_solving_result(id_command, session)
                 _capture_shots_result(id_command, session)
                 id_command["count_info"] = state.requested_count_tele if state.requested_count_tele else state.requested_count_wide
-                id_command["mosaic_info"] = bool program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action")
+                id_command["mosaic_info"] = bool(program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action"))
                 if not id_command["mosaic_info"]:
                     id_command["message"] += _early_stop_note(id_command, session, program)
             state.shots_taken = id_command.get("shots_taken")

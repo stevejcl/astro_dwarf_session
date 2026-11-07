@@ -43,8 +43,8 @@ _POLL_INTERVAL_S = 2.0
 # cam_id 0 = tele, 1 = wide (matches ResNotifyStreamType_message.cam_id
 # and get_client_status()'s takePhotoStacked/takeWidePhotoStacked pair).
 _CAMERAS = (
-    {"cam_id": 0, "url_key": "http_stacking_tele", "stack_field": "takePhotoStacked", "label_key": "camera_tele", "rtsp_key": "rtsp_tele"},
-    {"cam_id": 1, "url_key": "http_stacking_wide", "stack_field": "takeWidePhotoStacked", "label_key": "camera_wide", "rtsp_key": "rtsp_wide"},
+    {"cam_id": 0, "url_key": "http_stacking_tele", "stack_field": "takePhotoStacked", "stack_mosaic": "takeMosaicStacked", "label_key": "camera_tele", "rtsp_key": "rtsp_tele"},
+    {"cam_id": 1, "url_key": "http_stacking_wide", "stack_field": "takeWidePhotoStacked", "stack_mosaic": "takeWidePhotoStacked", "label_key": "camera_wide", "rtsp_key": "rtsp_wide"},
 )
 
 
@@ -63,12 +63,14 @@ class _PreviewHandles:
     url: str
     rtsp_url: str
     stack_field: str
+    stack_fields: tuple
     image: ui.image
     container: ui.column
     not_available_label: ui.label
     rtsp_image: ui.image
     rtsp_container: ui.column
     expansion: ui.expansion
+    last_stacked: tuple = None
     rtsp_started: bool = False
 
 
@@ -155,6 +157,7 @@ def _build_preview(cam_config: dict, url: str, rtsp_url: str, show_links: bool) 
         url=url,
         rtsp_url=rtsp_url,
         stack_field=cam_config["stack_field"],
+        stack_fields=tuple({cam_config["stack_field"], cam_config["stack_mosaic"]}),
         image=image,
         container=container,
         not_available_label=not_available_label,
@@ -260,9 +263,12 @@ def dashboard_thumbnail_refresh_source(session, image: ui.image, new_values: dic
     ip = session.config.dwarf_ip
     if not ip:
         return
-    if "takePhotoStacked" not in new_values and "takeWidePhotoStacked" not in new_values:
-        return
     full_status = get_client_status(session).get("fullStatus", {})
+    stacked_now = (full_status.get("takePhotoStacked"), full_status.get("takeMosaicStacked"),
+                   full_status.get("takeWidePhotoStacked"))
+    if getattr(image, "_last_stacked", None) == stacked_now:
+        return
+    image._last_stacked = stacked_now
     is_tele = scheduler_runner.resolve_active_camera_is_tele(session.dwarf_uid, full_status)
     url = _stream_urls(ip)["http_stacking_tele" if is_tele else "http_stacking_wide"]
     image.set_source(f"{url}?t={time.monotonic()}")
@@ -582,7 +588,11 @@ def build_camera_stream_section(session, show_links: bool = True) -> None:
 
             # Back to the Tele preview once a megastack (its thumbnail above) is over
             back_from_megastack = "/api/megastack/preview/" in (preview.image.source or "")
-            if not is_rtsp and (preview.stack_field in new_values or back_from_megastack):
+            stacked_now = tuple(full_status.get(f) for f in preview.stack_fields)
+            changed = stacked_now != preview.last_stacked
+            preview.last_stacked = stacked_now
+            if not is_rtsp and (changed or back_from_megastack):
                 preview.image.set_source(f"{preview.url}?t={time.monotonic()}")
+
 
     ui.timer(_POLL_INTERVAL_S, _poll)

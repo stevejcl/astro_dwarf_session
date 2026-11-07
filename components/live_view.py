@@ -146,11 +146,11 @@ def _status(session) -> dict:
 
 
 def frame_key(session, cam: int) -> tuple:
-    """Changes when the camera has a new image: its counters."""
+    """Changes when the camera has a new STACKED image."""
     s = _status(session)
     if cam == 0:
-        return (s.get("takePhotoCount"), s.get("takePhotoStacked"), s.get("takeMosaicStacked"))
-    return (s.get("takeWidePhotoCount"), s.get("takeWidePhotoStacked"))
+        return (s.get("takePhotoStacked"), s.get("takeMosaicStacked"))
+    return (s.get("takeWidePhotoStacked"),)
 
 
 _MAX_BYTES = 16 * 1024 * 1024
@@ -277,7 +277,7 @@ def _capture_folder(session, cam: int) -> str | None:
     uid = session.dwarf_uid
     if config_to_dwarf_id_str(session.config.dwarf_model_id) == "2" and scheduler_runner.is_running(uid):
         return None
-    stacked = frame_key(session, cam)[1] or 0
+    stacked = max((x or 0) for x in frame_key(session, cam))
     known = _folders.get((uid, cam))
     now = time.monotonic()
     if known and known["folder"] and stacked >= known["stacked"]:
@@ -337,6 +337,42 @@ def _read_stacked(ip: str, folder: str) -> tuple[bytes | None, str]:
     return None, why
 
 
+def _read_small(ip: str, folder: str, name: str) -> bytes | None:
+    """Un petit fichier du dossier (HTTP, puis FTP ; "ftp:" = FTP direct)."""
+    if folder.startswith("ftp:"):
+        from components.dwarf_media import _fetch_ftp_exact
+        return _fetch_ftp_exact(ip, folder[len("ftp:"):] + name)
+    try:
+        response = requests.get(f"http://{ip}{folder}{name}", timeout=5)
+        if response.ok:
+            return response.content
+    except requests.RequestException:
+        pass
+    from components.dwarf_media import _fetch_ftp
+    return _fetch_ftp(ip, folder + name)
+
+
+def _mosaic_subfolder(ip: str, folder: str) -> str | None:
+    """Mosaïque : le sous-dossier du panneau en cours (shotsInfo.json ->
+    mosaicInfo.currentSubviewId / subviewInfo[].path), même schéma
+    (HTTP ou "ftp:") que le dossier parent. Seul le nom du sous-dossier
+    est repris : la racine du chemin diffère entre HTTP et FTP.
+    None si ce n'est pas une mosaïque ou si le fichier est illisible."""
+    if "_MOSAIC_" not in folder.rstrip("/").rsplit("/", 1)[-1]:
+        return None
+    raw = _read_small(ip, folder, "shotsInfo.json")
+    if not raw:
+        return None
+    try:
+        mosaic = (json.loads(raw.decode("utf-8", "replace")) or {}).get("mosaicInfo") or {}
+    except ValueError:
+        return None
+    current = mosaic.get("currentSubviewId")
+    panel = next((p for p in mosaic.get("subviewInfo") or [] if p.get("id") == current), None)
+    name = ((panel or {}).get("path") or "").rstrip("/").rsplit("/", 1)[-1]
+    return f"{folder}{name}/" if name else None
+
+
 def frame_bytes(dwarf_uid: str, cam: int) -> bytes | None:
     """The camera's last stacked image, asked from the Dwarf only when its
     counters changed (or _REFETCH_S later), _WRITE_DELAY_S after the change
@@ -362,6 +398,8 @@ def frame_bytes(dwarf_uid: str, cam: int) -> bytes | None:
             if wait > 0:        # the Dwarf writes the new stacked.jpg meanwhile
                 time.sleep(wait)
             folder = _capture_folder(session, cam)
+            if folder and cam == 0:     # mosaïque : stacked.jpg est dans le sous-dossier du panneau
+                folder = _mosaic_subfolder(ip, folder) or folder
             data, why, url = None, "", ""
             if folder:
                 url = (f"ftp://{ip}{folder[4:]}stacked.jpg" if folder.startswith("ftp:")

@@ -659,12 +659,14 @@ class DeviceCardView:
         if kind == "capturing" and self._dynamic_label is not None:
             is_tele = scheduler_runner.resolve_active_camera_is_tele(self.dwarf_uid, full_status)
             run_state = scheduler_runner.get_run_state(self.dwarf_uid)
-            stacked = full_status.get("takePhotoStacked" if is_tele else "takeWidePhotoStacked", 0)
+            stacked_tele = full_status.get("takePhotoStacked", 0) or full_status.get("takeMosaicStacked", 0)
+            stacked = stacked_tele if is_tele else full_status.get("takeWidePhotoStacked", 0)
             # NOT the requested total - see RunState's own per-camera
             # requested_count_tele/wide docstring (scheduler_runner.py):
             # this is current_count under a misleading cache key, i.e.
             # "captured so far", not the target.
-            current = full_status.get("takePhotoCount" if is_tele else "takeWidePhotoCount", 0)
+            current_tele = full_status.get("takePhotoCount", 0) or full_status.get("takeMosaicCount", 0)
+            current = current_tele if is_tele else full_status.get("takeWidePhotoCount", 0)
             total = (
                 (run_state.requested_count_tele if is_tele else run_state.requested_count_wide)
                 if run_state else ""

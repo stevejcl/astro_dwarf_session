@@ -100,8 +100,8 @@ def _shots_info_caption(info: dict) -> str:
     bits = []
     if stacked is not None and taken is not None:
         bits.append(f"{stacked}/{taken} {t('prog_shots_stacked')}")
-    if taken is not None and exposure_seconds is not None:
-        bits.append(_format_duration(taken * exposure_seconds))
+    if stacked is not None and exposure_seconds is not None:
+        bits.append(_format_duration(stacked * exposure_seconds))
     return " \u00b7 ".join(bits)
 
 

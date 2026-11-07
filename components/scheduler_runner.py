@@ -613,7 +613,7 @@ def reconcile_after_reconnect(dwarf_uid: str, session) -> None:
         requested = int(state.requested_count_tele or state.requested_count_wide or 0)
     except (TypeError, ValueError):
         requested = 0
-    current_count = status.get("current_count") or 0
+    current_count = max(status.get("current_count") or 0, _client_count(session, camera_type))
     if not requested or current_count < requested:
         return  # didn't actually reach the target - leave it recorded as failed
 
@@ -780,6 +780,15 @@ def device_target_matches(session, program: dict) -> bool:
     return device_target_match(session, program) is True
 
 
+def _client_count(session, camera_type: str) -> int:
+    """Images captured based on the client's counters (single photo or mosaic
+    for the Tele) - the 'current_count' from the stacking state does not
+    necessarily correspond to the total for a mosaic."""
+    full_status = get_client_status(session).get("fullStatus") or {}
+    keys = ("takePhotoCount", "takeMosaicCount") if camera_type == "Tele" else ("takeWidePhotoCount",)
+    return max((full_status.get(k) or 0) for k in keys)
+
+
 def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted, end_time=None) -> int:
     """Returns the final current_count once the resumed capture is
     considered finished.
@@ -812,7 +821,7 @@ def _wait_for_resumed_capture(session, camera_type, requested_count, interrupted
             time.sleep(_RESUME_POLL_INTERVAL_S)
             continue
 
-        current_count = status.get("current_count") or 0
+        current_count = max(status.get("current_count") or 0, _client_count(session, camera_type))
         if current_count != last_count:
             last_count = current_count
 
@@ -959,6 +968,9 @@ def _resume_capture(dwarf_uid, session, dirs, filename, path, program, id_comman
             "Session completed successfully (resumed after restart)"
             if success else "Session failed (resumed after restart)"
         ) + _early_stop_note(id_command, session, program)
+        cam = program.get("setup_camera", {})
+        id_command["count_info"] = state.requested_count_tele or state.requested_count_wide
+        id_command["mosaic_info"] = bool(cam.get("doMosaic") and cam.get("do_action"))
         _update_process_status(full_program, "done", session=session)
 
         dest_dir = dirs["DONE_DIR"] if success else dirs["ERROR_DIR"]
@@ -1202,6 +1214,8 @@ def _finalize_orphan_ended_on_device(dwarf_uid, session, dirs, filename, path, p
                  else program.get("setup_wide_camera", {}).get("count")) or ""
     _set_dwarf_field(id_command, session)
     id_command["count_info"] = requested
+    cam = program.get("setup_camera", {})
+    id_command["mosaic_info"] = bool(cam.get("doMosaic") and cam.get("do_action"))
     try:
         asked = int(requested or 0)
     except (TypeError, ValueError):
@@ -1436,6 +1450,8 @@ def _run_blocking(
         id_command.pop("ir_actual", None)
         id_command.pop("eq_azimut_error", None)
         id_command.pop("eq_altitude_error", None)
+        id_command.pop("count_info", None)
+        id_command.pop("mosaic_info", None)
         _update_process_status(full_program, "pending", session=session)
         id_command["time"] = session_now(session).strftime("%H:%M:%S")
         _write_json(current_path, full_program)
@@ -1573,7 +1589,7 @@ def _run_blocking(
                 _capture_eq_solving_result(id_command, session)
                 _capture_shots_result(id_command, session)
                 id_command["count_info"] = state.requested_count_tele if state.requested_count_tele else state.requested_count_wide
-                id_command["mosaic_info"] =  program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action")
+                id_command["mosaic_info"] = bool program.get("setup_camera", {}).get("doMosaic") and program.get("setup_camera", {}).get("do_action")
                 if not id_command["mosaic_info"]:
                     id_command["message"] += _early_stop_note(id_command, session, program)
             state.shots_taken = id_command.get("shots_taken")

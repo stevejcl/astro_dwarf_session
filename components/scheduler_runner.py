@@ -1201,6 +1201,102 @@ def _album_check(session, program: dict) -> dict | None:
     return summary if summary.get("status") in ("ok", "empty") else None
 
 
+def _check_final_stack(ip: str, folder_name: str, mosaic: bool) -> tuple[str, str]:
+    """(status, detail) from final file "stacked-16_..." from parent directory:
+    "valid", "invalid" (present but  but truncated/illegible), "missing"
+    or "unknown" (Dwarf unreachable). Lightweight check, without a full download:
+    header for a FITS file, end of archive for a ZIP file"""
+    import math
+    import struct
+    from ftplib import FTP, all_errors
+    from components.dwarf_media import FTP_PORT
+
+    ext = ".zip" if mosaic else ".fits"
+    try:
+        ftp = FTP()
+        ftp.connect(ip.split(":")[0], FTP_PORT, timeout=10)
+        ftp.login("Anonymous", "")
+        ftp.set_pasv(True)
+        ftp.voidcmd("TYPE I")
+    except all_errors as e:
+        return "unknown", f"no FTP ({e})"
+    try:
+        path = size = None
+        for root in ("/Astronomy", "/DWARF_II/Astronomy"):
+            try:
+                names = [n.rstrip("/").rsplit("/", 1)[-1] for n in ftp.nlst(f"{root}/{folder_name}")]
+            except all_errors:
+                continue
+            found = [n for n in names if n.startswith("stacked-16_") and n.lower().endswith(ext)]
+            if found:
+                path = f"{root}/{folder_name}/{found[0]}"
+                break
+        if path is None:
+            return "missing", f"no stacked-16_*{ext} in {folder_name}"
+        size = ftp.size(path)
+        if not size:
+            return "invalid", f"{path}: empty"
+
+        if ext == ".fits":
+            conn = ftp.transfercmd(f"RETR {path}")
+            head = b""
+            try:
+                while len(head) < 2880 * 4:
+                    chunk = conn.recv(2880 * 4 - len(head))
+                    if not chunk:
+                        break
+                    head += chunk
+            finally:
+                conn.close()
+            try:
+                ftp.voidresp()
+            except all_errors:
+                pass
+            if not head.startswith(b"SIMPLE"):
+                return "invalid", f"{path}: not a FITS header"
+            cards = [head[i:i + 80].decode("ascii", "replace") for i in range(0, len(head) - 79, 80)]
+            end = next((i for i, c in enumerate(cards) if c.startswith("END")), None)
+            if end is None:
+                return "invalid", f"{path}: FITS header without END"
+            header_len = math.ceil((end + 1) * 80 / 2880) * 2880
+            keys = {}
+            for c in cards[:end]:
+                if "=" in c[:10]:
+                    keys[c[:8].strip()] = c[10:].split("/")[0].strip()
+            try:
+                bitpix, naxis = abs(int(keys["BITPIX"])), int(keys["NAXIS"])
+                data = bitpix // 8
+                for n in range(1, naxis + 1):
+                    data *= int(keys[f"NAXIS{n}"])
+            except (KeyError, ValueError):
+                return "invalid", f"{path}: unreadable FITS keywords"
+            if size < header_len + data:
+                return "invalid", f"{path}: truncated ({size} < {header_len + data} bytes)"
+            return "valid", f"{path}: {size} bytes"
+
+        # ZIP : archive End (EOCD) read via offset
+        start = max(0, size - 65557)
+        tail = bytearray()
+        ftp.retrbinary(f"RETR {path}", tail.extend, rest=start)
+        pos = tail.rfind(b"PK\x05\x06")
+        if pos < 0 or len(tail) - pos < 22:
+            return "invalid", f"{path}: no end-of-archive record (truncated zip)"
+        _sig, _d, _cd, _n_disk, n_entries, cd_size, cd_offset, comment = struct.unpack("<4sHHHHIIH", bytes(tail[pos:pos + 22]))
+        if 0xFFFFFFFF in (cd_size, cd_offset) or n_entries == 0xFFFF:
+            return "valid", f"{path}: zip64, {size} bytes (structure not checked further)"
+        eocd_abs = start + pos
+        if n_entries == 0 or cd_offset + cd_size > eocd_abs or eocd_abs + 22 + comment > size:
+            return "invalid", f"{path}: inconsistent zip structure"
+        return "valid", f"{path}: {n_entries} entries, {size} bytes"
+    except all_errors as e:
+        return "unknown", f"FTP error ({e})"
+    finally:
+        try:
+            ftp.quit()
+        except all_errors:
+            pass
+
+
 def _finalize_orphan_ended_on_device(dwarf_uid, session, dirs, filename, path, program, id_command) -> None:
     """A Current/ program whose capture had started, the Dwarf no longer
     capturing: it ended on the Dwarf while the app was stopped - never
@@ -1233,15 +1329,30 @@ def _finalize_orphan_ended_on_device(dwarf_uid, session, dirs, filename, path, p
     except (TypeError, ValueError):
         taken = 0
 
+    final_stack, stack_detail = None, ""
+    folder_name = (album or {}).get("folder")
+    if folder_name:
+        status_stack, stack_detail = _check_final_stack(
+            session.config.dwarf_ip, folder_name,
+            bool(program.get("setup_camera", {}).get("doMosaic") and take_photo))
+        final_stack = True if status_stack == "valid" else (False if status_stack in ("missing", "invalid") else None)
+        log.notice(f"[{dwarf_uid}] Final stack check: {status_stack} - {stack_detail}")
+
     if album is not None and album.get("status") == "empty":
         failed, message = True, "Capture ended on the Dwarf while the app was stopped, no image stacked (its album)"
-    elif taken and asked and taken < asked:
+    elif taken and asked and taken < asked and final_stack is not True:
         failed = True
         message = f"Capture stopped on the Dwarf before its end ({taken}/{asked}) while the app was stopped ({source})"
     else:
         failed = False
         counts = f" - {taken} taken, {id_command.get('shots_stacked')} stacked" if album is not None else ""
-        message = f"Capture ended on the Dwarf while the app was stopped ({source}){counts}"
+        note = ""
+        if final_stack is True:
+            note = ", final stack file present"
+            if taken and asked and taken < asked:
+                note += f", ended at {taken}/{asked}"
+        message = f"Capture ended on the Dwarf while the app was stopped ({source}{note}){counts}"
+
     status, result, dest_dir = ("error", False, dirs["ERROR_DIR"]) if failed else ("done", True, dirs["DONE_DIR"])
 
     starting_date = id_command.get("starting_date") or session_now(session).strftime("%Y-%m-%d %H:%M:%S")

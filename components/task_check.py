@@ -133,8 +133,12 @@ def summarize(session, task: dict) -> dict:
     if entry is None:
         return {"status": "not_found"}
     info = None
-    if entry.get("thumbnailPath"):
+    folderName = None
+    thumbnailPath = entry.get("thumbnailPath") or None
+    if thumbnailPath:
         info = _fetch_shots_info(_shots_info_url(session.config.dwarf_ip, entry["thumbnailPath"]))
+        parts = thumbnailPath.split("/")
+        folderName = parts[-2] if len(parts) >= 3 else None
     out = {
         "status": verdict(info),
         "target": _target_name(entry),
@@ -143,7 +147,8 @@ def summarize(session, task: dict) -> dict:
         "stacked": None,
         "taken": None,
         "integration": None,
-        "thumbnailPath": entry.get("thumbnailPath"),
+        "thumbnailPath": thumbnailPath,
+        "folder": folderName,
     }
     if info:
         out["stacked"], out["taken"] = info.get("shotsStacked"), info.get("shotsTaken")

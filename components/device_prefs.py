@@ -45,6 +45,14 @@ def set_hidden(dwarf_uid: str, hidden: bool) -> None:
     _write_all(data)
 
 
+def forget(dwarf_uid: str) -> None:
+    """Drops a removed Dwarf's preferences (hidden flag, position), so
+    they don't come back if the same Dwarf is paired again."""
+    data = _read_all()
+    if data.pop(dwarf_uid, None) is not None:
+        _write_all(data)
+
+
 def _ordered(sessions: list, data: dict) -> list:
     """Shown Dwarfs then hidden ones, each group by saved position (a Dwarf
     without one keeps its registry order, after the positioned ones)."""

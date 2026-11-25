@@ -53,7 +53,7 @@ from dwarf_python_api.get_config_data import set_config_data
 from dwarf_python_api.lib.dwarf_config import DwarfConfig
 from dwarf_python_api.lib.dwarf_session import get_manager
 
-from device_registry import find_shared_config_value, name_and_uid, rename_device, device_name
+from device_registry import find_shared_config_value, forget_device, name_and_uid, rename_device, device_name
 from device_provisioning import update_dwarf_ip
 from dwarf_python_api.lib.dwarf_utils import perform_disconnect
 
@@ -547,3 +547,40 @@ def build_settings_page() -> None:
             # Android installs the app full screen only over HTTPS - see
             # components/https_server.py
             render_https_card()
+
+            # Remove this Dwarf from the configuration (user-reported Nov
+            # 2026: after swapping a Dwarf for another, no way to remove
+            # the old one). Last on the page, apart, and confirmed. Only
+            # the app's list is touched: the config.py / config.ini files
+            # stay on the disk, and nothing is sent to the Dwarf.
+            async def _remove_device() -> None:
+                if not connection_health.try_acquire_command_slot(dwarf_uid, caller="settings.remove_device"):
+                    ui.notify(t("device_busy"), type="warning")
+                    return
+                try:
+                    if session.is_connected:
+                        await run.io_bound(perform_disconnect, session=session)
+                finally:
+                    connection_health.release_command_slot(dwarf_uid)
+                label = name_and_uid(session)
+                forget_device(get_manager(), session)
+                ui.notify(t("settings_remove_done", name=label), type="positive")
+                ui.navigate.to("/")
+
+            with ui.dialog() as remove_dialog, ui.card():
+                ui.label(t("settings_remove_confirm", name=name_and_uid(session))).classes("text-sm")
+                ui.label(t("settings_remove_files_kept")).classes("text-xs text-grey-6")
+
+                async def _confirm_remove() -> None:
+                    remove_dialog.close()
+                    await _remove_device()
+
+                with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                    ui.button(t("cancel"), on_click=remove_dialog.close).props("flat")
+                    ui.button(t("delete"), on_click=_confirm_remove).props("color=negative")
+
+            ui.separator().classes("mt-4")
+            ui.label(t("settings_remove_hint")).classes("text-xs text-grey-6")
+            ui.button(
+                t("settings_remove_button"), icon="delete_outline", on_click=remove_dialog.open
+            ).props("flat color=negative")

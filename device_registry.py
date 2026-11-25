@@ -119,9 +119,35 @@ def rename_device(session, name: str) -> bool:
 
 def remove_device_entry(config_py: str) -> None:
     """Removes an entry by its config.py path (natural key: one file
-    pair corresponds to exactly one physical device)."""
-    entries = [e for e in _read_entries() if e.config_py != config_py]
+    pair corresponds to exactly one physical device). Compared as files
+    (same path written differently - relative / absolute, case on
+    Windows - still matches)."""
+    entries = [e for e in _read_entries() if not _same_file(e.config_py, config_py)]
     _write_entries(entries)
+
+
+def forget_device(manager: DwarfManager, session) -> None:
+    """Removes a Dwarf from the configuration (user-reported Nov 2026:
+    after swapping a Dwarf for another, the old one stayed on the
+    dashboard with no way to remove it): its devices.json entry, its
+    session in the manager, and what the app kept for it (display
+    preferences, pending schedule, health/stall state, instance lock).
+
+    The Dwarf must be disconnected first (the caller does it). Its
+    config.py / config.ini files are left in place - nothing is deleted
+    from the disk, and the Dwarf can be paired again later."""
+    from components import capture_stall, connection_health, device_lock, device_prefs
+    import pending_schedules
+
+    uid = session.dwarf_uid
+    remove_device_entry(getattr(session.config, "config_py_path", "") or "")
+    manager.remove(uid)
+    device_prefs.forget(uid)
+    pending_schedules.clear_pending(uid)
+    connection_health.forget(uid)
+    connection_health.clear_manual_disconnect(uid)
+    capture_stall.forget(uid)
+    device_lock.release(uid)
 
 
 # Why a devices.json entry wasn't loaded at startup (user-reported Oct

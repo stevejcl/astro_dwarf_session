@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.2.8] - 2026-11-25
+
+  ### Add
+    Remove a Dwarf from the configuration
+    After swapping a Dwarf for another, the old one stayed on the dashboard with no way to remove it.
+    The Settings page of each Dwarf now ends with a "Remove this Dwarf" button, asked to confirm. It disconnects the Dwarf if needed, takes it out of the dashboard and of devices.json, and forgets what the app kept for it (hidden flag and position, pending schedule).
+    Its config files stay on the disk and nothing is changed on the Dwarf itself, so it can be paired again later.
+
 ## [3.2.7] - 2026-11-07
 
   ### Add
